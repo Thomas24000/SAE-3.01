@@ -1,0 +1,3 @@
+# Code source de l'application : jamais servi directement.
+# Seul back/index.php constitue un point d'entrée légitime.
+Require all denied

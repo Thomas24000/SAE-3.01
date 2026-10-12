@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- Cinémathèque — tables et jeu de données
+-- SAE301-Starter — tables et jeu de données
 --
 -- Ce script ne crée PAS de base de données : il ajoute ses deux tables, film
 -- et genre, à une base existante, la vôtre. Depuis phpMyAdmin, sélectionnez

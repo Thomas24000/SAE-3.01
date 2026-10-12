@@ -1,4 +1,4 @@
-# Cinémathèque
+# SAE301-Starter
 
 Catalogue de films : une API PHP en trois couches (routage / contrôleur /
 modèle) au-dessus de MySQL, et un front en JavaScript organisé en layouts,

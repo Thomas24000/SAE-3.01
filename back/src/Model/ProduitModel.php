@@ -27,7 +27,7 @@ final class ProduitModel
      * variante la moins chère (prix « à partir de »).
      *
      * @return array<int, array{id:int, nom:string, slug:string, description:string,
-     *                          teinte:int, categorie:string, prixMin:int}>
+     *                          teinte:int, image:string, categorie:string, prixMin:int}>
      */
     public function lister(): array
     {
@@ -37,13 +37,14 @@ final class ProduitModel
                     produit.slug,
                     produit.description,
                     produit.teinte,
+                    produit.image,
                     categorie.libelle      AS categorie,
                     MIN(variante.prix_cents) AS prix_min
                FROM produit
          INNER JOIN categorie ON categorie.id = produit.categorie_id
          INNER JOIN variante  ON variante.produit_id = produit.id
            GROUP BY produit.id, produit.nom, produit.slug, produit.description,
-                    produit.teinte, categorie.id, categorie.libelle
+                    produit.teinte, produit.image, categorie.id, categorie.libelle
            ORDER BY categorie.id, produit.nom'
         )->fetchAll();
 
@@ -56,6 +57,7 @@ final class ProduitModel
                 'slug'        => $ligne['slug'],
                 'description' => $ligne['description'],
                 'teinte'      => (int) $ligne['teinte'],
+                'image'       => $ligne['image'],
                 'categorie'   => $ligne['categorie'],
                 'prixMin'     => (int) $ligne['prix_min'],
             ],

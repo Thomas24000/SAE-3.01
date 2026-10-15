@@ -35,8 +35,8 @@ CREATE TABLE categorie (
 -- ---------------------------------------------------------------------------
 -- Produits (un parfum de glace)
 --
--- teinte : angle de couleur (0-359) qui colore le pot à l'écran, en attendant
--- de vraies photos.
+-- teinte : angle de couleur (0-359) qui colore le fond de la carte.
+-- image  : chemin du visuel, relatif à la racine du site (front/public/).
 -- ---------------------------------------------------------------------------
 CREATE TABLE produit (
     id           SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -45,6 +45,7 @@ CREATE TABLE produit (
     slug         VARCHAR(120)      NOT NULL,
     description  VARCHAR(400)      NOT NULL,
     teinte       SMALLINT UNSIGNED NOT NULL,
+    image        VARCHAR(200)      NOT NULL,
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_produit_slug (slug),
@@ -87,19 +88,19 @@ INSERT INTO categorie (id, libelle, slug) VALUES
     (2, 'Sans lactose',    'sans-lactose'),
     (3, 'Sorbets',         'sorbets');
 
-INSERT INTO produit (id, categorie_id, nom, slug, description, teinte) VALUES
-    (1,  1, 'Cookie Dough',          'cookie-dough',          'Glace vanille avec des morceaux de pâte à cookie et des pépites de chocolat.',            45),
-    (2,  1, 'Chocolate Fudge Brownie','chocolate-fudge-brownie','Glace au chocolat avec des morceaux de brownie fondants.',                                 20),
-    (3,  1, 'Cherry Garcia',         'cherry-garcia',         'Glace à la cerise avec des morceaux de cerises et des pépites de chocolat.',               350),
-    (4,  1, 'Caramel Chew Chew',     'caramel-chew-chew',     'Glace au caramel, swirl de caramel et morceaux de caramel fondant.',                       35),
-    (5,  2, 'Cookie Dough Sans Lactose','cookie-dough-sans-lactose','Pâte à cookie et pépites de chocolat sur une base à l''amande, sans lactose.',       50),
-    (6,  2, 'Peanut Butter Cup',     'peanut-butter-cup',     'Glace au beurre de cacahuète, swirl de beurre de cacahuète et coques de chocolat.',        30),
-    (7,  2, 'Chocolate Chip Cookie', 'chocolate-chip-cookie', 'Glace cookie dough sur une base végétale, avec des pépites de chocolat.',                 40),
-    (8,  2, 'Vanille Caramel Fudge', 'vanille-caramel-fudge', 'Glace vanille, caramel et fudge sur une base à l''amande.',                                 38),
-    (9,  3, 'Mangue Passion',        'mangue-passion',        'Sorbet à la mangue avec un swirl de fruit de la passion.',                                 42),
-    (10, 3, 'Fraise Basilic',        'fraise-basilic',        'Sorbet à la fraise parfumé au basilic, frais et acidulé.',                                 0),
-    (11, 3, 'Citron Menthe',         'citron-menthe',         'Sorbet au citron avec des feuilles de menthe, très désaltérant.',                          95),
-    (12, 3, 'Framboise Myrtille',    'framboise-myrtille',    'Sorbet aux framboises et aux myrtilles, intense et fruité.',                               290);
+INSERT INTO produit (id, categorie_id, nom, slug, description, teinte, image) VALUES
+    (1,  1, 'Cookie Dough',          'cookie-dough',          'Glace vanille avec des morceaux de pâte à cookie et des pépites de chocolat.',            45, 'images/produits/cookie-dough.svg'),
+    (2,  1, 'Chocolate Fudge Brownie','chocolate-fudge-brownie','Glace au chocolat avec des morceaux de brownie fondants.',                                 20, 'images/produits/chocolate-fudge-brownie.svg'),
+    (3,  1, 'Cherry Garcia',         'cherry-garcia',         'Glace à la cerise avec des morceaux de cerises et des pépites de chocolat.',               350, 'images/produits/cherry-garcia.svg'),
+    (4,  1, 'Caramel Chew Chew',     'caramel-chew-chew',     'Glace au caramel, swirl de caramel et morceaux de caramel fondant.',                       35, 'images/produits/caramel-chew-chew.svg'),
+    (5,  2, 'Cookie Dough Sans Lactose','cookie-dough-sans-lactose','Pâte à cookie et pépites de chocolat sur une base à l''amande, sans lactose.',       50, 'images/produits/cookie-dough-sans-lactose.svg'),
+    (6,  2, 'Peanut Butter Cup',     'peanut-butter-cup',     'Glace au beurre de cacahuète, swirl de beurre de cacahuète et coques de chocolat.',        30, 'images/produits/peanut-butter-cup.svg'),
+    (7,  2, 'Chocolate Chip Cookie', 'chocolate-chip-cookie', 'Glace cookie dough sur une base végétale, avec des pépites de chocolat.',                 40, 'images/produits/chocolate-chip-cookie.svg'),
+    (8,  2, 'Vanille Caramel Fudge', 'vanille-caramel-fudge', 'Glace vanille, caramel et fudge sur une base à l''amande.',                                 38, 'images/produits/vanille-caramel-fudge.svg'),
+    (9,  3, 'Mangue Passion',        'mangue-passion',        'Sorbet à la mangue avec un swirl de fruit de la passion.',                                 42, 'images/produits/mangue-passion.svg'),
+    (10, 3, 'Fraise Basilic',        'fraise-basilic',        'Sorbet à la fraise parfumé au basilic, frais et acidulé.',                                 0, 'images/produits/fraise-basilic.svg'),
+    (11, 3, 'Citron Menthe',         'citron-menthe',         'Sorbet au citron avec des feuilles de menthe, très désaltérant.',                          95, 'images/produits/citron-menthe.svg'),
+    (12, 3, 'Framboise Myrtille',    'framboise-myrtille',    'Sorbet aux framboises et aux myrtilles, intense et fruité.',                               290, 'images/produits/framboise-myrtille.svg');
 
 INSERT INTO variante (produit_id, libelle, prix_cents, stock) VALUES
     (1,  'Pot 100 ml', 290, 40), (1,  'Pot 465 ml', 790, 25),

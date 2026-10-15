@@ -1,7 +1,6 @@
 <article class="flex flex-col overflow-hidden rounded-2xl border border-zinc-200 shadow-xs transition-colors hover:border-zinc-500 dark:border-zinc-800 dark:hover:border-zinc-400">
-  <!-- Pot décoratif : sa couleur vient de --teinte, en attendant de vraies photos. -->
-  <div class="bandeau-clair dark:bandeau-sombre flex aspect-[4/3] items-center justify-center border-b border-zinc-200 dark:border-zinc-800" style="--teinte: {{teinte}}" aria-hidden="true">
-    <div class="size-24 rounded-full border-4 border-white bg-[hsl(var(--teinte)_75%_58%)] shadow-md dark:border-zinc-900"></div>
+  <div class="bandeau-clair dark:bandeau-sombre aspect-[4/3] border-b border-zinc-200 dark:border-zinc-800" style="--teinte: {{teinte}}">
+    <img src="{{image}}" alt="Pot de glace {{nom}}" width="400" height="300" loading="lazy" class="size-full object-cover" />
   </div>
 
   <div class="flex flex-1 flex-col p-4">

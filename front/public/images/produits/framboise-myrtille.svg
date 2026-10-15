@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+<rect width="400" height="300" fill="hsl(290 70% 93%)"/>
+<ellipse cx="200" cy="268" rx="105" ry="12" fill="hsl(290 40% 70%)" opacity=".5"/>
+<path d="M115 85 Q200 45 285 85 Q300 130 200 140 Q100 130 115 85Z" fill="hsl(290 75% 62%)"/>
+<path d="M130 90 Q200 60 270 90 Q280 112 200 120 Q120 112 130 90Z" fill="hsl(290 80% 72%)"/>
+<rect x="137" y="107" width="18" height="14.4" rx="3" transform="rotate(62 137 107)" fill="hsl(110 45% 28%)"/><rect x="220" y="83" width="14" height="11.200000000000001" rx="3" transform="rotate(32 220 83)" fill="hsl(110 45% 28%)"/><rect x="163" y="82" width="16" height="12.8" rx="3" transform="rotate(29 163 82)" fill="hsl(110 45% 28%)"/><rect x="172" y="112" width="16" height="12.8" rx="3" transform="rotate(37 172 112)" fill="hsl(110 45% 28%)"/><rect x="198" y="108" width="14" height="11.200000000000001" rx="3" transform="rotate(8 198 108)" fill="hsl(110 45% 28%)"/><rect x="167" y="100" width="20" height="16" rx="3" transform="rotate(29 167 100)" fill="hsl(110 45% 28%)"/><rect x="194" y="106" width="16" height="12.8" rx="3" transform="rotate(17 194 106)" fill="hsl(110 45% 28%)"/><rect x="161" y="85" width="10" height="8" rx="3" transform="rotate(24 161 85)" fill="hsl(110 45% 28%)"/><rect x="170" y="92" width="18" height="14.4" rx="3" transform="rotate(19 170 92)" fill="hsl(110 45% 28%)"/><rect x="200" y="94" width="16" height="12.8" rx="3" transform="rotate(28 200 94)" fill="hsl(110 45% 28%)"/><rect x="216" y="87" width="12" height="9.600000000000001" rx="3" transform="rotate(12 216 87)" fill="hsl(110 45% 28%)"/><rect x="167" y="83" width="14" height="11.200000000000001" rx="3" transform="rotate(48 167 83)" fill="hsl(110 45% 28%)"/><rect x="174" y="83" width="10" height="8" rx="3" transform="rotate(75 174 83)" fill="hsl(110 45% 28%)"/><rect x="216" y="109" width="18" height="14.4" rx="3" transform="rotate(46 216 109)" fill="hsl(110 45% 28%)"/>
+<path d="M112 130 H288 L270 262 Q200 276 130 262Z" fill="#fff" stroke="hsl(290 60% 40%)" stroke-width="4"/>
+<path d="M112 130 H288 L284 160 Q200 182 116 160Z" fill="hsl(290 75% 55%)"/>
+<path d="M118 200 Q160 170 200 200 T282 200 L276 236 Q200 262 124 236Z" fill="hsl(290 75% 60%)" opacity=".9"/>
+<ellipse cx="200" cy="130" rx="88" ry="12" fill="#1e3a8a"/>
+<circle cx="200" cy="212" r="22" fill="#fff" opacity=".9"/>
+<circle cx="200" cy="212" r="12" fill="hsl(290 75% 55%)"/>
+</svg>

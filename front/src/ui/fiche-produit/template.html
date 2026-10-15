@@ -8,13 +8,21 @@
   </nav>
 
   <div class="grid gap-8 md:grid-cols-2 md:gap-12">
-    <div class="bandeau-clair dark:bandeau-sombre aspect-square overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800" style="--teinte: {{teinte}}">
-      <img src="{{image}}" alt="Pot de glace {{nom}}" width="560" height="560" class="size-full object-cover" />
+    <div class="flex flex-col gap-3 lg:flex-row-reverse lg:gap-4">
+      <div class="bandeau-clair dark:bandeau-sombre aspect-square overflow-hidden rounded-lg border border-zinc-200 lg:flex-1 dark:border-zinc-800" style="--teinte: {{teinte}}">
+        <img src="{{image}}" alt="Pot de glace {{nom}}" width="560" height="560" class="size-full object-cover" />
+      </div>
+      <div class="hidden gap-3 sm:flex lg:flex-col">
+        <slot name="vignettes"></slot>
+      </div>
     </div>
 
     <div class="flex flex-col gap-5">
       <h1 class="text-2xl font-bold tracking-tight text-blue-900 md:text-3xl dark:text-blue-300">{{nom}}</h1>
-      <p class="text-3xl font-bold tracking-tight">{{prix}}</p>
+      <div class="flex items-center gap-3">
+        <p class="text-3xl font-bold tracking-tight">{{prix}}</p>
+        <slot name="badge"></slot>
+      </div>
       <p class="text-sm text-zinc-600 dark:text-zinc-300">{{description}}</p>
 
       <fieldset>
@@ -24,8 +32,31 @@
         </div>
       </fieldset>
 
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <p class="text-sm font-semibold sm:hidden">Quantité</p>
+        <div role="group" aria-label="Quantité" class="flex min-h-10 w-fit items-center gap-4 rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700">
+          <button type="button" data-quantite-delta="-1" aria-label="Diminuer la quantité" aria-disabled="{{moinsDesactive}}" class="size-4 leading-none aria-disabled:cursor-not-allowed aria-disabled:opacity-40">−</button>
+          <output aria-live="polite" class="w-5 text-center font-semibold">{{quantite}}</output>
+          <button type="button" data-quantite-delta="1" aria-label="Augmenter la quantité" aria-disabled="{{plusDesactive}}" class="size-4 leading-none aria-disabled:cursor-not-allowed aria-disabled:opacity-40">+</button>
+        </div>
+        <button type="button" data-action="ajouter" {{achatDesactive}} class="min-h-12 flex-1 rounded-lg bg-blue-900 px-6 py-3 font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500">{{libelleAchat}}</button>
+      </div>
+
       <p class="text-xs text-zinc-500 dark:text-zinc-400">Retrait gratuit en magasin · Paiement au retrait</p>
     </div>
+  </div>
+
+  <hr class="my-10 border-zinc-200 dark:border-zinc-800" />
+
+  <div class="grid gap-8 md:grid-cols-2 md:gap-12">
+    <section>
+      <h2 class="mb-2 text-lg font-bold">Description</h2>
+      <p class="text-sm text-zinc-600 dark:text-zinc-300">{{descriptionLongue}}</p>
+    </section>
+    <section>
+      <h2 class="mb-2 text-lg font-bold">Ingrédients et allergènes</h2>
+      <p class="text-sm text-zinc-600 dark:text-zinc-300">{{ingredients}}</p>
+    </section>
   </div>
 
   <a href="/" data-link class="mt-10 inline-block text-sm hover:underline">‹ Retour au catalogue</a>

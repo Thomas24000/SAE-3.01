@@ -18,8 +18,10 @@ use App\Core\Response;
 use App\Core\Router;
 use App\Controller\AuthController;
 use App\Controller\CatalogueController;
+use App\Controller\ProduitController;
 use App\Controller\StatsController;
 use App\Model\FilmModel;
+use App\Model\ProduitModel;
 
 // --- Chargement automatique des classes ------------------------------------
 // App\Core\Router  ->  back/src/Core/Router.php
@@ -61,6 +63,7 @@ try {
     // le contrôleur reçoit le modèle. Aucune magie, tout est lisible ici.
     $controleurs = [
         CatalogueController::class => new CatalogueController(new FilmModel($pdo), $config['chemin']),
+        ProduitController::class   => new ProduitController(new ProduitModel($pdo)),
         AuthController::class      => new AuthController(),
         StatsController::class     => new StatsController(new FilmModel($pdo)),
     ];

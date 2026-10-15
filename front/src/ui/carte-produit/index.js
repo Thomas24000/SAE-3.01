@@ -3,11 +3,12 @@ import { formaterPrix } from "../../lib/format.js";
 import template from "./template.html?raw";
 
 // Carte d'un produit, tel que le renvoie l'API :
-// { nom, description, teinte, image, categorie, prixMin }
+// { nom, slug, description, teinte, image, categorie, prixMin }
 let CarteProduitView = {
   html: function (produit) {
     return genericRenderer(template, {
       nom: produit.nom,
+      slug: produit.slug,
       description: produit.description,
       categorie: produit.categorie,
       teinte: produit.teinte,

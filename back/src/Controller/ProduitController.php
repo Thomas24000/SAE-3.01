@@ -35,4 +35,29 @@ final class ProduitController
             'total'    => count($produits),
         ]);
     }
+
+    /**
+     * GET /api/produit?slug=cookie-dough : la fiche d'un produit.
+     *
+     * Réponse : { produit: { ..., categorie, variantes: [...] } }
+     * Erreurs : 400 si le slug est absent ou mal formé, 404 s'il est inconnu.
+     */
+    public function show(Request $requete): void
+    {
+        $slug = $requete->parametre('slug', '');
+
+        // Un slug ne contient que des minuscules, des chiffres et des tirets :
+        // tout le reste est rejeté avant d'atteindre la base.
+        if ($slug === '' || preg_match('/^[a-z0-9-]{1,120}$/', $slug) !== 1) {
+            Response::erreur('Le paramètre « slug » est absent ou invalide.', 400);
+        }
+
+        $produit = $this->produits->findBySlug($slug);
+
+        if ($produit === null) {
+            Response::erreur('Ce produit n\'existe pas.', 404);
+        }
+
+        Response::json(['produit' => $produit]);
+    }
 }

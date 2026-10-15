@@ -22,4 +22,21 @@ ProduitData.fetchAll = async function () {
   return reponse;
 };
 
+/**
+ * La fiche d'un produit : GET /api/produit?slug=…
+ *
+ * La réponse contient { produit } avec produit de la forme
+ * { id, nom, slug, description, teinte, image, categorie: { libelle, slug },
+ * variantes: [{ id, libelle, prixCents, stock }] }. Les prix sont en centimes.
+ *
+ * Lève une ErreurApi (statut 404 si le produit n'existe pas).
+ */
+ProduitData.fetchOne = async function (slug) {
+  let reponse = await getRequest(`produit?slug=${encodeURIComponent(slug)}`);
+
+  reponse.produit.image = import.meta.env.BASE_URL + reponse.produit.image;
+
+  return reponse;
+};
+
 export { ProduitData };

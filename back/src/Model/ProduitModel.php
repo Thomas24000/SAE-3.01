@@ -64,4 +64,69 @@ final class ProduitModel
             $lignes
         );
     }
+
+    /**
+     * Un produit retrouvé par son slug, avec sa catégorie et toutes ses
+     * variantes (format, prix en centimes, stock), de la moins chère à la plus
+     * chère.
+     *
+     * @param string $slug Identifiant d'URL du produit (ex. « cookie-dough »).
+     * @return array{id:int, nom:string, slug:string, description:string, teinte:int,
+     *               image:string, categorie:array{libelle:string, slug:string},
+     *               variantes:array<int, array{id:int, libelle:string, prixCents:int, stock:int}>}|null
+     *         null si aucun produit ne porte ce slug.
+     */
+    public function findBySlug(string $slug): ?array
+    {
+        $requete = $this->pdo->prepare(
+            'SELECT produit.id,
+                    produit.nom,
+                    produit.slug,
+                    produit.description,
+                    produit.teinte,
+                    produit.image,
+                    categorie.libelle AS categorie_libelle,
+                    categorie.slug    AS categorie_slug
+               FROM produit
+         INNER JOIN categorie ON categorie.id = produit.categorie_id
+              WHERE produit.slug = :slug'
+        );
+        $requete->execute(['slug' => $slug]);
+        $produit = $requete->fetch();
+
+        if ($produit === false) {
+            return null;
+        }
+
+        $requeteVariantes = $this->pdo->prepare(
+            'SELECT id, libelle, prix_cents, stock
+               FROM variante
+              WHERE produit_id = :produit_id
+           ORDER BY prix_cents, id'
+        );
+        $requeteVariantes->execute(['produit_id' => (int) $produit['id']]);
+        $variantes = $requeteVariantes->fetchAll();
+
+        return [
+            'id'          => (int) $produit['id'],
+            'nom'         => $produit['nom'],
+            'slug'        => $produit['slug'],
+            'description' => $produit['description'],
+            'teinte'      => (int) $produit['teinte'],
+            'image'       => $produit['image'],
+            'categorie'   => [
+                'libelle' => $produit['categorie_libelle'],
+                'slug'    => $produit['categorie_slug'],
+            ],
+            'variantes'   => array_map(
+                static fn (array $ligne): array => [
+                    'id'        => (int) $ligne['id'],
+                    'libelle'   => $ligne['libelle'],
+                    'prixCents' => (int) $ligne['prix_cents'],
+                    'stock'     => (int) $ligne['stock'],
+                ],
+                $variantes
+            ),
+        ];
+    }
 }

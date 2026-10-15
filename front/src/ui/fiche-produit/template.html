@@ -1,0 +1,32 @@
+<article>
+  <nav aria-label="Fil d'Ariane" class="mb-8 flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+    <a href="/" data-link class="hover:underline">Accueil</a>
+    <span aria-hidden="true">›</span>
+    <span>{{categorie}}</span>
+    <span aria-hidden="true">›</span>
+    <span aria-current="page" class="text-zinc-950 dark:text-zinc-50">{{nom}}</span>
+  </nav>
+
+  <div class="grid gap-8 md:grid-cols-2 md:gap-12">
+    <div class="bandeau-clair dark:bandeau-sombre aspect-square overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800" style="--teinte: {{teinte}}">
+      <img src="{{image}}" alt="Pot de glace {{nom}}" width="560" height="560" class="size-full object-cover" />
+    </div>
+
+    <div class="flex flex-col gap-5">
+      <h1 class="text-2xl font-bold tracking-tight text-blue-900 md:text-3xl dark:text-blue-300">{{nom}}</h1>
+      <p class="text-3xl font-bold tracking-tight">{{prix}}</p>
+      <p class="text-sm text-zinc-600 dark:text-zinc-300">{{description}}</p>
+
+      <fieldset>
+        <legend class="mb-2 text-sm font-semibold">Format</legend>
+        <div class="flex gap-2">
+          <slot name="variantes"></slot>
+        </div>
+      </fieldset>
+
+      <p class="text-xs text-zinc-500 dark:text-zinc-400">Retrait gratuit en magasin · Paiement au retrait</p>
+    </div>
+  </div>
+
+  <a href="/" data-link class="mt-10 inline-block text-sm hover:underline">‹ Retour au catalogue</a>
+</article>

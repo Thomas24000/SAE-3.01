@@ -66,13 +66,15 @@ final class ProduitModel
     }
 
     /**
-     * Un produit retrouvé par son slug, avec sa catégorie et toutes ses
-     * variantes (format, prix en centimes, stock), de la moins chère à la plus
-     * chère.
+     * Un produit retrouvé par son slug, avec sa catégorie, ses images et toutes
+     * ses variantes (format, prix en centimes, stock), de la moins chère à la
+     * plus chère.
      *
      * @param string $slug Identifiant d'URL du produit (ex. « cookie-dough »).
-     * @return array{id:int, nom:string, slug:string, description:string, teinte:int,
-     *               image:string, categorie:array{libelle:string, slug:string},
+     * @return array{id:int, nom:string, slug:string, description:string,
+     *               descriptionLongue:string, ingredients:string, teinte:int,
+     *               image:string, images:array<int, string>,
+     *               categorie:array{libelle:string, slug:string},
      *               variantes:array<int, array{id:int, libelle:string, prixCents:int, stock:int}>}|null
      *         null si aucun produit ne porte ce slug.
      */
@@ -83,6 +85,8 @@ final class ProduitModel
                     produit.nom,
                     produit.slug,
                     produit.description,
+                    produit.description_longue,
+                    produit.ingredients,
                     produit.teinte,
                     produit.image,
                     categorie.libelle AS categorie_libelle,
@@ -107,13 +111,26 @@ final class ProduitModel
         $requeteVariantes->execute(['produit_id' => (int) $produit['id']]);
         $variantes = $requeteVariantes->fetchAll();
 
+        $requeteImages = $this->pdo->prepare(
+            'SELECT chemin
+               FROM produit_image
+              WHERE produit_id = :produit_id
+           ORDER BY position'
+        );
+        $requeteImages->execute(['produit_id' => (int) $produit['id']]);
+        $images = $requeteImages->fetchAll(PDO::FETCH_COLUMN);
+
         return [
             'id'          => (int) $produit['id'],
             'nom'         => $produit['nom'],
             'slug'        => $produit['slug'],
             'description' => $produit['description'],
+            'descriptionLongue' => $produit['description_longue'],
+            'ingredients' => $produit['ingredients'],
             'teinte'      => (int) $produit['teinte'],
             'image'       => $produit['image'],
+            // Un produit sans galerie garde son visuel principal.
+            'images'      => $images === [] ? [$produit['image']] : $images,
             'categorie'   => [
                 'libelle' => $produit['categorie_libelle'],
                 'slug'    => $produit['categorie_slug'],

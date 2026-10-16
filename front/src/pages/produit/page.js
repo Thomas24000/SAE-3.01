@@ -65,20 +65,10 @@ M.clampQuantite = function (quantite) {
 };
 
 /**
- * Ajoute au panier la quantité choisie de la variante choisie, sans dépasser
- * son stock en tenant compte de ce que le panier en contient déjà.
- * > la quantité réellement ajoutée (0 si le stock est déjà entièrement au panier)
+ * Ajoute au panier la quantité choisie de la variante choisie.
  */
 M.addToCart = function () {
-  let variante = M.currentVariante();
-  let dejaAuPanier = PanierData.read().find((ligne) => ligne.variantId === variante.id)?.quantite ?? 0;
-  let quantite = Math.min(M.quantite, variante.stock - dejaAuPanier);
-
-  if (quantite > 0) {
-    PanierData.add(variante.id, quantite);
-  }
-
-  return quantite;
+  PanierData.add(M.varianteId, M.quantite);
 };
 
 /**
@@ -173,18 +163,8 @@ C.handler_changeQuantite = function (delta) {
  * l'indique à l'utilisateur.
  */
 C.handler_addToCart = function () {
-  let ajoutee = M.addToCart();
-
-  if (ajoutee === 0) {
-    M.message = { type: "erreur", texte: "Tout le stock disponible de ce format est déjà dans ton panier." };
-  } else if (ajoutee < M.quantite) {
-    M.message = {
-      type: "succes",
-      texte: `${ajoutee} article(s) ajouté(s) au panier : c'est tout le stock disponible de ce format.`,
-    };
-  } else {
-    M.message = { type: "succes", texte: `${ajoutee} article(s) ajouté(s) au panier.` };
-  }
+  M.addToCart();
+  M.message = { type: "succes", texte: `${M.quantite} article(s) ajouté(s) au panier.` };
 
   V.rafraichir();
   V.refreshCartCount(M.cartCount());

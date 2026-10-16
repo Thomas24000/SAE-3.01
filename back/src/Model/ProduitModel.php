@@ -119,7 +119,7 @@ final class ProduitModel
      * inconnu est simplement absent du résultat.
      *
      * @param array<int, int> $ids Identifiants de variantes (déjà validés comme entiers positifs).
-     * @return array<int, array{variantId:int, libelle:string, prixCents:int, stock:int,
+     * @return array<int, array{variantId:int, libelle:string, prixCents:int,
      *                          produit:array{nom:string, slug:string, image:string, teinte:int}}>
      */
     public function findVariantesByIds(array $ids): array
@@ -136,7 +136,6 @@ final class ProduitModel
             'SELECT variante.id,
                     variante.libelle,
                     variante.prix_cents,
-                    variante.stock,
                     produit.nom,
                     produit.slug,
                     produit.image,
@@ -153,7 +152,6 @@ final class ProduitModel
                 'variantId' => (int) $ligne['id'],
                 'libelle'   => $ligne['libelle'],
                 'prixCents' => (int) $ligne['prix_cents'],
-                'stock'     => (int) $ligne['stock'],
                 'produit'   => [
                     'nom'    => $ligne['nom'],
                     'slug'   => $ligne['slug'],

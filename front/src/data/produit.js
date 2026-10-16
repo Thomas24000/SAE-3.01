@@ -45,7 +45,7 @@ ProduitData.fetchOne = async function (slug) {
  * Les variantes d'un panier : GET /api/panier?ids=3,5
  *
  * La réponse contient { variantes }. Chaque variante est de la forme
- * { variantId, libelle, prixCents, stock, produit: { nom, slug, image, teinte } }.
+ * { variantId, libelle, prixCents, produit: { nom, slug, image, teinte } }.
  * Les prix sont en centimes. Une variante inconnue du serveur est absente de la
  * liste (la page doit la retirer du panier).
  *

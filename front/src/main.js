@@ -2,6 +2,7 @@ import { Router } from "./lib/router.js";
 import { RootLayout } from "./layouts/root/layout.js";
 import { ProduitsPage } from "./pages/produits/page.js";
 import { ProduitPage } from "./pages/produit/page.js";
+import { PanierPage } from "./pages/panier/page.js";
 import { AdminPage } from "./pages/admin/page.js";
 import { The404Page } from "./pages/404/page.js";
 
@@ -12,6 +13,7 @@ router.addLayout("/", RootLayout);
 
 router.addRoute("/", ProduitsPage);
 router.addRoute("/produit/:slug", ProduitPage);
+router.addRoute("/panier", PanierPage);
 router.addRoute("/admin", AdminPage);
 
 // En dernier : toute adresse qui ne correspond à aucune route.

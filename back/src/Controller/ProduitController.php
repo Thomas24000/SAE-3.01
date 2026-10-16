@@ -65,9 +65,9 @@ final class ProduitController
     }
 
     /**
-     * GET /api/panier?ids=3,5 : les variantes du panier, avec leur produit,
-     * leur prix et leur stock actuels. Le panier du navigateur ne sert qu'à
-     * l'affichage : prix et stock viennent toujours d'ici.
+     * GET /api/panier?ids=3,5 : les variantes du panier, avec leur produit
+     * et leur prix actuel. Le panier du navigateur ne sert qu'à l'affichage :
+     * le prix vient toujours d'ici.
      *
      * Réponse : { variantes: [...] }. Une variante inconnue est absente.
      * Erreurs : 400 si « ids » est absent, mal formé ou trop long.

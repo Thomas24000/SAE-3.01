@@ -24,20 +24,6 @@ export function formaterNote(note) {
 }
 
 /**
- * Calcule une teinte stable à partir d'une chaîne, pour donner à chaque film un
- * visuel qui lui est propre sans charger la moindre image.
- */
-export function teinteDepuisTexte(texte) {
-  let somme = 0;
-
-  for (const caractere of texte) {
-    somme += caractere.codePointAt(0);
-  }
-
-  return somme % 360;
-}
-
-/**
  * 790 (centimes) -> « 7,90 € »
  */
 export function formaterPrix(centimes) {

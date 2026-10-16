@@ -9,8 +9,8 @@
 @custom-variant dark (&:where(.theme-dark, .theme-dark *));
 
 /*
-  Bandeau des cartes de film : un dégradé dont la teinte est calculée à partir
-  du titre (voir ui/carte-film/index.js). La teinte arrive par la variable
+  Bandeau des cartes produit : un dégradé dont la teinte est calculée à partir
+  du titre (voir ui/carte-produit). La teinte arrive par la variable
   --teinte, posée dans le template. Aucune image n'est chargée.
 */
 @utility bandeau-clair {

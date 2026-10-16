@@ -17,7 +17,6 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Core\Router;
 use App\Controller\AuthController;
-use App\Controller\CatalogueController;
 use App\Controller\ProduitController;
 use App\Controller\StatsController;
 use App\Model\FilmModel;
@@ -62,7 +61,6 @@ try {
     // Les dépendances sont créées explicitement : le modèle reçoit la connexion,
     // le contrôleur reçoit le modèle. Aucune magie, tout est lisible ici.
     $controleurs = [
-        CatalogueController::class => new CatalogueController(new FilmModel($pdo), $config['chemin']),
         ProduitController::class   => new ProduitController(new ProduitModel($pdo)),
         AuthController::class      => new AuthController(),
         StatsController::class     => new StatsController(new FilmModel($pdo)),

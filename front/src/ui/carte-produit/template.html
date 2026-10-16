@@ -1,11 +1,13 @@
-<article class="flex flex-col overflow-hidden rounded-2xl border border-zinc-200 shadow-xs transition-colors hover:border-zinc-500 dark:border-zinc-800 dark:hover:border-zinc-400">
+<article class="relative flex flex-col overflow-hidden rounded-2xl border border-zinc-200 shadow-xs transition-colors focus-within:border-zinc-500 hover:border-zinc-500 dark:border-zinc-800 dark:focus-within:border-zinc-400 dark:hover:border-zinc-400">
   <div class="bandeau-clair dark:bandeau-sombre aspect-[4/3] border-b border-zinc-200 dark:border-zinc-800" style="--teinte: {{teinte}}">
     <img src="{{image}}" alt="Pot de glace {{nom}}" width="400" height="300" loading="lazy" class="size-full object-cover" />
   </div>
 
   <div class="flex flex-1 flex-col p-4">
     <p class="mb-1 text-xs font-medium tracking-wide text-zinc-500 uppercase dark:text-zinc-400">{{categorie}}</p>
-    <h2 class="mb-2 text-lg leading-snug font-semibold tracking-tight">{{nom}}</h2>
+    <h2 class="mb-2 text-lg leading-snug font-semibold tracking-tight">
+      <a href="/produit/{{slug}}" data-link class="after:absolute after:inset-0 after:content-['']">{{nom}}</a>
+    </h2>
     <p class="mb-4 flex-1 text-sm text-zinc-600 dark:text-zinc-300">{{description}}</p>
     <p class="text-sm text-zinc-500 dark:text-zinc-400">À partir de <span class="text-base font-semibold text-zinc-950 dark:text-zinc-50">{{prix}}</span></p>
   </div>

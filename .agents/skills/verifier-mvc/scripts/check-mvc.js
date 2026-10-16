@@ -55,9 +55,9 @@ const requiredPaths = [
   'front/src/data',
   'front/src/lib',
   'front/package.json',
-  'base/back/index.php',
-  'base/back/src/routes.php',
-  'base/back/src/Core/Response.php',
+  'back/index.php',
+  'back/src/routes.php',
+  'back/src/Core/Response.php',
 ];
 
 requiredPaths.forEach((relativePath) => {

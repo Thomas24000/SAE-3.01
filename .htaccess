@@ -22,7 +22,7 @@ RewriteRule ^api/ back/index.php [END,QSA]
 RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^front/dist/ - [END]
 
-#    Sinon, c'est une adresse de l'application (/admin, /films/12…) : seul le
+#    Sinon, c'est une adresse de l'application (/admin, /produit/cookie-dough…) : seul le
 #    routeur du front la connaît. On sert la page d'entrée, et le routeur
 #    affichera la bonne page — ou la page 404.
 RewriteRule ^front/dist/ front/dist/index.html [END]

@@ -3,18 +3,20 @@
 ## 0. Mission du projet
 
 Ce dépôt est un prototype full-stack de site web responsive de click & collect
-de glaces Ben & Jerry's. Le code actuel est encore un catalogue de films
-pédagogique : il sert de base technique, mais le produit cible est une boutique
-de pots de glace (et de produits associés), avec variantes de format et options,
-inspirée de l'univers de marque de [Ben & Jerry's France](https://www.benjerry.fr).
+de glaces Ben & Jerry's. Le domaine produit glace est déjà en place : catalogue,
+fiche produit avec variantes et stock, connexion et page d'administration. Le
+produit cible est une boutique de pots de glace (et de produits associés), avec
+variantes de format et options, inspirée de l'univers de marque de
+[Ben & Jerry's France](https://www.benjerry.fr). Restent à construire le panier,
+la commande, les options et le back-office complet.
 
 Le client commande en ligne, puis retire sa commande en magasin : il n'y a ni
 livraison ni paiement en ligne dans le périmètre.
 
 Le résultat attendu doit fonctionner sur mobile, tablette et desktop. Il doit
 conserver les principes de navigation, d'accessibilité, de sécurité et de
-séparation front/back existants, tout en remplaçant progressivement le domaine
-film par le domaine produit glace.
+séparation front/back existants, tout en complétant le domaine produit glace
+selon l'ordre de réalisation de la section 8.
 
 Ne réorganise, ne renomme et ne déplace jamais un fichier existant sans demande
 explicite. Respecte l'architecture présente avant de proposer une évolution.

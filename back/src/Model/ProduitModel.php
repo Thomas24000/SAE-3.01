@@ -114,6 +114,56 @@ final class ProduitModel
     }
 
     /**
+     * Des variantes retrouvées par leur identifiant, avec le produit auquel elles
+     * appartiennent : de quoi afficher les lignes d'un panier. Un identifiant
+     * inconnu est simplement absent du résultat.
+     *
+     * @param array<int, int> $ids Identifiants de variantes (déjà validés comme entiers positifs).
+     * @return array<int, array{variantId:int, libelle:string, prixCents:int,
+     *                          produit:array{nom:string, slug:string, image:string, teinte:int}}>
+     */
+    public function findVariantesByIds(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        // Un « ? » par identifiant : les valeurs restent des paramètres liés,
+        // seul le nombre de marqueurs est construit.
+        $marqueurs = implode(',', array_fill(0, count($ids), '?'));
+
+        $requete = $this->pdo->prepare(
+            'SELECT variante.id,
+                    variante.libelle,
+                    variante.prix_cents,
+                    produit.nom,
+                    produit.slug,
+                    produit.image,
+                    produit.teinte
+               FROM variante
+         INNER JOIN produit ON produit.id = variante.produit_id
+              WHERE variante.id IN (' . $marqueurs . ')
+           ORDER BY variante.id'
+        );
+        $requete->execute(array_values($ids));
+
+        return array_map(
+            static fn (array $ligne): array => [
+                'variantId' => (int) $ligne['id'],
+                'libelle'   => $ligne['libelle'],
+                'prixCents' => (int) $ligne['prix_cents'],
+                'produit'   => [
+                    'nom'    => $ligne['nom'],
+                    'slug'   => $ligne['slug'],
+                    'image'  => $ligne['image'],
+                    'teinte' => (int) $ligne['teinte'],
+                ],
+            ],
+            $requete->fetchAll()
+        );
+    }
+
+    /**
      * Un produit retrouvé par son slug, avec sa catégorie, ses images et toutes
      * ses variantes (format, prix en centimes, stock), de la moins chère à la
      * plus chère.

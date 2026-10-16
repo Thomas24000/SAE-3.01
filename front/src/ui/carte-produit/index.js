@@ -2,15 +2,14 @@ import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { formaterPrix } from "../../lib/format.js";
 import { BadgeStockView } from "../badge-stock/index.js";
 import template from "./template.html?raw";
-
-// Les classes sont écrites en entier, et non assemblées : Tailwind ne génère
-// que les classes qu'il trouve telles quelles dans le code.
-const BOUTON_ACHAT = "bg-bg-brand text-fg-on-brand hover:opacity-90";
-const BOUTON_EPUISE = "cursor-not-allowed border border-border-default bg-bg-default text-fg-muted";
+import templateChoisir from "./bouton-choisir.html?raw";
+import templateEpuise from "./bouton-epuise.html?raw";
 
 // Carte d'un produit, telle que la prépare la page :
 // { nom, slug, description, teinte, image, prixMin, statutStock }
 // statutStock vaut "disponible", "bientot" ou "epuise" (voir lib/stock.js).
+// Le format se choisit sur la fiche : la carte propose un lien vers elle, ou un
+// bouton désactivé « Épuisé ».
 let CarteProduitView = {
   dom: function (produit) {
     let epuise = produit.statutStock === "epuise";
@@ -22,12 +21,12 @@ let CarteProduitView = {
         teinte: produit.teinte,
         image: produit.image,
         prix: formaterPrix(produit.prixMin),
-        desactive: epuise ? "disabled" : "",
-        classes: epuise ? BOUTON_EPUISE : BOUTON_ACHAT,
-        libelleBouton: epuise ? "Épuisé" : "Ajouter au panier",
       })
     );
 
+    fragment
+      .querySelector('slot[name="action"]')
+      .replaceWith(htmlToFragment(epuise ? templateEpuise : genericRenderer(templateChoisir, { slug: produit.slug, nom: produit.nom })));
     fragment.querySelector('slot[name="badge"]').replaceWith(BadgeStockView.dom(produit.statutStock));
 
     return fragment;

@@ -1,7 +1,9 @@
+import { PanierData } from "../../data/panier.js";
 import { ProduitData } from "../../data/produit.js";
 import { htmlToFragment } from "../../lib/utils.js";
 import { statutStock } from "../../lib/stock.js";
 import { FicheProduitView } from "../../ui/fiche-produit/index.js";
+import { HeaderView } from "../../ui/header/index.js";
 import { MessageView } from "../../ui/message/index.js";
 import { The404Page } from "../404/page.js";
 import template from "./template.html?raw";
@@ -60,6 +62,21 @@ M.clampQuantite = function (quantite) {
   let max = Math.max(1, M.currentVariante().stock);
 
   return Math.min(Math.max(quantite, 1), max);
+};
+
+/**
+ * Ajoute au panier la quantité choisie de la variante choisie.
+ */
+M.addToCart = function () {
+  PanierData.add(M.varianteId, M.quantite);
+};
+
+/**
+ * Nombre d'articles du panier, quantités comprises.
+ * > le nombre d'articles
+ */
+M.cartCount = function () {
+  return PanierData.count();
 };
 
 /**
@@ -142,12 +159,15 @@ C.handler_changeQuantite = function (delta) {
 };
 
 /**
- * Clic sur « Ajouter au panier ». Le panier est l'objet de la US CMD-b : en
- * attendant, la page l'indique à l'utilisateur.
+ * Clic sur « Ajouter au panier » : range la sélection dans le panier et
+ * l'indique à l'utilisateur.
  */
 C.handler_addToCart = function () {
-  M.message = { type: "erreur", texte: "Le panier n'est pas encore disponible." };
+  M.addToCart();
+  M.message = { type: "succes", texte: `${M.quantite} article(s) ajouté(s) au panier.` };
+
   V.rafraichir();
+  V.refreshCartCount(M.cartCount());
 };
 
 C.init = async function (params) {
@@ -177,6 +197,11 @@ V.rafraichir = function () {
   let nouvelleRacine = fragment.firstElementChild;
   V.racine.replaceWith(fragment);
   V.racine = nouvelleRacine;
+};
+
+// Le header est hors de la page : on met son compteur à jour sans le reconstruire.
+V.refreshCartCount = function (nombre) {
+  HeaderView.updateCount(nombre);
 };
 
 V.createPageFragment = function () {

@@ -114,15 +114,6 @@ C.handler_voirPlus = function () {
 };
 
 /**
- * Clic sur « Ajouter au panier » d'une carte. Le panier est l'objet de la US
- * CMD-b : en attendant, la page l'indique à l'utilisateur.
- */
-C.handler_addToCart = function () {
-  M.message = { type: "erreur", texte: "Le panier n'est pas encore disponible." };
-  V.rafraichir();
-};
-
-/**
  * Clic sur « Découvrir nos glaces » : fait défiler jusqu'au catalogue.
  */
 C.handler_decouvrir = function () {
@@ -184,7 +175,7 @@ V.createPageFragment = function () {
 
   pageFragment
     .querySelector('slot[name="grille"]')
-    .replaceWith(GrilleProduitsView.dom(M.produitsVisibles(), C.handler_addToCart));
+    .replaceWith(GrilleProduitsView.dom(M.produitsVisibles()));
 
   let slotVoirPlus = pageFragment.querySelector('slot[name="voir-plus"]');
 

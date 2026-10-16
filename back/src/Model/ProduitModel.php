@@ -23,11 +23,13 @@ final class ProduitModel
     }
 
     /**
-     * Tous les produits du catalogue, avec leur catégorie et le prix de leur
-     * variante la moins chère (prix « à partir de »).
+     * Tous les produits du catalogue, avec leur catégorie, le prix de leur
+     * variante la moins chère (prix « à partir de ») et leur stock total
+     * (somme des stocks de leurs variantes).
      *
      * @return array<int, array{id:int, nom:string, slug:string, description:string,
-     *                          teinte:int, image:string, categorie:string, prixMin:int}>
+     *                          teinte:int, image:string, categorie:string,
+     *                          categorieSlug:string, prixMin:int, stock:int}>
      */
     public function lister(): array
     {
@@ -39,12 +41,15 @@ final class ProduitModel
                     produit.teinte,
                     produit.image,
                     categorie.libelle      AS categorie,
-                    MIN(variante.prix_cents) AS prix_min
+                    categorie.slug         AS categorie_slug,
+                    MIN(variante.prix_cents) AS prix_min,
+                    SUM(variante.stock)      AS stock
                FROM produit
          INNER JOIN categorie ON categorie.id = produit.categorie_id
          INNER JOIN variante  ON variante.produit_id = produit.id
            GROUP BY produit.id, produit.nom, produit.slug, produit.description,
-                    produit.teinte, produit.image, categorie.id, categorie.libelle
+                    produit.teinte, produit.image, categorie.id, categorie.libelle,
+                    categorie.slug
            ORDER BY categorie.id, produit.nom'
         )->fetchAll();
 
@@ -59,7 +64,9 @@ final class ProduitModel
                 'teinte'      => (int) $ligne['teinte'],
                 'image'       => $ligne['image'],
                 'categorie'   => $ligne['categorie'],
+                'categorieSlug' => $ligne['categorie_slug'],
                 'prixMin'     => (int) $ligne['prix_min'],
+                'stock'       => (int) $ligne['stock'],
             ],
             $lignes
         );

@@ -1,3 +1,4 @@
+import { PanierData } from "../../data/panier.js";
 import { ProduitData } from "../../data/produit.js";
 import { htmlToFragment } from "../../lib/utils.js";
 import { statutStock } from "../../lib/stock.js";
@@ -60,6 +61,23 @@ M.clampQuantite = function (quantite) {
   let max = Math.max(1, M.currentVariante().stock);
 
   return Math.min(Math.max(quantite, 1), max);
+};
+
+/**
+ * Ajoute au panier la quantité choisie de la variante choisie, sans dépasser
+ * son stock en tenant compte de ce que le panier en contient déjà.
+ * > la quantité réellement ajoutée (0 si le stock est déjà entièrement au panier)
+ */
+M.addToCart = function () {
+  let variante = M.currentVariante();
+  let dejaAuPanier = PanierData.read().find((ligne) => ligne.variantId === variante.id)?.quantite ?? 0;
+  let quantite = Math.min(M.quantite, variante.stock - dejaAuPanier);
+
+  if (quantite > 0) {
+    PanierData.add(variante.id, quantite);
+  }
+
+  return quantite;
 };
 
 /**
@@ -142,11 +160,23 @@ C.handler_changeQuantite = function (delta) {
 };
 
 /**
- * Clic sur « Ajouter au panier ». Le panier est l'objet de la US CMD-b : en
- * attendant, la page l'indique à l'utilisateur.
+ * Clic sur « Ajouter au panier » : range la sélection dans le panier et
+ * l'indique à l'utilisateur.
  */
 C.handler_addToCart = function () {
-  M.message = { type: "erreur", texte: "Le panier n'est pas encore disponible." };
+  let ajoutee = M.addToCart();
+
+  if (ajoutee === 0) {
+    M.message = { type: "erreur", texte: "Tout le stock disponible de ce format est déjà dans ton panier." };
+  } else if (ajoutee < M.quantite) {
+    M.message = {
+      type: "succes",
+      texte: `${ajoutee} article(s) ajouté(s) au panier : c'est tout le stock disponible de ce format.`,
+    };
+  } else {
+    M.message = { type: "succes", texte: `${ajoutee} article(s) ajouté(s) au panier.` };
+  }
+
   V.rafraichir();
 };
 

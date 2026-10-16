@@ -41,4 +41,27 @@ ProduitData.fetchOne = async function (slug) {
   return reponse;
 };
 
+/**
+ * Les variantes d'un panier : GET /api/panier?ids=3,5
+ *
+ * La réponse contient { variantes }. Chaque variante est de la forme
+ * { variantId, libelle, prixCents, stock, produit: { nom, slug, image, teinte } }.
+ * Les prix sont en centimes. Une variante inconnue du serveur est absente de la
+ * liste (la page doit la retirer du panier).
+ *
+ * Lève une ErreurApi (statut 400 si les identifiants sont invalides).
+ *
+ * @param {number[]} ids - les identifiants des variantes du panier (au moins un).
+ */
+ProduitData.fetchVariantes = async function (ids) {
+  let reponse = await getRequest(`panier?ids=${encodeURIComponent(ids.join(","))}`);
+
+  reponse.variantes = reponse.variantes.map((variante) => ({
+    ...variante,
+    produit: { ...variante.produit, image: import.meta.env.BASE_URL + variante.produit.image },
+  }));
+
+  return reponse;
+};
+
 export { ProduitData };

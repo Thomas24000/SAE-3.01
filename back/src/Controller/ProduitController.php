@@ -13,6 +13,9 @@ use App\Model\ProduitModel;
  */
 final class ProduitController
 {
+    /** Nombre maximal de variantes différentes acceptées dans un panier. */
+    private const PANIER_MAX_LIGNES = 50;
+
     /** Le modèle qui interroge la base, fourni à la construction. */
     private ProduitModel $produits;
 
@@ -59,5 +62,31 @@ final class ProduitController
         }
 
         Response::json(['produit' => $produit]);
+    }
+
+    /**
+     * GET /api/panier?ids=3,5 : les variantes du panier, avec leur produit,
+     * leur prix et leur stock actuels. Le panier du navigateur ne sert qu'à
+     * l'affichage : prix et stock viennent toujours d'ici.
+     *
+     * Réponse : { variantes: [...] }. Une variante inconnue est absente.
+     * Erreurs : 400 si « ids » est absent, mal formé ou trop long.
+     */
+    public function panier(Request $requete): void
+    {
+        $brut = $requete->parametre('ids', '');
+
+        // Des entiers positifs séparés par des virgules, rien d'autre.
+        if ($brut === '' || preg_match('/^[1-9][0-9]{0,9}(,[1-9][0-9]{0,9})*$/', $brut) !== 1) {
+            Response::erreur('Le paramètre « ids » est absent ou invalide.', 400);
+        }
+
+        $ids = array_values(array_unique(array_map('intval', explode(',', $brut))));
+
+        if (count($ids) > self::PANIER_MAX_LIGNES) {
+            Response::erreur('Le panier contient trop de lignes.', 400);
+        }
+
+        Response::json(['variantes' => $this->produits->findVariantesByIds($ids)]);
     }
 }

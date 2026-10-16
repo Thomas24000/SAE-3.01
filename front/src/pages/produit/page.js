@@ -3,6 +3,7 @@ import { ProduitData } from "../../data/produit.js";
 import { htmlToFragment } from "../../lib/utils.js";
 import { statutStock } from "../../lib/stock.js";
 import { FicheProduitView } from "../../ui/fiche-produit/index.js";
+import { HeaderView } from "../../ui/header/index.js";
 import { MessageView } from "../../ui/message/index.js";
 import { The404Page } from "../404/page.js";
 import template from "./template.html?raw";
@@ -78,6 +79,14 @@ M.addToCart = function () {
   }
 
   return quantite;
+};
+
+/**
+ * Nombre d'articles du panier, quantités comprises.
+ * > le nombre d'articles
+ */
+M.cartCount = function () {
+  return PanierData.count();
 };
 
 /**
@@ -178,6 +187,7 @@ C.handler_addToCart = function () {
   }
 
   V.rafraichir();
+  V.refreshCartCount(M.cartCount());
 };
 
 C.init = async function (params) {
@@ -207,6 +217,11 @@ V.rafraichir = function () {
   let nouvelleRacine = fragment.firstElementChild;
   V.racine.replaceWith(fragment);
   V.racine = nouvelleRacine;
+};
+
+// Le header est hors de la page : on met son compteur à jour sans le reconstruire.
+V.refreshCartCount = function (nombre) {
+  HeaderView.updateCount(nombre);
 };
 
 V.createPageFragment = function () {

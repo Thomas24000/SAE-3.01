@@ -73,6 +73,47 @@ final class ProduitModel
     }
 
     /**
+     * Statistiques globales du catalogue, pour la zone d'administration.
+     *
+     * @return array{total:int, stockTotal:int, prixMoyenCents:int,
+     *               parCategorie:array<int, array{categorie:string, nombre:int}>}
+     *         prixMoyenCents : prix moyen des variantes, en centimes.
+     */
+    public function statistiques(): array
+    {
+        $global = $this->pdo->query(
+            'SELECT (SELECT COUNT(*) FROM produit) AS total,
+                    COALESCE(SUM(stock), 0)        AS stock_total,
+                    COALESCE(AVG(prix_cents), 0)   AS prix_moyen
+               FROM variante'
+        )->fetch();
+
+        $parCategorie = $this->pdo->query(
+            'SELECT categorie.libelle AS categorie,
+                    COUNT(produit.id) AS nombre
+               FROM categorie
+          LEFT JOIN produit ON produit.categorie_id = categorie.id
+           GROUP BY categorie.id, categorie.libelle
+           ORDER BY nombre DESC, categorie.libelle ASC'
+        )->fetchAll();
+
+        // MySQL renvoie les nombres sous forme de chaînes. On les convertit
+        // ligne par ligne, pour que le JSON contienne bien des nombres.
+        return [
+            'total'          => (int) $global['total'],
+            'stockTotal'     => (int) $global['stock_total'],
+            'prixMoyenCents' => (int) round((float) $global['prix_moyen']),
+            'parCategorie'   => array_map(
+                static fn (array $ligne): array => [
+                    'categorie' => $ligne['categorie'],
+                    'nombre'    => (int) $ligne['nombre'],
+                ],
+                $parCategorie
+            ),
+        ];
+    }
+
+    /**
      * Un produit retrouvé par son slug, avec sa catégorie, ses images et toutes
      * ses variantes (format, prix en centimes, stock), de la moins chère à la
      * plus chère.

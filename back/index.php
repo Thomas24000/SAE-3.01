@@ -19,7 +19,6 @@ use App\Core\Router;
 use App\Controller\AuthController;
 use App\Controller\ProduitController;
 use App\Controller\StatsController;
-use App\Model\FilmModel;
 use App\Model\ProduitModel;
 
 // --- Chargement automatique des classes ------------------------------------
@@ -60,10 +59,12 @@ try {
     // --- Assemblage ---------------------------------------------------------
     // Les dépendances sont créées explicitement : le modèle reçoit la connexion,
     // le contrôleur reçoit le modèle. Aucune magie, tout est lisible ici.
+    $produits = new ProduitModel($pdo);
+
     $controleurs = [
-        ProduitController::class   => new ProduitController(new ProduitModel($pdo)),
+        ProduitController::class   => new ProduitController($produits),
         AuthController::class      => new AuthController(),
-        StatsController::class     => new StatsController(new FilmModel($pdo)),
+        StatsController::class     => new StatsController($produits),
     ];
 
     $routes = require __DIR__ . '/src/routes.php';

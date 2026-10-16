@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Core\Response;
-use App\Model\FilmModel;
+use App\Model\ProduitModel;
 
 /**
  * Statistiques du catalogue, réservées aux administrateurs.
@@ -13,13 +13,19 @@ use App\Model\FilmModel;
 final class StatsController
 {
     /** Le modèle qui interroge la base, fourni à la construction. */
-    private FilmModel $films;
+    private ProduitModel $produits;
 
-    public function __construct(FilmModel $films)
+    public function __construct(ProduitModel $produits)
     {
-        $this->films = $films;
+        $this->produits = $produits;
     }
 
+    /**
+     * GET /api/admin/stats : les statistiques du catalogue.
+     *
+     * Réponse : { total, stockTotal, prixMoyenCents, parCategorie: [...] }
+     * Erreur : 403 si l'utilisateur connecté n'a pas le rôle admin.
+     */
     public function index(): void
     {
         // La session est déjà ouverte par index.php.
@@ -27,6 +33,6 @@ final class StatsController
             Response::erreur('Accès réservé aux administrateurs', 403);
         }
 
-        Response::json($this->films->statistiques());
+        Response::json($this->produits->statistiques());
     }
 }

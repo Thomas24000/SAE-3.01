@@ -5,7 +5,7 @@ globs: ["sql/**/*.sql"]
 
 # Règles SQL métier
 
-- Préserver les décisions métier de `analyse-user-stories.md` :
+- Préserver les décisions métier de la section 7 d'`AGENTS.md` :
   variantes, stock par variante, panier avec `variantId`, prix figé dans les
   lignes de commande, commandes et journal de stock.
 - Utiliser InnoDB, `utf8mb4`, clés étrangères et contraintes explicites.

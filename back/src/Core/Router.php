@@ -10,7 +10,7 @@ use RuntimeException;
  * Associe une requête entrante au contrôleur chargé de la traiter.
  *
  * Les routes sont déclarées dans back/src/routes.php sous la forme :
- *     'GET /api/films' => [CatalogueController::class, 'index']
+ *     'GET /api/produits' => [ProduitController::class, 'index']
  */
 final class Router
 {
@@ -32,10 +32,17 @@ final class Router
 
     public function traiter(Request $requete): void
     {
-        foreach ($this->routes as $declaration => $cible) {
+        $declarations = array_keys($this->routes);
+        $total        = count($declarations);
+
+        for ($i = 0; $i < $total; $i++) {
+            $declaration = $declarations[$i];
+
             if (self::normaliser($declaration) !== $requete->signature()) {
                 continue;
             }
+
+            $cible = $this->routes[$declaration];
 
             // $cible est le tableau déclaré dans routes.php :
             // à l'indice 0 le nom de la classe, à l'indice 1 celui de la méthode.
@@ -63,7 +70,7 @@ final class Router
     }
 
     /**
-     * « GET   /api/films » et « GET /api/films » désignent la même route :
+     * « GET   /api/produits » et « GET /api/produits » désignent la même route :
      * on réduit les espaces multiples pour permettre un alignement lisible
      * dans le fichier de déclaration.
      */

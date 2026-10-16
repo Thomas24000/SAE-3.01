@@ -4,19 +4,19 @@
   <div class="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-4">
     <div class="rounded-md border border-border-default p-4">
       <div class="text-2xl leading-tight font-semibold tracking-tight">{{total}}</div>
-      <div class="text-[0.8125rem] text-fg-muted">films</div>
+      <div class="text-[0.8125rem] text-fg-muted">produits</div>
     </div>
     <div class="rounded-md border border-border-default p-4">
-      <div class="text-2xl leading-tight font-semibold tracking-tight">{{noteMoyenne}}</div>
-      <div class="text-[0.8125rem] text-fg-muted">note moyenne</div>
+      <div class="text-2xl leading-tight font-semibold tracking-tight">{{stockTotal}}</div>
+      <div class="text-[0.8125rem] text-fg-muted">pots en stock</div>
     </div>
     <div class="rounded-md border border-border-default p-4">
-      <div class="text-2xl leading-tight font-semibold tracking-tight">{{dureeMoyenne}}</div>
-      <div class="text-[0.8125rem] text-fg-muted">durée moyenne</div>
+      <div class="text-2xl leading-tight font-semibold tracking-tight">{{prixMoyen}}</div>
+      <div class="text-[0.8125rem] text-fg-muted">prix moyen</div>
     </div>
   </div>
 
   <ul class="mt-6 divide-y divide-border-default text-sm">
-    <slot name="genres"></slot>
+    <slot name="categories"></slot>
   </ul>
 </section>

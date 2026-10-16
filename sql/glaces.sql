@@ -1,8 +1,8 @@
 -- ---------------------------------------------------------------------------
 -- SAE301 Ben & Jerry's — catégories, produits et variantes (US DEC-b)
 --
--- Ce script s'ajoute à sql/import.sql sans toucher aux tables film et genre.
--- Importez-le depuis phpMyAdmin, dans la même base.
+-- Ce script crée toutes les tables de l'application. Importez-le depuis
+-- phpMyAdmin, dans votre base.
 --
 -- Le stock est porté par la variante (un pot 100 ml et un pot 465 ml du même
 -- parfum ont chacun le leur). Les prix sont des entiers en centimes : un

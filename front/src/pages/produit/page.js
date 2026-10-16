@@ -1,5 +1,6 @@
 import { ProduitData } from "../../data/produit.js";
 import { htmlToFragment } from "../../lib/utils.js";
+import { statutStock } from "../../lib/stock.js";
 import { FicheProduitView } from "../../ui/fiche-produit/index.js";
 import { MessageView } from "../../ui/message/index.js";
 import { The404Page } from "../404/page.js";
@@ -12,10 +13,6 @@ import template from "./template.html?raw";
  * V : le template et la fiche. C : charge le produit, réagit aux choix de
  * l'utilisateur.
  */
-
-// Stock à partir duquel une variante est « Bientôt épuisé ». Valeur provisoire :
-// elle ira dans la table de paramètres avec la US STK-b.
-const SEUIL_BIENTOT_EPUISE = 5;
 
 let M = {
   produit: null, // produit, ses images et ses variantes, ou null tant que le chargement n'a pas réussi
@@ -51,9 +48,7 @@ M.currentVariante = function () {
  * > "epuise" si le stock est nul, "bientot" s'il est sous le seuil, sinon "disponible"
  */
 M.stockStatus = function (variante) {
-  if (variante.stock === 0) return "epuise";
-  if (variante.stock <= SEUIL_BIENTOT_EPUISE) return "bientot";
-  return "disponible";
+  return statutStock(variante.stock);
 };
 
 /**

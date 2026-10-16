@@ -3,22 +3,24 @@
 ## 0. Mission du projet
 
 Ce dépôt est un prototype full-stack de site web responsive de click & collect
-de glaces Ben & Jerry's. Le code actuel est encore un catalogue de films
-pédagogique : il sert de base technique, mais le produit cible est une boutique
-de pots de glace (et de produits associés), avec variantes de format et options,
-inspirée de l'univers de marque de [Ben & Jerry's France](https://www.benjerry.fr).
+de glaces Ben & Jerry's. Le domaine produit glace est déjà en place : catalogue,
+fiche produit avec variantes et stock, connexion et page d'administration. Le
+produit cible est une boutique de pots de glace (et de produits associés), avec
+variantes de format et options, inspirée de l'univers de marque de
+[Ben & Jerry's France](https://www.benjerry.fr). Restent à construire le panier,
+la commande, les options et le back-office complet.
 
 Le client commande en ligne, puis retire sa commande en magasin : il n'y a ni
 livraison ni paiement en ligne dans le périmètre.
 
 Le résultat attendu doit fonctionner sur mobile, tablette et desktop. Il doit
 conserver les principes de navigation, d'accessibilité, de sécurité et de
-séparation front/back existants, tout en remplaçant progressivement le domaine
-film par le domaine produit glace.
+séparation front/back existants, tout en complétant le domaine produit glace
+selon l'ordre de réalisation de la section 8.
 
 Ne réorganise, ne renomme et ne déplace jamais un fichier existant sans demande
 explicite. Respecte l'architecture présente avant de proposer une évolution.
-Parcours l'intégralité du dépôt, y compris `front/`, `base/back/`, `sql/`, les
+Parcours l'intégralité du dépôt, y compris `front/`, `back/`, `sql/`, les
 configurations et les sous-dossiers, avant une modification structurante.
 
 ## 1. Règles d'exécution impératives
@@ -45,7 +47,7 @@ configurations et les sous-dossiers, avant une modification structurante.
   l'existant.
 - Pour chaque test que tu veux faire ou chose que tu veux vérifier :
   `cd front/` puis `npm run dev` puis ouverture du lien
-  `http://localhost:5174/~le-flohic4/SAE301/base/`. Grâce à la config
+  `http://localhost:5174/~bellevert1/SAE301-Starter/`. Grâce à la config
   `vite.config.js`, tout fonctionne sur ce lien.
 
 ## 2. Architecture actuelle à respecter
@@ -55,16 +57,16 @@ Le dépôt est un full-stack sans framework applicatif :
 | Zone        | Rôle                                                                              | Emplacement      |
 | ----------- | --------------------------------------------------------------------------------- | ---------------- |
 | Front       | SPA Vite, Tailwind CSS 4, routeur client, pages et composants                     | `front/`         |
-| Back        | API JSON PHP, routage, contrôleurs et accès PDO/MySQL                             | `base/back/`     |
+| Back        | API JSON PHP, routage, contrôleurs et accès PDO/MySQL                             | `back/`     |
 | Données     | Schéma et seeds SQL, à faire évoluer vers produits/variantes/stock/commandes      | `sql/`           |
-| Entrée HTTP | Réécriture `/api/...` vers PHP et du reste vers `front/dist/`                     | `base/.htaccess` |
+| Entrée HTTP | Réécriture `/api/...` vers PHP et du reste vers `front/dist/`                     | `.htaccess` |
 
 Le front conserve le découpage `layouts/`, `pages/`, `ui/`, `data/` et `lib/`.
 Le back conserve `Core/`, `Controller/`, `Model/`, `routes.php` et son point
-d'entrée `base/back/index.php`. Ne crée pas une nouvelle couche ou un nouveau
+d'entrée `back/index.php`. Ne crée pas une nouvelle couche ou un nouveau
 framework seulement pour contourner cette structure.
 
-Voir ARCHITECTURE.md
+Voir README.md pour le détail de l'arborescence et de l'architecture.
 
 ## 3. MVC strict
 
@@ -157,7 +159,7 @@ template (V) --get--
   erreurs et des statuts HTTP.
 - Le routeur doit conserver les liens `data-link`, le `basename` Vite et la
   page 404. Les URL propres du sujet (`/produit/nom-produit`,
-  `/categorie/nom-categorie`) passent par ce routeur et par `base/.htaccess`.
+  `/categorie/nom-categorie`) passent par ce routeur et par `.htaccess`.
 - Le panier est stocké en `localStorage` (donc modifiable par le client) :
   il ne sert qu'à l'affichage, le serveur recalcule tout à la validation.
 - Les états loading, vide, erreur, succès, authentification et indisponibilité
@@ -223,7 +225,7 @@ que le compilateur les détecte.
 ## 6. Back-end PHP
 
 - `declare(strict_types=1)` dans chaque fichier PHP.
-- Conserve `base/back/index.php` comme point d'entrée unique : autoload,
+- Conserve `back/index.php` comme point d'entrée unique : autoload,
   configuration, connexion, session, contrôleurs et routeur.
 - Les contrôleurs valident la requête et orchestrent ; les modèles interrogent
   la base ; `Core/` contient les abstractions HTTP, DB et routage.
@@ -240,8 +242,7 @@ que le compilateur les détecte.
 
 ## 7. Données, commandes et sécurité
 
-Le futur modèle métier doit préserver les décisions documentées dans
-`sae301/avis-sujet.md` et `sae301/dependances.md` :
+Le futur modèle métier doit préserver les décisions suivantes :
 
 - un produit (un parfum de glace) a au moins une **variante**, par exemple
   « pot 100 ml » et « pot 465 ml » ; un produit sans choix possible a une
@@ -288,8 +289,7 @@ Règles obligatoires :
 
 ## 8. Ordre de réalisation métier
 
-Source : `sae301/dependances.md` (tableau des dépendances), `sae301/avis-sujet.md`
-(section 5) et `sae301/6-premieres-us.pdf` (justification des 6 premières US).
+Source : le tableau des dépendances ci-dessous.
 Respecte cet ordre sauf décision explicite. Une US n'est terminée qu'avec la
 DoD commune du sujet : branche dédiée et commits propres, HTML/CSS valides W3C,
 charte et responsive, 3 navigateurs, validation client **et** serveur en
@@ -318,7 +318,7 @@ français, contrôle des droits.
 | 18 | `SUI-c` Historique des commandes               | CMD-a                      | Moyenne    |
 | 19 | `SUI-a` Commander à nouveau                    | SUI-c, CMD-b, STK-c        | Moyenne    |
 | 20 | `PIL-a` Statistiques                           | GOF-b, CMD-a, STK-b        | Lourde     |
-| 21 | `PRO-c`, puis `PRO-a`, `PRO-b` (bonus uniquement, après stabilisation) | voir `dependances.md` | Légère |
+| 21 | `PRO-c`, puis `PRO-a`, `PRO-b` (bonus uniquement, après stabilisation) | US précédentes terminées | Légère |
 
 Jalons :
 

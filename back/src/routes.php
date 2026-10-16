@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Controller\AuthController;
-use App\Controller\CatalogueController;
 use App\Controller\ProduitController;
 use App\Controller\StatsController;
 
@@ -18,7 +17,6 @@ use App\Controller\StatsController;
  */
 
 return [
-    'GET  /api/films'       => [CatalogueController::class, 'index'],
     'GET  /api/produits'    => [ProduitController::class,   'index'],
     'GET  /api/produit'     => [ProduitController::class,   'show'],
     'POST /api/login'     => [AuthController::class,      'login'],

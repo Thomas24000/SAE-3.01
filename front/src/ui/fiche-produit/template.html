@@ -1,15 +1,15 @@
 <article>
-  <nav aria-label="Fil d'Ariane" class="mb-8 flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+  <nav aria-label="Fil d'Ariane" class="mb-8 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
     <a href="/" data-link class="hover:underline">Accueil</a>
     <span aria-hidden="true">›</span>
     <span>{{categorie}}</span>
     <span aria-hidden="true">›</span>
-    <span aria-current="page" class="text-zinc-950 dark:text-zinc-50">{{nom}}</span>
+    <span aria-current="page" class="text-fg-default">{{nom}}</span>
   </nav>
 
   <div class="grid gap-8 md:grid-cols-2 md:gap-12">
     <div class="flex flex-col gap-3 lg:flex-row-reverse lg:gap-4">
-      <div class="bandeau-clair dark:bandeau-sombre aspect-square overflow-hidden rounded-lg border border-zinc-200 lg:flex-1 dark:border-zinc-800" style="--teinte: {{teinte}}">
+      <div class="bandeau-clair dark:bandeau-sombre aspect-square overflow-hidden rounded-lg border border-border-default lg:flex-1" style="--teinte: {{teinte}}">
         <img src="{{image}}" alt="Pot de glace {{nom}}" width="560" height="560" class="size-full object-cover" />
       </div>
       <div class="hidden gap-3 sm:flex lg:flex-col">
@@ -18,12 +18,12 @@
     </div>
 
     <div class="flex flex-col gap-5">
-      <h1 class="text-2xl font-bold tracking-tight text-blue-900 md:text-3xl dark:text-blue-300">{{nom}}</h1>
+      <h1 class="text-2xl font-bold tracking-tight text-fg-brand md:text-3xl">{{nom}}</h1>
       <div class="flex items-center gap-3">
         <p class="text-3xl font-bold tracking-tight">{{prix}}</p>
         <slot name="badge"></slot>
       </div>
-      <p class="text-sm text-zinc-600 dark:text-zinc-300">{{description}}</p>
+      <p class="text-sm text-fg-muted">{{description}}</p>
 
       <fieldset>
         <legend class="mb-2 text-sm font-semibold">Format</legend>
@@ -34,28 +34,28 @@
 
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <p class="text-sm font-semibold sm:hidden">Quantité</p>
-        <div role="group" aria-label="Quantité" class="flex min-h-10 w-fit items-center gap-4 rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700">
+        <div role="group" aria-label="Quantité" class="flex min-h-10 w-fit items-center gap-4 rounded-lg border border-border-default px-3 py-2">
           <button type="button" data-quantite-delta="-1" aria-label="Diminuer la quantité" aria-disabled="{{moinsDesactive}}" class="size-4 leading-none aria-disabled:cursor-not-allowed aria-disabled:opacity-40">−</button>
           <output aria-live="polite" class="w-5 text-center font-semibold">{{quantite}}</output>
           <button type="button" data-quantite-delta="1" aria-label="Augmenter la quantité" aria-disabled="{{plusDesactive}}" class="size-4 leading-none aria-disabled:cursor-not-allowed aria-disabled:opacity-40">+</button>
         </div>
-        <button type="button" data-action="ajouter" {{achatDesactive}} class="min-h-12 flex-1 rounded-lg bg-blue-900 px-6 py-3 font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500">{{libelleAchat}}</button>
+        <button type="button" data-action="ajouter" {{achatDesactive}} class="min-h-12 flex-1 rounded-lg bg-bg-brand px-6 py-3 font-semibold text-fg-on-brand hover:opacity-90 disabled:cursor-not-allowed disabled:bg-bg-muted disabled:text-fg-on-muted">{{libelleAchat}}</button>
       </div>
 
-      <p class="text-xs text-zinc-500 dark:text-zinc-400">Retrait gratuit en magasin · Paiement au retrait</p>
+      <p class="text-xs text-fg-muted">Retrait gratuit en magasin · Paiement au retrait</p>
     </div>
   </div>
 
-  <hr class="my-10 border-zinc-200 dark:border-zinc-800" />
+  <hr class="my-10 border-border-default" />
 
   <div class="grid gap-8 md:grid-cols-2 md:gap-12">
     <section>
       <h2 class="mb-2 text-lg font-bold">Description</h2>
-      <p class="text-sm text-zinc-600 dark:text-zinc-300">{{descriptionLongue}}</p>
+      <p class="text-sm text-fg-muted">{{descriptionLongue}}</p>
     </section>
     <section>
       <h2 class="mb-2 text-lg font-bold">Ingrédients et allergènes</h2>
-      <p class="text-sm text-zinc-600 dark:text-zinc-300">{{ingredients}}</p>
+      <p class="text-sm text-fg-muted">{{ingredients}}</p>
     </section>
   </div>
 

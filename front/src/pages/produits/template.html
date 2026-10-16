@@ -1,7 +1,19 @@
-<section class="mx-auto max-w-6xl px-4 pt-10 pb-16 sm:px-6">
-  <h1 class="mb-2 text-3xl font-bold tracking-tight">Nos glaces</h1>
-  <p class="mb-8 text-zinc-600 dark:text-zinc-300">Commandez en ligne, retirez votre pot en magasin.</p>
+<div>
+  <slot name="bandeau"></slot>
 
-  <slot name="message"></slot>
-  <slot name="grille"></slot>
-</section>
+  <section id="catalogue" class="conteneur scroll-mt-20 py-10 md:py-12">
+    <h2 class="mb-6 text-2xl font-bold tracking-tight md:text-[2rem] md:tracking-[-0.5px]">Nos glaces</h2>
+
+    <slot name="message"></slot>
+
+    <div class="mb-6">
+      <slot name="filtres"></slot>
+    </div>
+
+    <slot name="grille"></slot>
+
+    <div class="mt-10 flex justify-center">
+      <slot name="voir-plus"></slot>
+    </div>
+  </section>
+</div>

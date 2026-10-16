@@ -1,6 +1,171 @@
 @import "tailwindcss";
 
 /*
+  Design tokens — miroir des variables Figma (fichier Bellevert_Thomas).
+
+  Trois collections, trois niveaux :
+    1. Primitives : les valeurs brutes (palette). Jamais utilisées directement
+       dans une page ou un composant.
+    2. Sémantique : des rôles (fond, texte, bordure…) qui pointent vers une
+       primitive, avec une valeur par thème : Light et Dark.
+    3. Dimensions : espacements, rayons, épaisseurs de bordure, grille.
+
+  Correspondance des noms : "bleu/900" dans Figma devient --color-bleu-900.
+  Dans les composants, on utilise les classes Tailwind issues de la
+  sémantique : bg-bg-default, text-fg-muted, border-border-default, etc.
+*/
+
+/* ---------------------------------------------------------------------------
+   1. PRIMITIVES — collection « Primitives » (mode Ben & Jerry's)
+   --------------------------------------------------------------------------- */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-bleu-900: #002f87;
+  --color-bleu-400: #40b4e5;
+  --color-bleu-100: #c4e7f3;
+  --color-bleu-50: #edf8fb;
+
+  --color-jaune-400: #ffbc0e;
+
+  --color-vert-800: #2a5729;
+
+  --color-neutre-0: #ffffff;
+  --color-neutre-100: #f2f2f2;
+  --color-neutre-200: #cccccc;
+  --color-neutre-600: #595959;
+  --color-neutre-850: #212529;
+  --color-neutre-900: #141414;
+  --color-neutre-1000: #000000;
+}
+
+/* ---------------------------------------------------------------------------
+   3. DIMENSIONS — collection « Dimensions »
+   --------------------------------------------------------------------------- */
+
+/* Rayons : remplacent les rayons par défaut de Tailwind (rounded-sm, -md…). */
+@theme {
+  --radius-none: 0px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+}
+
+/* Espacements, bordures et grille : variables simples, utilisables avec
+   p-(--space-16), border-(length:--border-width-2), etc. */
+:root {
+  --space-0: 0px;
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-40: 40px;
+  --space-48: 48px;
+  --space-64: 64px;
+  --space-80: 80px;
+
+  --border-width-1: 1px;
+  --border-width-2: 2px;
+
+  --layout-marge-mobile: 16px;
+  --layout-marge-tablette: 32px;
+  --layout-marge-desktop: 120px;
+  --layout-contenu-desktop: 1200px;
+}
+
+/* ---------------------------------------------------------------------------
+   2. SÉMANTIQUE — collection « Sémantique » (modes Light et Dark)
+
+   Light est le thème par défaut (:root). Dark s'active par la classe .theme-dark
+   posée sur <html> (voir lib/theme.js).
+   --------------------------------------------------------------------------- */
+:root {
+  --bg-default: var(--color-neutre-0);
+  --bg-subtle: var(--color-bleu-50);
+  --bg-accent: var(--color-bleu-100);
+  --bg-brand: var(--color-bleu-900);
+  --bg-highlight: var(--color-jaune-400);
+  --bg-success: var(--color-vert-800);
+  --bg-inverse: var(--color-neutre-900);
+  --bg-placeholder: var(--color-bleu-100);
+  --bg-muted: var(--color-neutre-200);
+
+  --fg-default: var(--color-neutre-850);
+  --fg-muted: var(--color-neutre-600);
+  --fg-brand: var(--color-bleu-900);
+  --fg-on-brand: var(--color-neutre-0);
+  --fg-on-highlight: var(--color-neutre-900);
+  --fg-on-success: var(--color-neutre-0);
+  --fg-on-muted: var(--color-neutre-900);
+  --fg-inverse: var(--color-neutre-0);
+
+  --border-default: var(--color-neutre-200);
+  --border-strong: var(--color-neutre-1000);
+  --border-brand: var(--color-bleu-900);
+  --border-focus: var(--color-bleu-400);
+}
+
+.theme-dark {
+  --bg-default: var(--color-neutre-900);
+  --bg-subtle: var(--color-neutre-850);
+  --bg-accent: var(--color-bleu-900);
+  --bg-brand: var(--color-bleu-400);
+  --bg-highlight: var(--color-jaune-400);
+  --bg-success: var(--color-vert-800);
+  --bg-inverse: var(--color-neutre-0);
+  --bg-placeholder: var(--color-neutre-850);
+  --bg-muted: var(--color-neutre-600);
+
+  --fg-default: var(--color-neutre-0);
+  --fg-muted: var(--color-neutre-200);
+  --fg-brand: var(--color-bleu-400);
+  --fg-on-brand: var(--color-neutre-900);
+  --fg-on-highlight: var(--color-neutre-900);
+  --fg-on-success: var(--color-neutre-0);
+  --fg-on-muted: var(--color-neutre-0);
+  --fg-inverse: var(--color-neutre-900);
+
+  --border-default: var(--color-neutre-600);
+  --border-strong: var(--color-neutre-0);
+  --border-brand: var(--color-bleu-400);
+  --border-focus: var(--color-bleu-400);
+}
+
+/* Expose la sémantique à Tailwind. « inline » : les classes lisent la variable
+   du thème actif au lieu de figer la valeur du thème clair. */
+@theme inline {
+  --color-bg-default: var(--bg-default);
+  --color-bg-subtle: var(--bg-subtle);
+  --color-bg-accent: var(--bg-accent);
+  --color-bg-brand: var(--bg-brand);
+  --color-bg-highlight: var(--bg-highlight);
+  --color-bg-success: var(--bg-success);
+  --color-bg-inverse: var(--bg-inverse);
+  --color-bg-placeholder: var(--bg-placeholder);
+  --color-bg-muted: var(--bg-muted);
+
+  --color-fg-default: var(--fg-default);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-brand: var(--fg-brand);
+  --color-fg-on-brand: var(--fg-on-brand);
+  --color-fg-on-highlight: var(--fg-on-highlight);
+  --color-fg-on-success: var(--fg-on-success);
+  --color-fg-on-muted: var(--fg-on-muted);
+  --color-fg-inverse: var(--fg-inverse);
+
+  --color-border-default: var(--border-default);
+  --color-border-strong: var(--border-strong);
+  --color-border-brand: var(--border-brand);
+  --color-border-focus: var(--border-focus);
+}
+
+/*
   Le thème sombre s'active par la classe theme-dark posée sur <html> (voir
   index.html et lib/theme.js), et non par le réglage du système : c'est ce que
   déclare cette variante. Une classe préfixée par dark: s'applique donc dès que
@@ -9,8 +174,8 @@
 @custom-variant dark (&:where(.theme-dark, .theme-dark *));
 
 /*
-  Bandeau des cartes de film : un dégradé dont la teinte est calculée à partir
-  du titre (voir ui/carte-film/index.js). La teinte arrive par la variable
+  Bandeau des cartes produit : un dégradé dont la teinte est calculée à partir
+  du titre (voir ui/carte-produit). La teinte arrive par la variable
   --teinte, posée dans le template. Aucune image n'est chargée.
 */
 @utility bandeau-clair {
@@ -29,6 +194,23 @@
   );
 }
 
+/* Colonne de contenu centrée, avec les marges de la maquette : 16 px sur
+   mobile, 32 px sur tablette, 120 px sur desktop, contenu limité à 1200 px. */
+@utility conteneur {
+  width: 100%;
+  max-width: calc(var(--layout-contenu-desktop) + 2 * var(--layout-marge-desktop));
+  margin-inline: auto;
+  padding-inline: var(--layout-marge-mobile);
+
+  @media (min-width: 48rem) {
+    padding-inline: var(--layout-marge-tablette);
+  }
+
+  @media (min-width: 80rem) {
+    padding-inline: var(--layout-marge-desktop);
+  }
+}
+
 @layer base {
   /* Menus déroulants et barres de défilement natifs, eux aussi en sombre. */
   .theme-dark {
@@ -38,7 +220,7 @@
   /* Un seul anneau de focus pour toute l'application, visible uniquement au
      clavier : :focus-visible ne se déclenche pas sur un clic de souris. */
   :where(a, button, select, input):focus-visible {
-    outline: 2px solid var(--color-zinc-400);
+    outline: 2px solid var(--border-focus);
     outline-offset: 2px;
   }
 

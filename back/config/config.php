@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Configuration de l'application.
  *
  * Les valeurs « a_completer » sont les identifiants de VOTRE base de données,
- * celle dans laquelle vous avez importé sql/import.sql. Tant qu'elles ne sont
+ * celle dans laquelle vous avez importé sql/glaces.sql. Tant qu'elles ne sont
  * pas renseignées, le catalogue restera vide.
  *
  * Sur le serveur de l'IUT, ce sont les identifiants MySQL qui vous ont été

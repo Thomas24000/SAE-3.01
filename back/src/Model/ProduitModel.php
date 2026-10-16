@@ -23,11 +23,13 @@ final class ProduitModel
     }
 
     /**
-     * Tous les produits du catalogue, avec leur catégorie et le prix de leur
-     * variante la moins chère (prix « à partir de »).
+     * Tous les produits du catalogue, avec leur catégorie, le prix de leur
+     * variante la moins chère (prix « à partir de ») et leur stock total
+     * (somme des stocks de leurs variantes).
      *
      * @return array<int, array{id:int, nom:string, slug:string, description:string,
-     *                          teinte:int, image:string, categorie:string, prixMin:int}>
+     *                          teinte:int, image:string, categorie:string,
+     *                          categorieSlug:string, prixMin:int, stock:int}>
      */
     public function lister(): array
     {
@@ -39,12 +41,15 @@ final class ProduitModel
                     produit.teinte,
                     produit.image,
                     categorie.libelle      AS categorie,
-                    MIN(variante.prix_cents) AS prix_min
+                    categorie.slug         AS categorie_slug,
+                    MIN(variante.prix_cents) AS prix_min,
+                    SUM(variante.stock)      AS stock
                FROM produit
          INNER JOIN categorie ON categorie.id = produit.categorie_id
          INNER JOIN variante  ON variante.produit_id = produit.id
            GROUP BY produit.id, produit.nom, produit.slug, produit.description,
-                    produit.teinte, produit.image, categorie.id, categorie.libelle
+                    produit.teinte, produit.image, categorie.id, categorie.libelle,
+                    categorie.slug
            ORDER BY categorie.id, produit.nom'
         )->fetchAll();
 
@@ -59,10 +64,53 @@ final class ProduitModel
                 'teinte'      => (int) $ligne['teinte'],
                 'image'       => $ligne['image'],
                 'categorie'   => $ligne['categorie'],
+                'categorieSlug' => $ligne['categorie_slug'],
                 'prixMin'     => (int) $ligne['prix_min'],
+                'stock'       => (int) $ligne['stock'],
             ],
             $lignes
         );
+    }
+
+    /**
+     * Statistiques globales du catalogue, pour la zone d'administration.
+     *
+     * @return array{total:int, stockTotal:int, prixMoyenCents:int,
+     *               parCategorie:array<int, array{categorie:string, nombre:int}>}
+     *         prixMoyenCents : prix moyen des variantes, en centimes.
+     */
+    public function statistiques(): array
+    {
+        $global = $this->pdo->query(
+            'SELECT (SELECT COUNT(*) FROM produit) AS total,
+                    COALESCE(SUM(stock), 0)        AS stock_total,
+                    COALESCE(AVG(prix_cents), 0)   AS prix_moyen
+               FROM variante'
+        )->fetch();
+
+        $parCategorie = $this->pdo->query(
+            'SELECT categorie.libelle AS categorie,
+                    COUNT(produit.id) AS nombre
+               FROM categorie
+          LEFT JOIN produit ON produit.categorie_id = categorie.id
+           GROUP BY categorie.id, categorie.libelle
+           ORDER BY nombre DESC, categorie.libelle ASC'
+        )->fetchAll();
+
+        // MySQL renvoie les nombres sous forme de chaînes. On les convertit
+        // ligne par ligne, pour que le JSON contienne bien des nombres.
+        return [
+            'total'          => (int) $global['total'],
+            'stockTotal'     => (int) $global['stock_total'],
+            'prixMoyenCents' => (int) round((float) $global['prix_moyen']),
+            'parCategorie'   => array_map(
+                static fn (array $ligne): array => [
+                    'categorie' => $ligne['categorie'],
+                    'nombre'    => (int) $ligne['nombre'],
+                ],
+                $parCategorie
+            ),
+        ];
     }
 
     /**

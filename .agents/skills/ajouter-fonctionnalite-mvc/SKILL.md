@@ -1,14 +1,14 @@
 ---
 name: ajouter-fonctionnalite-mvc
-description: Ajoute une fonctionnalité front au site click & collect de drones en respectant pages, composants UI, modules data et séparation MVC. À utiliser pour catalogue, détail produit, catégories, panier, commande, stock ou administration.
+description: Ajoute une fonctionnalité front au site click & collect de glaces Ben & Jerry's en respectant pages, composants UI, modules data et séparation MVC. À utiliser pour catalogue, détail produit, catégories, panier, commande, stock ou administration.
 ---
 
 # Ajouter une fonctionnalité front
 
 ## Étapes obligatoires
 
-1. Identifier l'US concernée dans `analyse-user-stories.md` et vérifier ses
-   dépendances.
+1. Identifier l'US concernée dans le tableau de la section 8 d'`AGENTS.md` et
+   vérifier ses dépendances.
 2. Lire les pages, composants, modules data, routeur et templates concernés.
 3. Présenter un découpage avant d'écrire :
    - M/data : état, appels API et transformations ;
@@ -28,7 +28,8 @@ description: Ajoute une fonctionnalité front au site click & collect de drones 
 
 - Ne pas revenir à un fichier JavaScript monolithique ni à des objets globaux
   pour simuler le MVC.
-- Ne pas utiliser de données de film pour une nouvelle fonctionnalité drone.
+- Ne pas réutiliser le vocabulaire ni les données de l'ancien catalogue de
+  films : tout est pots de glace, parfums, variantes et options.
 - Ne jamais faire confiance au front pour le prix, le rôle, le stock ou les
   permissions.
 - Ne pas modifier le back ou le schéma SQL dans la même tâche sans demande

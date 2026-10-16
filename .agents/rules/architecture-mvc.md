@@ -18,7 +18,7 @@ dynamique**, pas trois objets globaux dans un fichier unique.
   stockage métier.
 
 Une page dynamique suit le modèle présent dans
-`front/src/pages/catalogue/page.js` et `front/src/pages/admin/page.js` :
+`front/src/pages/produits/page.js` et `front/src/pages/admin/page.js` :
 état privé de page, contrôleurs d'actions, puis fonctions de rendu. La page
 exportée retourne `C.init()` au routeur.
 

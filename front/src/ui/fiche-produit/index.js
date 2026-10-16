@@ -1,28 +1,21 @@
 import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { formaterPrix } from "../../lib/format.js";
+import { BadgeStockView } from "../badge-stock/index.js";
 import template from "./template.html?raw";
 import templateVariante from "./variante.html?raw";
 import templateVignette from "./vignette.html?raw";
-import templateBadge from "./badge.html?raw";
 
 // Les classes sont écrites en entier, et non assemblées : Tailwind ne génère
 // que les classes qu'il trouve telles quelles dans le code.
 const ETATS = {
-  defaut: "border-zinc-300 hover:border-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-400",
-  selectionne: "border-2 border-zinc-950 font-semibold dark:border-zinc-50",
-  indisponible: "border-zinc-200 text-zinc-500 cursor-not-allowed dark:border-zinc-800 dark:text-zinc-400",
+  defaut: "border-border-default hover:border-border-strong",
+  selectionne: "border-2 border-border-strong font-semibold",
+  indisponible: "border-border-default text-fg-muted cursor-not-allowed",
 };
 
 const ETATS_VIGNETTE = {
-  defaut: "border-zinc-200 hover:border-zinc-500 dark:border-zinc-800 dark:hover:border-zinc-400",
-  selectionne: "border-2 border-zinc-950 dark:border-zinc-50",
-};
-
-// Badge de stock, selon le statut calculé par la page : "disponible", "bientot" ou "epuise".
-const BADGES = {
-  disponible: { libelle: "En stock", classes: "bg-green-800 text-white" },
-  bientot: { libelle: "Bientôt épuisé", classes: "bg-amber-200 text-amber-950" },
-  epuise: { libelle: "Épuisé", classes: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" },
+  defaut: "border-border-default hover:border-border-strong",
+  selectionne: "border-2 border-border-strong",
 };
 
 // Attributs qui identifient un bouton de la fiche. Servent à retrouver le
@@ -91,16 +84,6 @@ let FicheProduitView = {
   },
 
   /**
-   * Le badge de stock.
-   *
-   * @param {"disponible"|"bientot"|"epuise"} statut
-   * @returns {DocumentFragment}
-   */
-  domBadge: function (statut) {
-    return htmlToFragment(genericRenderer(templateBadge, BADGES[statut]));
-  },
-
-  /**
    * @param {{produit: {nom: string, description: string, descriptionLongue: string,
    *          ingredients: string, teinte: number, images: string[],
    *          categorie: {libelle: string}, variantes: Array<{id: number, libelle: string,
@@ -139,7 +122,7 @@ let FicheProduitView = {
       })
     );
 
-    fragment.querySelector('slot[name="badge"]').replaceWith(FicheProduitView.domBadge(data.statutStock));
+    fragment.querySelector('slot[name="badge"]').replaceWith(BadgeStockView.dom(data.statutStock));
 
     let vignettes = produit.images.map((image, index) =>
       FicheProduitView.domVignette(image, index, index === data.imageIndex)

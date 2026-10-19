@@ -21,6 +21,7 @@ import templateVoirPlus from "./voir-plus.html?raw";
 const PAGE_TAILLE = 8;
 
 let M = {
+  seuil: 0, // seuil « Bientôt épuisé », lu dans la table de paramètres via l'API
   produits: null, // tableau de produits, ou null tant que le chargement n'a pas réussi
   categorieSlug: "", // catégorie choisie, "" pour tous les produits
   affiches: PAGE_TAILLE, // nombre de produits affichés
@@ -44,7 +45,7 @@ M.produitsFiltres = function () {
 M.produitsVisibles = function () {
   return M.produitsFiltres()
     .slice(0, M.affiches)
-    .map((produit) => ({ ...produit, statutStock: statutStock(produit.stock) }));
+    .map((produit) => ({ ...produit, statutStock: statutStock(produit.stock, M.seuil) }));
 };
 
 /**
@@ -88,6 +89,7 @@ C.charger = async function () {
   try {
     let reponse = await ProduitData.fetchAll();
     M.produits = reponse.produits;
+    M.seuil = reponse.seuilBientotEpuise;
     M.message = null;
   } catch (erreur) {
     M.produits = null;

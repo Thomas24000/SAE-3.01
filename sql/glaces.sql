@@ -16,6 +16,9 @@
 
 SET NAMES utf8mb4;
 
+DROP TABLE IF EXISTS parametre;
+DROP TABLE IF EXISTS ligne_commande;
+DROP TABLE IF EXISTS commande;
 DROP TABLE IF EXISTS utilisateur;
 DROP TABLE IF EXISTS produit_image;
 DROP TABLE IF EXISTS variante;
@@ -110,6 +113,20 @@ CREATE TABLE variante (
   COLLATE = utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------------
+-- Paramètres de l'application (US STK-b) : un couple clé / valeur par réglage.
+-- seuil_bientot_epuise : stock à partir duquel (inclus) une variante est
+-- « Bientôt épuisé ». Modifiable à terme depuis le back-office.
+-- ---------------------------------------------------------------------------
+CREATE TABLE parametre (
+    cle    VARCHAR(60)  NOT NULL,
+    valeur VARCHAR(255) NOT NULL,
+
+    PRIMARY KEY (cle)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
 -- Utilisateurs (US CMD-c)
 --
 -- email : identifiant de connexion, unique (stocké en minuscules par l'API).
@@ -126,6 +143,64 @@ CREATE TABLE utilisateur (
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_utilisateur_email (email)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
+-- Commandes (US CMD-a)
+--
+-- numero : numéro lisible et unique (ex. CC-2026-000123), fabriqué par l'API
+-- à partir de l'identifiant de la commande.
+-- statut : une commande validée naît « en_cours ».
+-- total_cents : somme des lignes, figée à la validation (centimes).
+-- ---------------------------------------------------------------------------
+CREATE TABLE commande (
+    id             INT UNSIGNED                                        NOT NULL AUTO_INCREMENT,
+    numero         VARCHAR(20)                                         NOT NULL,
+    utilisateur_id INT UNSIGNED                                        NOT NULL,
+    statut         ENUM('en_cours', 'prete', 'retiree', 'annulee')     NOT NULL DEFAULT 'en_cours',
+    total_cents    INT UNSIGNED                                        NOT NULL,
+    cree_le        DATETIME                                            NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_commande_numero (numero),
+    KEY idx_commande_utilisateur (utilisateur_id),
+
+    CONSTRAINT fk_commande_utilisateur
+        FOREIGN KEY (utilisateur_id) REFERENCES utilisateur (id)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
+-- Lignes de commande
+--
+-- Instantané : le nom du produit, le format et le prix unitaire sont copiés au
+-- moment de la commande. Un changement de prix ou de libellé ultérieur ne
+-- modifie donc jamais une commande passée. variante_id passe à NULL si la
+-- variante est supprimée, la ligne reste lisible grâce à l'instantané.
+-- ---------------------------------------------------------------------------
+CREATE TABLE ligne_commande (
+    id                  INT UNSIGNED      NOT NULL AUTO_INCREMENT,
+    commande_id         INT UNSIGNED      NOT NULL,
+    variante_id         INT UNSIGNED      NULL,
+    produit_nom         VARCHAR(120)      NOT NULL,
+    variante_libelle    VARCHAR(60)       NOT NULL,
+    prix_unitaire_cents INT UNSIGNED      NOT NULL,
+    quantite            SMALLINT UNSIGNED NOT NULL,
+
+    PRIMARY KEY (id),
+    KEY idx_ligne_commande (commande_id),
+
+    CONSTRAINT fk_ligne_commande
+        FOREIGN KEY (commande_id) REFERENCES commande (id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_ligne_variante
+        FOREIGN KEY (variante_id) REFERENCES variante (id)
+        ON DELETE SET NULL
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
@@ -196,6 +271,9 @@ INSERT INTO variante (produit_id, libelle, prix_cents, stock) VALUES
     (10, 'Pot 100 ml', 270, 27), (10, 'Pot 465 ml', 720, 11),
     (11, 'Pot 100 ml', 270, 24), (11, 'Pot 465 ml', 720, 9),
     (12, 'Pot 100 ml', 270, 29), (12, 'Pot 465 ml', 720, 15);
+
+INSERT INTO parametre (cle, valeur) VALUES
+    ('seuil_bientot_epuise', '5');
 
 -- Comptes de démonstration : alice@example.com / azerty (client),
 -- admin@example.com / motdepasse (admin). Les mots de passe sont stockés hachés.

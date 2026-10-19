@@ -5,7 +5,7 @@ let ProduitData = {};
 /**
  * Le catalogue des produits : GET /api/produits
  *
- * La réponse contient { produits, total }. Chaque produit est de la forme
+ * La réponse contient { produits, total, seuilBientotEpuise }. Chaque produit est de la forme
  * { id, nom, slug, description, teinte, image, categorie, prixMin } ; prixMin est un
  * prix en centimes, celui de la variante la moins chère.
  */
@@ -25,7 +25,7 @@ ProduitData.fetchAll = async function () {
 /**
  * La fiche d'un produit : GET /api/produit?slug=…
  *
- * La réponse contient { produit } avec produit de la forme
+ * La réponse contient { produit, seuilBientotEpuise } avec produit de la forme
  * { id, nom, slug, description, descriptionLongue, ingredients, teinte, image,
  * images: [chemin], categorie: { libelle, slug },
  * variantes: [{ id, libelle, prixCents, stock }] }. Les prix sont en centimes.

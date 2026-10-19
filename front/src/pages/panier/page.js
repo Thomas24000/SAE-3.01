@@ -191,8 +191,8 @@ C.handler_remove = function (variantId) {
 
 /**
  * Clic sur « Valider ma commande ». Le serveur dit si le visiteur est connecté :
- * sinon on l'envoie à la connexion, avec retour au panier. La validation
- * elle-même est l'objet de la US CMD-a : en attendant, la page l'indique.
+ * sinon on l'envoie à la connexion, avec retour au récapitulatif de commande
+ * (US CMD-a) ; sinon on y va directement.
  */
 C.handler_validate = async function () {
   try {
@@ -204,12 +204,11 @@ C.handler_validate = async function () {
   }
 
   if (!M.isConnected()) {
-    goTo("/connexion?retour=" + encodeURIComponent("/panier"));
+    goTo("/connexion?retour=" + encodeURIComponent("/commande"));
     return;
   }
 
-  M.message = { type: "erreur", texte: "La validation de la commande n'est pas encore disponible." };
-  V.refresh(C.viewData(), "h1[data-titre]");
+  goTo("/commande");
 };
 
 C.init = async function () {

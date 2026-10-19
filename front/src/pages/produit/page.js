@@ -17,6 +17,7 @@ import template from "./template.html?raw";
  */
 
 let M = {
+  seuil: 0, // seuil « Bientôt épuisé », lu dans la table de paramètres via l'API
   produit: null, // produit, ses images et ses variantes, ou null tant que le chargement n'a pas réussi
   varianteId: null, // identifiant de la variante choisie
   imageIndex: 0, // rang de l'image affichée en grand
@@ -50,7 +51,7 @@ M.currentVariante = function () {
  * > "epuise" si le stock est nul, "bientot" s'il est sous le seuil, sinon "disponible"
  */
 M.stockStatus = function (variante) {
-  return statutStock(variante.stock);
+  return statutStock(variante.stock, M.seuil);
 };
 
 /**
@@ -81,14 +82,17 @@ M.cartCount = function () {
 
 /**
  * Les données dont la fiche a besoin pour s'afficher.
- * > { produit, varianteId, imageIndex, quantite, statutStock, totalCents,
+ * > { produit (variantes enrichies de leur statutStock), varianteId, imageIndex, quantite, statutStock, totalCents,
  *     moinsPossible, plusPossible, achatPossible }
  */
 M.ficheData = function () {
   let variante = M.currentVariante();
 
   return {
-    produit: M.produit,
+    produit: {
+      ...M.produit,
+      variantes: M.produit.variantes.map((item) => ({ ...item, statutStock: M.stockStatus(item) })),
+    },
     varianteId: M.varianteId,
     imageIndex: M.imageIndex,
     quantite: M.quantite,
@@ -117,6 +121,7 @@ C.charger = async function (slug) {
   try {
     let reponse = await ProduitData.fetchOne(slug);
     M.produit = reponse.produit;
+    M.seuil = reponse.seuilBientotEpuise;
     M.varianteId = M.defaultVarianteId(reponse.produit);
   } catch (erreur) {
     if (erreur.statut === 404) {

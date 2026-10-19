@@ -40,10 +40,11 @@ function rendreFocus(bouton) {
 // description et ingrédients.
 let FicheProduitView = {
   /**
-   * Un bouton de format. Une variante sans stock est désactivée et affiche
-   * « Épuisé » à la place du prix.
+   * Un bouton de format, avec le badge de stock de sa variante. Une variante
+   * sans stock est désactivée.
    *
-   * @param {{id: number, libelle: string, prixCents: number, stock: number}} variante
+   * @param {{id: number, libelle: string, prixCents: number, stock: number,
+   *          statutStock: "disponible"|"bientot"|"epuise"}} variante
    * @param {boolean} selectionnee - true pour la variante actuellement choisie.
    * @returns {DocumentFragment}
    */
@@ -51,16 +52,20 @@ let FicheProduitView = {
     let epuisee = variante.stock === 0;
     let etat = epuisee ? "indisponible" : selectionnee ? "selectionne" : "defaut";
 
-    return htmlToFragment(
+    let fragment = htmlToFragment(
       genericRenderer(templateVariante, {
         id: variante.id,
         libelle: variante.libelle,
-        prix: epuisee ? "Épuisé" : formaterPrix(variante.prixCents),
+        prix: formaterPrix(variante.prixCents),
         selectionnee: selectionnee,
         desactivee: epuisee ? "disabled" : "",
         classes: ETATS[etat],
       })
     );
+
+    fragment.querySelector('slot[name="badge"]').replaceWith(BadgeStockView.dom(variante.statutStock));
+
+    return fragment;
   },
 
   /**
@@ -87,7 +92,8 @@ let FicheProduitView = {
    * @param {{produit: {nom: string, description: string, descriptionLongue: string,
    *          ingredients: string, teinte: number, images: string[],
    *          categorie: {libelle: string}, variantes: Array<{id: number, libelle: string,
-   *          prixCents: number, stock: number}>},
+   *          prixCents: number, stock: number,
+   *          statutStock: "disponible"|"bientot"|"epuise"}>},
    *          varianteId: number, imageIndex: number, quantite: number,
    *          statutStock: "disponible"|"bientot"|"epuise", totalCents: number,
    *          moinsPossible: boolean, plusPossible: boolean, achatPossible: boolean}} data

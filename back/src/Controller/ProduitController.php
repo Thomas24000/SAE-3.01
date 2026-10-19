@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Core\Request;
 use App\Core\Response;
+use App\Model\ParametreModel;
 use App\Model\ProduitModel;
 
 /**
@@ -19,15 +20,19 @@ final class ProduitController
     /** Le modèle qui interroge la base, fourni à la construction. */
     private ProduitModel $produits;
 
-    public function __construct(ProduitModel $produits)
+    /** Le modèle des paramètres (seuil « Bientôt épuisé »), fourni à la construction. */
+    private ParametreModel $parametres;
+
+    public function __construct(ProduitModel $produits, ParametreModel $parametres)
     {
-        $this->produits = $produits;
+        $this->produits   = $produits;
+        $this->parametres = $parametres;
     }
 
     /**
      * GET /api/produits : la liste des produits du catalogue.
      *
-     * Réponse : { produits: [...], total: n }
+     * Réponse : { produits: [...], total: n, seuilBientotEpuise: n }
      */
     public function index(Request $requete): void
     {
@@ -36,13 +41,14 @@ final class ProduitController
         Response::json([
             'produits' => $produits,
             'total'    => count($produits),
+            'seuilBientotEpuise' => $this->parametres->seuilBientotEpuise(),
         ]);
     }
 
     /**
      * GET /api/produit?slug=cookie-dough : la fiche d'un produit.
      *
-     * Réponse : { produit: { ..., categorie, variantes: [...] } }
+     * Réponse : { produit: { ..., categorie, variantes: [...] }, seuilBientotEpuise: n }
      * Erreurs : 400 si le slug est absent ou mal formé, 404 s'il est inconnu.
      */
     public function show(Request $requete): void
@@ -61,7 +67,10 @@ final class ProduitController
             Response::erreur('Ce produit n\'existe pas.', 404);
         }
 
-        Response::json(['produit' => $produit]);
+        Response::json([
+            'produit'            => $produit,
+            'seuilBientotEpuise' => $this->parametres->seuilBientotEpuise(),
+        ]);
     }
 
     /**

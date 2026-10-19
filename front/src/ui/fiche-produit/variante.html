@@ -1,4 +1,5 @@
 <button type="button" data-variante-id="{{id}}" aria-pressed="{{selectionnee}}" {{desactivee}} class="flex min-h-[52px] flex-1 flex-col items-center justify-center rounded-lg border px-3 py-2 text-sm {{classes}}">
   <span>{{libelle}}</span>
   <span>{{prix}}</span>
+  <slot name="badge"></slot>
 </button>

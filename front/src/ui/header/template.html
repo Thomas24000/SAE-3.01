@@ -17,11 +17,13 @@
     </a>
 
     <!-- Mène à la connexion ; la page affiche « connecté » si une session est ouverte. -->
-    <a href="/connexion" data-link aria-label="Mon compte" class="flex min-h-10 min-w-10 items-center justify-center text-fg-default">
+    <a href="/connexion" data-link data-compte-lien aria-label="{{compteLibelle}}" class="flex min-h-10 min-w-10 items-center justify-center gap-2 text-fg-default">
       <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2" />
         <path d="M4 21C4 17.134 7.58172 14 12 14C16.4183 14 20 17.134 20 21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
+      <!-- L'identifiant n'apparaît que pour un visiteur connecté (attribut hidden). -->
+      <span data-compte-login {{masqueLogin}} class="max-w-32 truncate text-sm font-medium">{{login}}</span>
     </a>
 
     <button type="button" data-action="theme" aria-label="Changer de thème" class="h-8 rounded-md border border-border-default px-3 text-sm font-medium transition-colors hover:bg-bg-subtle">

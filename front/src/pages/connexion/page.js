@@ -1,6 +1,7 @@
 import { AuthData } from "../../data/auth.js";
 import { goTo, readQuery, safeReturnPath } from "../../lib/navigation.js";
 import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
+import { HeaderView } from "../../ui/header/index.js";
 import { FormulaireLoginView } from "../../ui/formulaire-login/index.js";
 import { MessageView } from "../../ui/message/index.js";
 import template from "./template.html?raw";
@@ -142,6 +143,8 @@ V.refresh = function (data, focusSelector) {
   V.racine.replaceWith(fragment);
   V.racine = nouvelleRacine;
 
+  // Le header est hors de la page : après une déconnexion, on le met à jour.
+  HeaderView.updateAccount(data.connecte ? data.loginConnecte : null);
   document.querySelector(focusSelector)?.focus();
 };
 

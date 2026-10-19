@@ -19,6 +19,12 @@ final class CommandeModel
     /** Statut d'une commande qui vient d'être validée. */
     private const STATUT_INITIAL = 'en_cours';
 
+    /** Statut qui rend le stock des lignes (US STK-a). */
+    private const STATUT_ANNULEE = 'annulee';
+
+    /** Statuts qu'une commande peut prendre (liste blanche). */
+    private const STATUTS = ['en_cours', 'prete', 'retiree', 'annulee'];
+
     /** Connexion à la base, fournie à la construction. */
     private PDO $pdo;
 
@@ -30,15 +36,17 @@ final class CommandeModel
     /**
      * Enregistre une commande : la commande et toutes ses lignes, ou rien.
      *
-     * Les variantes sont relues dans la transaction (avec un verrou de lecture,
-     * pour que leur prix ne change pas avant l'écriture) et leur nom, format et
-     * prix sont copiés dans les lignes. Le numéro est fabriqué avec
-     * l'identifiant de la commande : CC-2026-000123.
+     * Les variantes sont relues dans la transaction (avec un verrou d'écriture :
+     * deux commandes simultanées se mettent en file, la seconde voit le stock
+     * laissé par la première) et leur nom, format et prix sont copiés dans les
+     * lignes. Le stock de chaque variante est décrémenté et journalisé dans la
+     * même transaction (US STK-a). Le numéro est fabriqué avec l'identifiant de
+     * la commande : CC-2026-000123.
      *
      * @param int $utilisateurId Identifiant du client connecté.
      * @param array<int, array{variantId:int, quantite:int}> $lignes Lignes déjà validées (entiers positifs, variantes distinctes).
      * @return array{numero:string, statut:string, totalCents:int}
-     * @throws DomainException Si une variante n'existe plus.
+     * @throws DomainException Si une variante n'existe plus ou n'a plus assez de stock.
      */
     public function creer(int $utilisateurId, array $lignes): array
     {
@@ -56,6 +64,13 @@ final class CommandeModel
                     if ($variante === null) {
                         throw new DomainException(
                             'Un article de ton panier n\'est plus proposé. Retourne au panier pour le mettre à jour.'
+                        );
+                    }
+
+                    if ($variante['stock'] < $ligne['quantite']) {
+                        throw new DomainException(
+                            'Stock insuffisant pour « ' . $variante['nom'] . ' » (' . $variante['libelle']
+                            . ') : il en reste ' . $variante['stock'] . '. Retourne au panier pour ajuster la quantité.'
                         );
                     }
 
@@ -106,6 +121,11 @@ final class CommandeModel
                 $detail
             );
 
+            array_map(
+                fn (array $ligne) => $this->mouvementer($commandeId, $ligne['id'], 'sortie', $ligne['quantite']),
+                $detail
+            );
+
             $this->pdo->commit();
         } catch (Throwable $e) {
             $this->pdo->rollBack();
@@ -113,6 +133,62 @@ final class CommandeModel
         }
 
         return ['numero' => $numero, 'statut' => self::STATUT_INITIAL, 'totalCents' => $total];
+    }
+
+    /**
+     * Change le statut d'une commande : c'est la SEULE porte d'entrée pour le
+     * faire, donc le seul endroit où le stock est recrédité (US STK-a).
+     *
+     * Le stock des lignes est rendu (et journalisé) uniquement au passage à
+     * « annulee » ; tout autre changement laisse le stock intact. Tout se passe
+     * dans une transaction : si un recrédit échoue, le statut n'est pas changé.
+     * La commande est verrouillée, donc deux annulations simultanées ne rendent
+     * le stock qu'une fois.
+     *
+     * @param int $commandeId Identifiant de la commande.
+     * @param string $statut Nouveau statut (en_cours, prete, retiree ou annulee).
+     * @throws DomainException Si le statut est inconnu, la commande introuvable ou
+     *                         la transition interdite (une commande annulée ou
+     *                         déjà retirée ne peut plus être annulée).
+     */
+    public function changerStatut(int $commandeId, string $statut): void
+    {
+        if (!in_array($statut, self::STATUTS, true)) {
+            throw new DomainException('Statut de commande inconnu.');
+        }
+
+        $this->pdo->beginTransaction();
+
+        try {
+            $requete = $this->pdo->prepare('SELECT statut FROM commande WHERE id = :id FOR UPDATE');
+            $requete->execute(['id' => $commandeId]);
+            $actuel = $requete->fetchColumn();
+
+            if ($actuel === false) {
+                throw new DomainException('Commande introuvable.');
+            }
+
+            if ($actuel === self::STATUT_ANNULEE && $statut !== self::STATUT_ANNULEE) {
+                throw new DomainException('Une commande annulée ne peut plus changer de statut.');
+            }
+
+            if ($statut === self::STATUT_ANNULEE && $actuel !== self::STATUT_ANNULEE) {
+                if ($actuel === 'retiree') {
+                    throw new DomainException('Une commande déjà retirée ne peut pas être annulée.');
+                }
+
+                $this->recrediter($commandeId);
+            }
+
+            $this->pdo
+                ->prepare('UPDATE commande SET statut = :statut WHERE id = :id')
+                ->execute(['statut' => $statut, 'id' => $commandeId]);
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
     }
 
     /**
@@ -167,11 +243,94 @@ final class CommandeModel
     }
 
     /**
+     * Rend au stock les quantités d'une commande annulée, ligne par ligne.
+     * À appeler dans une transaction ouverte.
+     *
+     * @param int $commandeId Identifiant de la commande annulée.
+     */
+    private function recrediter(int $commandeId): void
+    {
+        // Les lignes dont la variante a été supprimée n'ont plus de stock à rendre.
+        $requete = $this->pdo->prepare(
+            'SELECT variante_id, quantite
+               FROM ligne_commande
+              WHERE commande_id = :commande AND variante_id IS NOT NULL
+           ORDER BY variante_id'
+        );
+        $requete->execute(['commande' => $commandeId]);
+
+        array_map(
+            fn (array $ligne) => $this->mouvementer(
+                $commandeId,
+                (int) $ligne['variante_id'],
+                'retour',
+                (int) $ligne['quantite']
+            ),
+            $requete->fetchAll()
+        );
+    }
+
+    /**
+     * Déplace le stock d'une variante et l'inscrit au journal, dans la
+     * transaction en cours : c'est l'unique endroit qui écrit le stock.
+     *
+     * La variante est verrouillée avant la lecture. Une sortie n'est exécutée
+     * que si le stock suffit (`stock >= quantité`), sinon rien n'est écrit.
+     *
+     * @param int $commandeId Commande à l'origine du mouvement.
+     * @param int $varianteId Variante dont le stock bouge.
+     * @param string $type « sortie » (validation) ou « retour » (annulation).
+     * @param int $quantite Quantité déplacée, toujours positive.
+     * @throws DomainException Si le stock est insuffisant ou la variante absente.
+     */
+    private function mouvementer(int $commandeId, int $varianteId, string $type, int $quantite): void
+    {
+        $lecture = $this->pdo->prepare('SELECT stock FROM variante WHERE id = :id FOR UPDATE');
+        $lecture->execute(['id' => $varianteId]);
+        $avant = $lecture->fetchColumn();
+
+        if ($avant === false) {
+            throw new DomainException('Une variante de la commande n\'existe plus.');
+        }
+
+        $avant = (int) $avant;
+        $apres = $type === 'sortie' ? $avant - $quantite : $avant + $quantite;
+
+        if ($apres < 0) {
+            throw new DomainException('Stock insuffisant : la commande ne peut pas être validée.');
+        }
+
+        // La condition « stock = :avant » est redondante avec le verrou : elle
+        // garantit qu'aucune autre écriture n'a glissé entre lecture et mise à jour.
+        $miseAJour = $this->pdo->prepare('UPDATE variante SET stock = :apres WHERE id = :id AND stock = :avant');
+        $miseAJour->execute(['apres' => $apres, 'id' => $varianteId, 'avant' => $avant]);
+
+        if ($miseAJour->rowCount() !== 1) {
+            throw new DomainException('Le stock a changé pendant la commande, réessaie.');
+        }
+
+        $this->pdo
+            ->prepare(
+                'INSERT INTO mouvement_stock (variante_id, commande_id, type, quantite, stock_avant, stock_apres)
+                 VALUES (:variante, :commande, :type, :quantite, :avant, :apres)'
+            )
+            ->execute([
+                'variante' => $varianteId,
+                'commande' => $commandeId,
+                'type'     => $type,
+                'quantite' => $quantite,
+                'avant'    => $avant,
+                'apres'    => $apres,
+            ]);
+    }
+
+    /**
      * Les variantes demandées, avec le nom de leur produit, verrouillées en
-     * lecture jusqu'à la fin de la transaction.
+     * écriture jusqu'à la fin de la transaction (par identifiant croissant, pour
+     * que deux commandes ne s'attendent jamais l'une l'autre).
      *
      * @param array<int, int> $ids Identifiants de variantes.
-     * @return array<int, array{id:int, libelle:string, prix_cents:int, nom:string}> Indexé par identifiant de variante.
+     * @return array<int, array{id:int, libelle:string, prix_cents:int, stock:int, nom:string}> Indexé par identifiant de variante.
      */
     private function lireVariantes(array $ids): array
     {
@@ -179,11 +338,12 @@ final class CommandeModel
         $marqueurs = implode(',', array_fill(0, count($ids), '?'));
 
         $requete = $this->pdo->prepare(
-            'SELECT variante.id, variante.libelle, variante.prix_cents, produit.nom
+            'SELECT variante.id, variante.libelle, variante.prix_cents, variante.stock, produit.nom
                FROM variante
          INNER JOIN produit ON produit.id = variante.produit_id
               WHERE variante.id IN (' . $marqueurs . ')
-              LOCK IN SHARE MODE'
+           ORDER BY variante.id
+                FOR UPDATE'
         );
         $requete->execute(array_values($ids));
 
@@ -196,6 +356,7 @@ final class CommandeModel
                     'id'         => (int) $ligne['id'],
                     'libelle'    => $ligne['libelle'],
                     'prix_cents' => (int) $ligne['prix_cents'],
+                    'stock'      => (int) $ligne['stock'],
                     'nom'        => $ligne['nom'],
                 ],
                 $lignes

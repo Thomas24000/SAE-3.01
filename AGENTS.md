@@ -400,6 +400,7 @@ back/
     ├── Core/                Database (PDO singleton), Request, Response (json/erreur + exit), Router
     ├── Controller/          AuthController, CommandeController, ProduitController, StatsController
     └── Model/               CommandeModel, ParametreModel, ProduitModel, UtilisateurModel
+back/tests/stock.php         tests CLI du stock STK-a (base jetable, `Require all denied`)
 front/
 ├── index.html               page unique : police Inter, script inline du thème, #app, main.js
 ├── vite.config.js           BASE = "/~bellevert1/SAE301-Starter/", proxy /api → mmi.unilim.fr
@@ -510,7 +511,7 @@ touchent au `localStorage`.
 | `POST /api/inscription` | `AuthController::register` | `UtilisateurModel::create()` | corps `{ email, mdp, confirmation }` → 201 `{ connecte, email, role: "client" }` (connecte aussitôt) ; 400 validation (`filter_var`), 409 e-mail pris |
 | `GET /api/me` | `AuthController::me` | — (lit la session) | `{ connecte: false }` ou `{ connecte, email, role }` |
 | `POST /api/logout` | `AuthController::logout` | — | `{ connecte: false }` |
-| `POST /api/commande` | `CommandeController::store` | `CommandeModel::creer()` | corps `{ lignes: [{ variantId, quantite }] }` → 201 `{ commande: { numero, statut, totalCents } }` ; 401 non connecté, 400 lignes invalides (vide, > 50, doublon, quantité hors 1-99), 409 variante disparue. Transaction : prix relus en base (verrou `LOCK IN SHARE MODE`), prix du client ignoré |
+| `POST /api/commande` | `CommandeController::store` | `CommandeModel::creer()` | corps `{ lignes: [{ variantId, quantite }] }` → 201 `{ commande: { numero, statut, totalCents } }` ; 401 non connecté, 400 lignes invalides (vide, > 50, doublon, quantité hors 1-99), 409 variante disparue **ou stock insuffisant**. Transaction : variantes verrouillées `FOR UPDATE` par id croissant, prix relus en base (prix du client ignoré), stock décrémenté et journalisé (STK-a) |
 | `GET /api/commande?numero=` | `CommandeController::show` | `CommandeModel::findByNumero()` | `{ commande: { numero, statut, totalCents, creeLe, email, lignes } }` ; 401, 400 numéro mal formé, 404 inconnue **ou à un autre client** |
 | `GET /api/admin/stats` | `StatsController::index` | `statistiques()` | 403 si `$_SESSION['role'] !== 'admin'` |
 
@@ -532,6 +533,7 @@ Itérations PHP : `for` ou `array_map`, jamais `foreach`.
 | `utilisateur` | `email` (minuscules), `mot_de_passe` (hachage `password_hash`), `role` (`client`\|`admin`), `cree_le` | `UNIQUE(email)` |
 | `commande` | `numero` (`CC-AAAA-000123`), `utilisateur_id`, `statut` (`en_cours`\|`prete`\|`retiree`\|`annulee`, défaut `en_cours`), `total_cents`, `cree_le` | `UNIQUE(numero)`, FK → utilisateur `RESTRICT` |
 | `ligne_commande` | `commande_id`, `variante_id` (NULL si supprimée), `produit_nom`, `variante_libelle`, `prix_unitaire_cents`, `quantite` | FK commande `CASCADE`, FK variante `SET NULL` ; nom, format et prix **figés** à la commande |
+| `mouvement_stock` | `variante_id` (NULL si supprimée), `commande_id`, `type` (`sortie`\|`retour`), `quantite`, `stock_avant`, `stock_apres`, `cree_le` | `UNIQUE(commande_id, variante_id, type)` (idempotence), FK variante `SET NULL`, FK commande `CASCADE` ; `variante.stock` a en plus `CHECK (stock >= 0)` |
 
 Seeds : 3 catégories (pots classiques, sans lactose, sorbets) × 4 produits,
 2 variantes chacun (« Pot 100 ml » 2,90 €, « Pot 465 ml » 7,90 €), stocks
@@ -540,7 +542,12 @@ variés (certains ≤ 5 pour tester « Bientôt épuisé »). Comptes de démo
 | `parametre` | `cle` (PK), `valeur` ; seed `seuil_bientot_epuise` = 5 | lue par `ParametreModel` (repli sur 5 si absente) |
 
 **Absentes pour l'instant** :
-`option`, `mouvement_stock` (à créer selon §7 et l'ordre §8).
+`option` (à créer selon §7 et l'ordre §8).
+
+**Stock (STK-a)** : `CommandeModel::mouvementer()` est le seul endroit qui
+écrit `variante.stock` ; `creer()` l'appelle (sortie) et `changerStatut()`
+(seule porte pour changer un statut, aucune route pour l'instant : PIL-b) rend
+le stock uniquement au passage à `annulee`. Test : `back/tests/stock.php`.
 
 ### 12.9 Quel skill ouvrir pour quelle tâche
 
@@ -566,7 +573,7 @@ variés (certains ≤ 5 pour tester « Bientôt épuisé »). Comptes de démo
 | 7 | `config.php` : `debug => true` ; contient de vrais identifiants | passer à `false` en prod ; ne jamais afficher ni committer les identifiants |
 | 8 | Commentaires de `lib/api-request.js` et `lib/router.js` citent `/~login/Base/` (héritage du TP) | sans effet ; ne pas « corriger » sans demande |
 | 9 | Pas de jeton CSRF : `POST /api/commande` s'appuie sur le cookie `SameSite=Lax` et le corps JSON | à prévoir avant les écritures admin |
-| 11 | Validation de commande : le stock n'est ni contrôlé ni décrémenté (hors CMD-a) | STK-a (même transaction que `CommandeModel::creer`) et STK-c |
+| 11 | Stock décrémenté, journalisé et recrédité : **résolu** (STK-a). Reste : messages et affichage côté front d'un refus pour stock insuffisant (409), ajustement du panier | STK-c |
 | 12 | Aucun e-mail de confirmation : la confirmation est la page `/commande/:numero` | hors périmètre actuel |
 | 10 | Aucun `foreach` dans le code applicatif (`for…of` dans le routeur, `forEach` seulement dans `check-mvc.js`, outil hors application) | garder la règle §1 |
 

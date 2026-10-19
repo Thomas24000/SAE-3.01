@@ -17,6 +17,7 @@
 SET NAMES utf8mb4;
 
 DROP TABLE IF EXISTS parametre;
+DROP TABLE IF EXISTS mouvement_stock;
 DROP TABLE IF EXISTS ligne_commande;
 DROP TABLE IF EXISTS commande;
 DROP TABLE IF EXISTS utilisateur;
@@ -103,6 +104,8 @@ CREATE TABLE variante (
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_variante_produit_libelle (produit_id, libelle),
+    -- Dernier garde-fou (US STK-a) : le stock ne peut jamais être négatif.
+    CONSTRAINT ck_variante_stock CHECK (stock >= 0),
 
     CONSTRAINT fk_variante_produit
         FOREIGN KEY (produit_id) REFERENCES produit (id)
@@ -201,6 +204,40 @@ CREATE TABLE ligne_commande (
     CONSTRAINT fk_ligne_variante
         FOREIGN KEY (variante_id) REFERENCES variante (id)
         ON DELETE SET NULL
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
+-- Journal des mouvements de stock (US STK-a)
+--
+-- Une ligne par variante et par mouvement : « sortie » à la validation d'une
+-- commande, « retour » à son annulation. quantite est toujours positive, le
+-- sens est donné par le type. stock_avant / stock_apres permettent de rejouer
+-- l'historique. La clé unique rend chaque mouvement idempotent : une commande
+-- ne peut ni sortir ni revenir deux fois le stock d'une même variante.
+-- Le journal est conservé même si la variante est supprimée (variante_id NULL).
+-- ---------------------------------------------------------------------------
+CREATE TABLE mouvement_stock (
+    id          INT UNSIGNED         NOT NULL AUTO_INCREMENT,
+    variante_id INT UNSIGNED         NULL,
+    commande_id INT UNSIGNED         NOT NULL,
+    type        ENUM('sortie', 'retour') NOT NULL,
+    quantite    SMALLINT UNSIGNED    NOT NULL,
+    stock_avant INT UNSIGNED         NOT NULL,
+    stock_apres INT UNSIGNED         NOT NULL,
+    cree_le     DATETIME             NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_mouvement (commande_id, variante_id, type),
+    KEY idx_mouvement_variante (variante_id),
+
+    CONSTRAINT fk_mouvement_variante
+        FOREIGN KEY (variante_id) REFERENCES variante (id)
+        ON DELETE SET NULL,
+    CONSTRAINT fk_mouvement_commande
+        FOREIGN KEY (commande_id) REFERENCES commande (id)
+        ON DELETE CASCADE
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;

@@ -17,8 +17,9 @@ export function statutStock(stock, seuil) {
  * Remet des lignes de panier d'accord avec le stock actuel (US STK-c) : une
  * quantité supérieure au stock est ramenée au stock, une variante épuisée est
  * retirée. Une ligne dont la variante est absente de `variantes` est laissée
- * telle quelle (c'est un autre contrôle qui la retire). Fonction pure : elle ne
- * modifie ni `lignes` ni `variantes`.
+ * telle quelle (c'est un autre contrôle qui la retire). Les lignes d'une même
+ * variante (options différentes) se partagent son stock, dans l'ordre du
+ * panier. Fonction pure : elle ne modifie ni `lignes` ni `variantes`.
  *
  * @param {Array<{variantId: number, quantite: number}>} lignes - le panier du navigateur.
  * @param {Array<{variantId: number, libelle: string, stock: number, produit: {nom: string}}>} variantes
@@ -31,22 +32,31 @@ export function statutStock(stock, seuil) {
  */
 export function ajusterLignes(lignes, variantes) {
   let ajustements = [];
+  let utilise = {}; // stock déjà attribué aux lignes précédentes, par variante
 
   let ajustees = lignes
     .map((ligne) => {
       let variante = variantes.find((autre) => autre.variantId === ligne.variantId);
-      if (variante === undefined || ligne.quantite <= variante.stock) return ligne;
+      if (variante === undefined) return ligne;
+
+      let restant = Math.max(0, variante.stock - (utilise[ligne.variantId] ?? 0));
+      if (ligne.quantite <= restant) {
+        utilise[ligne.variantId] = (utilise[ligne.variantId] ?? 0) + ligne.quantite;
+        return ligne;
+      }
+
+      utilise[ligne.variantId] = (utilise[ligne.variantId] ?? 0) + restant;
 
       ajustements.push({
         variantId: ligne.variantId,
         nom: variante.produit.nom,
         libelle: variante.libelle,
-        type: variante.stock === 0 ? "epuise" : "reduite",
+        type: restant === 0 ? "epuise" : "reduite",
         ancienneQuantite: ligne.quantite,
-        quantite: variante.stock,
+        quantite: restant,
       });
 
-      return { variantId: ligne.variantId, quantite: variante.stock };
+      return { ...ligne, quantite: restant };
     })
     .filter((ligne) => ligne.quantite > 0);
 

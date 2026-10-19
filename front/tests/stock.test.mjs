@@ -79,6 +79,18 @@ test("les tableaux reçus ne sont pas modifiés", () => {
   assert.deepEqual(panier, [{ variantId: 1, quantite: 5 }]);
 });
 
+test("deux lignes d'une même variante (options différentes) se partagent le stock", () => {
+  let resultat = ajusterLignes(
+    [{ variantId: 1, quantite: 2, options: [4] }, { variantId: 1, quantite: 3, options: [] }],
+    [variante(1, 4)]
+  );
+  assert.deepEqual(resultat.lignes, [
+    { variantId: 1, quantite: 2, options: [4] },
+    { variantId: 1, quantite: 2, options: [] },
+  ]);
+  assert.equal(resultat.ajustements.length, 1);
+});
+
 console.log("texteAjustements");
 
 test("rien à signaler : null", () => {

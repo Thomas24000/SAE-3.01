@@ -3,6 +3,7 @@ import { CommandeData } from "../../data/commande.js";
 import { PanierData } from "../../data/panier.js";
 import { ProduitData } from "../../data/produit.js";
 import { goTo } from "../../lib/navigation.js";
+import { ajusterLignes, texteAjustements } from "../../lib/stock.js";
 import { htmlToFragment } from "../../lib/utils.js";
 import { EncartValidationView } from "../../ui/encart-validation/index.js";
 import { LigneCommandeView } from "../../ui/ligne-commande/index.js";
@@ -38,8 +39,11 @@ M.findVariante = function (variantId) {
 };
 
 /**
- * Retire du panier les lignes dont la variante n'existe plus côté serveur.
- * > le nombre de lignes retirées
+ * Remet le panier d'accord avec le serveur : retire les lignes dont la variante
+ * n'existe plus, puis ramène les quantités au stock (US STK-c) en retirant les
+ * variantes épuisées.
+ * > { retirees, ajustements } : le nombre de lignes disparues du serveur et les
+ *   lignes de stock modifiées (voir ajusterLignes)
  */
 M.reconcile = function () {
   let retirees = 0;
@@ -51,8 +55,11 @@ M.reconcile = function () {
     }
   }
 
+  let ajuste = ajusterLignes(PanierData.read(), M.variantes);
+  PanierData.write(ajuste.lignes);
+
   M.lignes = PanierData.read();
-  return retirees;
+  return { retirees: retirees, ajustements: ajuste.ajustements };
 };
 
 /**
@@ -92,6 +99,20 @@ M.totalCents = function () {
 let C = {};
 
 /**
+ * Relit prix et stock auprès du serveur et ajuste le panier en conséquence.
+ * > le message qui explique les ajustements, ou null si le panier n'a pas
+ *   changé (lève une ErreurApi si le serveur ne répond pas)
+ */
+C.syncStock = async function () {
+  if (M.lignes.length === 0) return null;
+
+  M.variantes = (await ProduitData.fetchVariantes(M.lignes.map((ligne) => ligne.variantId))).variantes;
+
+  let reconciliation = M.reconcile();
+  return texteAjustements(reconciliation.ajustements, reconciliation.retirees);
+};
+
+/**
  * Vérifie la connexion puis charge le panier et ses variantes. Renvoie false
  * quand le visiteur a été redirigé vers la connexion.
  * > true si la page doit s'afficher
@@ -119,10 +140,10 @@ C.charger = async function () {
   if (M.lignes.length === 0) return true;
 
   try {
-    M.variantes = (await ProduitData.fetchVariantes(M.lignes.map((ligne) => ligne.variantId))).variantes;
+    let texte = await C.syncStock();
 
-    if (M.reconcile() > 0) {
-      M.message = { type: "erreur", texte: "Un article qui n'est plus proposé a été retiré de ton panier." };
+    if (texte !== null) {
+      M.message = { type: "erreur", texte: texte };
     }
   } catch (erreur) {
     M.echec = true;
@@ -148,9 +169,12 @@ C.viewData = function () {
 };
 
 /**
- * Clic sur « Confirmer ma commande » : envoie le panier au serveur, qui
- * enregistre la commande. Le panier n'est vidé qu'une fois la commande
- * acceptée, puis le client arrive sur la page de confirmation.
+ * Clic sur « Confirmer ma commande » : relit le stock (le panier peut dater) ;
+ * s'il a obligé à ajuster le panier, rien n'est envoyé et le client revoit sa
+ * commande. Sinon le panier part au serveur, qui enregistre la commande et fait
+ * foi : si son stock a encore changé (409), on réajuste et on l'explique. Le
+ * panier n'est vidé qu'une fois la commande acceptée, puis le client arrive sur
+ * la page de confirmation.
  */
 C.handler_confirm = async function () {
   if (M.envoiEnCours) return;
@@ -160,6 +184,15 @@ C.handler_confirm = async function () {
   V.refresh(C.viewData(), 'button[data-action="confirmer"]');
 
   try {
+    let texte = await C.syncStock();
+
+    if (texte !== null) {
+      M.envoiEnCours = false;
+      M.message = { type: "erreur", texte: `${texte} Vérifie ta commande, puis confirme-la.` };
+      V.refresh(C.viewData(), "h1[data-titre]");
+      return;
+    }
+
     let reponse = await CommandeData.create(M.lignes);
     PanierData.clear();
     goTo("/commande/" + encodeURIComponent(reponse.commande.numero));
@@ -173,6 +206,18 @@ C.handler_confirm = async function () {
     }
 
     M.message = { type: "erreur", texte: erreur.message };
+
+    // Stock épuisé entre-temps : on réajuste le panier pour que le client voie
+    // ce qui reste possible.
+    if (erreur.statut === 409) {
+      try {
+        let texte = await C.syncStock();
+        if (texte !== null) M.message = { type: "erreur", texte: `${texte} Vérifie ta commande, puis confirme-la.` };
+      } catch (autre) {
+        // Le message du serveur suffit si le stock ne peut pas être relu.
+      }
+    }
+
     V.refresh(C.viewData(), "h1[data-titre]");
   }
 };

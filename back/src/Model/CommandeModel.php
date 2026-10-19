@@ -192,6 +192,29 @@ final class CommandeModel
     }
 
     /**
+     * Compteurs des commandes pour le tableau de bord du back-office.
+     *
+     * @return array{total:int, aujourdhui:int, enCours:int}
+     *         total : toutes les commandes ; aujourdhui : créées aujourd'hui ;
+     *         enCours : encore au statut « en_cours » (à préparer).
+     */
+    public function statistiques(): array
+    {
+        $ligne = $this->pdo->query(
+            "SELECT COUNT(*)                                          AS total,
+                    COALESCE(SUM(DATE(cree_le) = CURDATE()), 0)       AS aujourdhui,
+                    COALESCE(SUM(statut = 'en_cours'), 0)             AS en_cours
+               FROM commande"
+        )->fetch();
+
+        return [
+            'total'      => (int) $ligne['total'],
+            'aujourdhui' => (int) $ligne['aujourdhui'],
+            'enCours'    => (int) $ligne['en_cours'],
+        ];
+    }
+
+    /**
      * Une commande et ses lignes, retrouvées par leur numéro. Seul le client qui
      * l'a passée peut la lire : pour tout autre, elle n'existe pas.
      *

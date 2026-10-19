@@ -114,6 +114,27 @@ final class ProduitModel
     }
 
     /**
+     * Nombre de produits « Bientôt épuisé » ou épuisés : leur stock total
+     * (somme des variantes) est au plus égal au seuil.
+     *
+     * @param int $seuil Seuil « Bientôt épuisé » (inclus), lu dans la table parametre.
+     * @return int
+     */
+    public function compterSousSeuil(int $seuil): int
+    {
+        $requete = $this->pdo->prepare(
+            'SELECT COUNT(*)
+               FROM (SELECT produit_id
+                       FROM variante
+                   GROUP BY produit_id
+                     HAVING SUM(stock) <= :seuil) AS sous_seuil'
+        );
+        $requete->execute(['seuil' => $seuil]);
+
+        return (int) $requete->fetchColumn();
+    }
+
+    /**
      * Des variantes retrouvées par leur identifiant, avec le produit auquel elles
      * appartiennent : de quoi afficher les lignes d'un panier. Un identifiant
      * inconnu est simplement absent du résultat.

@@ -30,9 +30,10 @@ DROP TABLE IF EXISTS categorie;
 -- Catégories
 -- ---------------------------------------------------------------------------
 CREATE TABLE categorie (
-    id      TINYINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    libelle VARCHAR(60)      NOT NULL,
-    slug    VARCHAR(60)      NOT NULL,
+    id          TINYINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    libelle     VARCHAR(60)      NOT NULL,
+    slug        VARCHAR(60)      NOT NULL,
+    description VARCHAR(255)     NOT NULL DEFAULT '',
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_categorie_slug (slug)
@@ -245,10 +246,10 @@ CREATE TABLE mouvement_stock (
 -- ---------------------------------------------------------------------------
 -- Jeu de données
 -- ---------------------------------------------------------------------------
-INSERT INTO categorie (id, libelle, slug) VALUES
-    (1, 'Pots classiques', 'pots-classiques'),
-    (2, 'Sans lactose',    'sans-lactose'),
-    (3, 'Sorbets',         'sorbets');
+INSERT INTO categorie (id, libelle, slug, description) VALUES
+    (1, 'Pots classiques', 'pots-classiques', 'Les parfums historiques de Ben & Jerry''s, en pot.'),
+    (2, 'Sans lactose',    'sans-lactose',    'Recettes sans produits laitiers, à base de boisson à l''amande.'),
+    (3, 'Sorbets',         'sorbets',         'Sorbets aux fruits, frais et sans produits laitiers.');
 
 INSERT INTO produit (id, categorie_id, nom, slug, description, teinte, image, description_longue, ingredients) VALUES
     (1,  1, 'Cookie Dough',          'cookie-dough',          'Glace vanille avec des morceaux de pâte à cookie et des pépites de chocolat.',            45, 'images/produits/cookie-dough.svg',

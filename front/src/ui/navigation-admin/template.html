@@ -1,0 +1,35 @@
+<div class="bg-bg-brand text-fg-on-brand md:sticky md:top-0 md:flex md:h-screen md:w-18 md:shrink-0 md:flex-col md:gap-2 md:px-3 md:py-6 lg:w-60 lg:px-4">
+  <div class="flex items-center gap-3 px-4 py-3 md:flex-col md:items-start md:px-0 md:py-0 md:pb-4">
+    <button type="button" data-action="menu" aria-expanded="false" aria-controls="menu-admin" aria-label="Ouvrir le menu" class="flex size-10 items-center justify-center md:hidden">
+      <img src="{{images}}nav-menu.svg" alt="" width="24" height="24" class="size-6 brightness-0 invert dark:invert-0" />
+    </button>
+    <div class="flex h-8 w-10 items-center justify-center rounded-md bg-bg-placeholder text-xs text-fg-muted md:size-12 lg:h-10 lg:w-35">
+      <span class="lg:hidden">B&amp;J</span>
+      <span class="hidden lg:inline">Logo Ben &amp; Jerry's</span>
+    </div>
+    <p class="text-[11px] font-medium md:hidden lg:block">BACK-OFFICE</p>
+  </div>
+
+  <!-- Mobile : replié jusqu'au clic sur le bouton menu. À partir de la tablette, toujours visible. -->
+  <div id="menu-admin" data-menu class="hidden flex-col gap-1 px-4 pb-4 md:flex md:flex-1 md:px-0 md:pb-0">
+    <nav aria-label="Sections d'administration" class="md:flex-1">
+      <ul class="flex flex-col gap-1">
+        <slot name="liens"></slot>
+      </ul>
+    </nav>
+    <ul class="flex flex-col gap-1">
+      <li>
+        <a href="/" data-link title="Voir le site" class="group flex items-center gap-3 rounded-md px-4 py-3 text-sm transition-colors hover:underline md:justify-center md:p-3 lg:justify-start lg:px-4">
+          <img src="{{images}}nav-voir-le-site.svg" alt="" width="20" height="20" class="size-5 shrink-0 dark:brightness-0" />
+          <span class="md:sr-only lg:not-sr-only">Voir le site</span>
+        </a>
+      </li>
+      <li>
+        <button type="button" data-action="deconnexion" title="Déconnexion" class="flex w-full items-center gap-3 rounded-md px-4 py-3 text-left text-sm transition-colors hover:underline md:justify-center md:p-3 lg:justify-start lg:px-4">
+          <img src="{{images}}nav-deconnexion.svg" alt="" width="20" height="20" class="size-5 shrink-0 dark:brightness-0" />
+          <span class="md:sr-only lg:not-sr-only">Déconnexion</span>
+        </button>
+      </li>
+    </ul>
+  </div>
+</div>

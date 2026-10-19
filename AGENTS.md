@@ -397,9 +397,9 @@ back/
 └── src/
     ├── .htaccess            Require all denied
     ├── routes.php           table 'METHODE /api/chemin' => [Controleur::class, 'methode']
-    ├── Core/                Database (PDO singleton), Request, Response (json/erreur + exit), Router
-    ├── Controller/          AuthController, CommandeController, ProduitController, StatsController
-    └── Model/               CommandeModel, ParametreModel, ProduitModel, UtilisateurModel
+    ├── Core/                Database (PDO singleton), Request (+ en-têtes), Response (json/erreur + exit), Router, SessionAdmin (garde admin + jeton CSRF)
+    ├── Controller/          AdminAuthController, AdminCategorieController, AuthController, CommandeController, ProduitController, StatsController
+    └── Model/               CategorieModel, CommandeModel, ParametreModel, ProduitModel, UtilisateurModel
 back/tests/stock.php         tests CLI du stock STK-a (base jetable, `Require all denied`)
 front/
 ├── index.html               page unique : police Inter, script inline du thème, #app, main.js
@@ -411,6 +411,7 @@ front/
     ├── main.js              déclaration du routeur, du layout et des routes
     ├── global.css           Tailwind v4 + tokens (primitives / sémantique / dimensions) + thème sombre
     ├── layouts/root/        RootLayout : header + <slot> page + footer
+    ├── layouts/admin/       AdminLayout (préfixe /admin) : navigation latérale + <slot> page ; sans admin connecté, juste la page
     ├── pages/<nom>/         page.js (M/C/V) + template.html (+ sous-templates)
     ├── ui/<nom>/            composants présentatifs : index.js + template.html (+ sous-templates)
     ├── data/                couche réseau / stockage, un module par ressource
@@ -442,9 +443,11 @@ En dev (`npm run dev`), l'étape 5 passe par le proxy Vite vers
 | `/panier` | `pages/panier` (lignes, ±, suppression, résumé, réconciliation avec l'API) | CMD-b | fait (« Valider » : non connecté → `/connexion?retour=/commande` ; connecté → `/commande`) |
 | `/commande` | `pages/commande` (récapitulatif en lecture seule, bouton « Confirmer ma commande », redirige vers la connexion si besoin) | CMD-a | fait (à tester en navigateur) |
 | `/commande/:numero` | `pages/confirmation` (numéro, statut, date, lignes aux prix figés, total ; 401/404 affichés) | CMD-a | fait (à tester en navigateur) |
-| `/admin` | `pages/admin` (connexion + stats, 401/403 affichés) | socle GOF-b | démo |
+| `/admin` | `pages/admin` : écran de connexion admin sans session, tableau de bord (4 indicateurs) avec session ; layout `AdminLayout` | GOF-b | fait (non testée en navigateur ni sur la vraie base) |
 | `/connexion` | `pages/connexion` (formulaire, ou « connecté » + déconnexion ; `?retour=` filtré) | CMD-c | fait |
 | `/inscription` | `pages/inscription` (validation client + serveur, connecte aussitôt) | CMD-c | fait |
+| `/admin/categories` | `pages/admin-categories` (liste, modale de suppression avec réaffectation) | GOF-c | fait (non testée en navigateur ni sur la vraie base) |
+| `/admin/categories/nouvelle`, `/admin/categories/:id/modifier` | `pages/admin-categorie` (même formulaire création / modification) | GOF-c | fait (non testée) |
 | `*` | `pages/404` (statique, renvoie une chaîne) | — | fait |
 | `/categorie/:slug` | — | DEC-a | **à faire** (le filtre actuel est local, sans URL) |
 
@@ -470,6 +473,16 @@ Ajouter une route : `import` + `router.addRoute(...)` **avant** `"*"`.
 | `formulaire-login` (`FormulaireLoginView`) | `dom(data, actions)` | `{ email }` ; `surConnexion(email, mdp)`, `surInscription` | connexion |
 | `formulaire-inscription` (`FormulaireInscriptionView`) | `dom(data, actions)` | `{ email }` ; `surInscription(email, mdp, confirmation)`, `surConnexion` | inscription |
 | `formulaire-connexion` (`FormulaireConnexionView`) | `html`, `dom(data, actions)` | `{ login }` ; `surConnexion(login, mdp)`, `surDeconnexion` | admin |
+| `indicateur` (`IndicateurView`) | `dom(data)` | `{ libelle, valeur, legende, icone, attention? }` (aucun callback) ; icônes dans `public/images/admin/` | `AdminLayout` |
+| `barre-admin` (`BarreAdminView`) | `dom(data)` | `{ section, email }` ; masquée en mobile ; avatar `public/images/admin/avatar.svg` | pages admin |
+| `connexion-admin` (`ConnexionAdminView`) | `dom(data, actions)` | `{ email, message }` ; `surConnexion(email, mdp)` | admin |
+| `navigation-admin` (`NavigationAdminView`) | `dom(data, actions)` ; sous-templates `lien.html`, `lien-indisponible.html` | `{ liens: [{ libelle, href, icone, disponible }] }` ; `surDeconnexion` ; `aria-current` posé par le routeur ; barre latérale desktop / icônes tablette / menu repliable mobile ; icônes `public/images/admin/nav-*.svg` | `AdminLayout` |
+| `formulaire-connexion` / `statistiques` (anciens composants de la page admin de démo) | — | **plus utilisés** depuis GOF-b ; à supprimer sur demande | aucun |
+| `en-tete-page` (`EnTetePageView`) | `dom(data)` ; `action.html` | `{ titre, sousTitre, action: { libelle, href } \| null }` | pages admin |
+| `bandeau-info` (`BandeauInfoView`) | `dom(data)` | `{ texte, attention? }` (bleu, ou jaune si `attention`) | admin-categories, modale |
+| `liste-categories` (`ListeCategoriesView`) | `dom(categories, actions)` ; `ligne.html`, `vide.html` | `[{ id, libelle, description, nombreProduits }]` ; `surSuppression(id)` | admin-categories |
+| `formulaire-categorie` (`FormulaireCategorieView`) | `dom(data, actions)` | `{ libelle, description, bouton, enCours, message }` ; `surEnvoi(libelle, description)` | admin-categorie |
+| `modale-suppression` (`ModaleSuppressionView`) | `dom(data, actions)` ; `reaffectation.html` ; `<dialog>` natif (la page appelle `showModal()`) | `{ nom, nombreProduits, cibles, cible, enCours, message }` ; `surConfirmation(cible)`, `surChoixCible`, `surAnnulation` | admin-categories |
 | `statistiques` (`StatistiquesView`) | `dom(stats)` ; `ligne-categorie.html` | `{ total, stockTotal, prixMoyenCents, parCategorie }` | admin |
 
 Conventions observées : dossier kebab-case français, objet `<Nom>View`,
@@ -494,7 +507,9 @@ les boutons. Booléens dans un template : `{{desactivee}}` vaut `"disabled"` ou
 | `data/produit.js` | `ProduitData.fetchAll / fetchOne(slug) / fetchVariantes(ids)` | préfixe les images par `BASE_URL` |
 | `data/auth.js` | `AuthData.login(email, mdp) / register / me / logout`, `knownEmail` | session PHP ; `knownEmail` = dernier e-mail connu, pour le header |
 | `data/commande.js` | `CommandeData.create(lignes) / fetchOne(numero)` | `POST` puis `GET /api/commande` ; n'envoie que `{ variantId, quantite }` |
-| `data/stats.js` | `StatsData.fetch()` | `admin/stats` |
+| `data/admin.js` | `AdminData.login(email, mdp) / me / logout`, `knownEmail` | `admin/login`, `admin/me`, `admin/logout` (session admin séparée) |
+| `data/categories.js` | `CategorieData.fetchAll / create / update / remove(id, reaffecterVers)` | `admin/categories…` ; joint le jeton CSRF (`AdminData.csrf`) en-tête `X-CSRF-Token` |
+| `data/stats.js` | `StatsData.fetch()` | `admin/stats` (inclut `commandes`) |
 | `data/panier.js` | `PanierData.read / write / add / setQuantity / remove / clear / count` | `localStorage["panier"]` = `[{ variantId, quantite }]` uniquement, validé à la lecture, plafond 99 |
 
 Seuls `data/panier.js` et `lib/theme.js` (+ le script inline d'`index.html`)
@@ -513,7 +528,14 @@ touchent au `localStorage`.
 | `POST /api/logout` | `AuthController::logout` | — | `{ connecte: false }` |
 | `POST /api/commande` | `CommandeController::store` | `CommandeModel::creer()` | corps `{ lignes: [{ variantId, quantite }] }` → 201 `{ commande: { numero, statut, totalCents } }` ; 401 non connecté, 400 lignes invalides (vide, > 50, doublon, quantité hors 1-99), 409 variante disparue **ou stock insuffisant**. Transaction : variantes verrouillées `FOR UPDATE` par id croissant, prix relus en base (prix du client ignoré), stock décrémenté et journalisé (STK-a) |
 | `GET /api/commande?numero=` | `CommandeController::show` | `CommandeModel::findByNumero()` | `{ commande: { numero, statut, totalCents, creeLe, email, lignes } }` ; 401, 400 numéro mal formé, 404 inconnue **ou à un autre client** |
-| `GET /api/admin/stats` | `StatsController::index` | `statistiques()` | 403 si `$_SESSION['role'] !== 'admin'` |
+| `POST /api/admin/login` | `AdminAuthController::login` | `UtilisateurModel::findByEmail()` | corps `{ email, mdp }` → `{ connecte, email }` ; 400 champ vide, 401 identifiants ou compte non admin. Session séparée du client : `$_SESSION['admin']` ; `POST /api/login` refuse désormais les comptes admin (401) |
+| `GET /api/admin/me` | `AdminAuthController::me` | — | `{ connecte: false }` ou `{ connecte, email }` |
+| `POST /api/admin/logout` | `AdminAuthController::logout` | — | retire `$_SESSION['admin']` seulement ; `{ connecte: false }` |
+| `GET /api/admin/categories` | `AdminCategorieController::index` | `CategorieModel::lister()` | `{ categories: [{ id, libelle, slug, description, nombreProduits }], totalProduits }` ; 401 |
+| `POST /api/admin/categories` | `AdminCategorieController::create` | `creer()` | corps `{ libelle, description }` → 201 `{ categorie }` ; 400 (nom 2-60, description ≤ 255), 401, 403 (CSRF), 409 (nom/slug déjà pris) |
+| `POST /api/admin/categories/modifier` | `AdminCategorieController::update` | `modifier()` | corps `{ id, libelle, description }` → `{ categorie }` ; 400, 401, 403, 404, 409 |
+| `POST /api/admin/categories/supprimer` | `AdminCategorieController::delete` | `supprimer()` | corps `{ id, reaffecterVers? }` → `{ supprimee, reaffectes }`. **Règle** : catégorie vide → suppression directe ; avec produits → `reaffecterVers` obligatoire (autre catégorie existante), sinon 409 ; transaction (verrou, UPDATE produit, DELETE) ; 400 cible invalide, 404 |
+| `GET /api/admin/stats` | `StatsController::index` | `ProduitModel::statistiques()`, `compterSousSeuil()`, `CommandeModel::statistiques()`, `ParametreModel::seuilBientotEpuise()` | `{ total (produits), stockTotal, prixMoyenCents, parCategorie, commandes, commandesAujourdhui, commandesEnCours, bientotEpuises }` ; 401 sans `$_SESSION['admin']` |
 
 Ajouter une route back = **3 endroits** : la ligne dans `routes.php`, l'instance
 du contrôleur dans le tableau `$controleurs` de `back/index.php` (sinon
@@ -526,7 +548,7 @@ Itérations PHP : `for` ou `array_map`, jamais `foreach`.
 
 | Table | Colonnes clés | Contraintes |
 | --- | --- | --- |
-| `categorie` | `id`, `libelle`, `slug` | `UNIQUE(slug)` |
+| `categorie` | `id`, `libelle`, `slug`, `description` (≤ 255, vide par défaut) | `UNIQUE(slug)` |
 | `produit` | `categorie_id`, `nom`, `slug`, `description`, `teinte` (0-359), `image`, `description_longue`, `ingredients` | `UNIQUE(slug)`, FK → categorie `RESTRICT` |
 | `produit_image` | `produit_id`, `chemin`, `position` | `UNIQUE(produit_id, position)`, FK `CASCADE` |
 | `variante` | `produit_id`, `libelle`, `prix_cents`, `stock` | `UNIQUE(produit_id, libelle)`, FK `CASCADE` |
@@ -572,7 +594,7 @@ le stock uniquement au passage à `annulee`. Test : `back/tests/stock.php`.
 | 6 | Seuil « Bientôt épuisé » : **résolu** (STK-b étape A, table `parametre`). Reste : le rendre modifiable en back-office (GOF-a) et afficher le stock par variante (STK-b étape B). Comptes en dur : **résolu** (CMD-c) |
 | 7 | `config.php` : `debug => true` ; contient de vrais identifiants | passer à `false` en prod ; ne jamais afficher ni committer les identifiants |
 | 8 | Commentaires de `lib/api-request.js` et `lib/router.js` citent `/~login/Base/` (héritage du TP) | sans effet ; ne pas « corriger » sans demande |
-| 9 | Pas de jeton CSRF : `POST /api/commande` s'appuie sur le cookie `SameSite=Lax` et le corps JSON | à prévoir avant les écritures admin |
+| 9 | CSRF : **résolu pour l'admin** (jeton en session, `SessionAdmin::exigerEcriture`, en-tête `X-CSRF-Token`) ; `POST /api/commande` (client) s'appuie toujours sur `SameSite=Lax` | utiliser `exigerEcriture` pour toute écriture admin |
 | 11 | Stock décrémenté, journalisé et recrédité : **résolu** (STK-a). Reste : messages et affichage côté front d'un refus pour stock insuffisant (409), ajustement du panier | STK-c |
 | 12 | Aucun e-mail de confirmation : la confirmation est la page `/commande/:numero` | hors périmètre actuel |
 | 10 | Aucun `foreach` dans le code applicatif (`for…of` dans le routeur, `forEach` seulement dans `check-mvc.js`, outil hors application) | garder la règle §1 |

@@ -58,11 +58,14 @@ let getRequest = function (uri) {
 /**
  * Envoi de données au format JSON. Par exemple :
  * await postRequest("login", { login: "alice", mdp: "azerty" })
+ *
+ * Le troisième paramètre ajoute des en-têtes, par exemple le jeton CSRF des
+ * écritures du back-office : { "X-CSRF-Token": jeton }.
  */
-let postRequest = function (uri, data = {}) {
+let postRequest = function (uri, data = {}, headers = {}) {
   return request(uri, {
     method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    headers: { Accept: "application/json", "Content-Type": "application/json", ...headers },
     body: JSON.stringify(data),
   });
 };

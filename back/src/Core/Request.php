@@ -24,12 +24,16 @@ final class Request
     /** Corps de la requête, décodé depuis le JSON reçu. */
     private array $corps;
 
-    private function __construct(string $methode, string $chemin, array $parametres, array $corps)
+    /** En-têtes HTTP, clés en minuscules (ex. « x-csrf-token »). */
+    private array $entetes;
+
+    private function __construct(string $methode, string $chemin, array $parametres, array $corps, array $entetes)
     {
         $this->methode    = $methode;
         $this->chemin     = $chemin;
         $this->parametres = $parametres;
         $this->corps      = $corps;
+        $this->entetes    = $entetes;
     }
 
     /**
@@ -56,11 +60,21 @@ final class Request
             $corps   = is_array($decode) ? $decode : [];
         }
 
+        // PHP range l'en-tête « X-CSRF-Token » dans $_SERVER['HTTP_X_CSRF_TOKEN'].
+        $entetes = [];
+        $cles    = array_keys($_SERVER);
+        for ($i = 0; $i < count($cles); $i++) {
+            if (str_starts_with($cles[$i], 'HTTP_') && is_string($_SERVER[$cles[$i]])) {
+                $entetes[strtolower(str_replace('_', '-', substr($cles[$i], 5)))] = $_SERVER[$cles[$i]];
+            }
+        }
+
         return new self(
             strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET'),
             $chemin,
             $_GET,
             $corps,
+            $entetes,
         );
     }
 
@@ -90,6 +104,17 @@ final class Request
     public function corps(): array
     {
         return $this->corps;
+    }
+
+    /**
+     * Un en-tête HTTP de la requête.
+     *
+     * @param string $nom Nom de l'en-tête, casse indifférente (ex. « X-CSRF-Token »).
+     * @return string|null La valeur, ou null si l'en-tête est absent.
+     */
+    public function entete(string $nom): ?string
+    {
+        return $this->entetes[strtolower($nom)] ?? null;
     }
 
     /**

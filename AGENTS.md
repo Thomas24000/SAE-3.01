@@ -354,3 +354,217 @@ Fournis un résumé clair et expliqué avec :
 3. les éventuels points d'attention et/ou étapes suivantes recommandées en
    respectant toujours l'ordre qui doit être suivi ;
 4. les éventuels impacts sur le reste de l'application.
+
+## 12. Cartographie du dépôt (état au 19/10/2026)
+
+Carte de référence pour retrouver vite où vit chaque chose avant une
+construction. **À tenir à jour** à chaque fichier, route ou table ajouté
+(voir 12.10). En cas d'écart entre cette carte et le code, le code fait foi.
+
+### 12.1 Contexte : `public_html/`
+
+| Dossier | Rôle | Toucher ? |
+| --- | --- | --- |
+| `SAE301-Starter/` | **le projet SAE301** (Ben & Jerry's) | oui |
+| `Base/` | évaluation R3.13 cookies/sessions (catalogue de films), `REPONSES.md` | non |
+| `R3.13-TP1/` | TP cookies/sessions (films) + énoncés HTML | non |
+| `.htaccess` (racine) | auth LDAP de l'espace perso (fichier `root`) | non |
+
+`Base/` et `R3.13-TP1/` sont l'ancêtre du Starter (même architecture PHP
+`Core/Controller/Model`, mêmes helpers). Ils servent uniquement de référence :
+ne jamais reprendre leur vocabulaire « films » (voir skill
+`ajouter-fonctionnalite-mvc`).
+
+### 12.2 Arborescence commentée de `SAE301-Starter/`
+
+```
+.htaccess                    /api/* → back/index.php ; le reste → front/dist/ (fallback index.html)
+.gitignore                   ignore front/node_modules/ et front/dist/
+AGENTS.md / README.md        règles (ce fichier) / doc d'installation pour humains
+.agents/
+├── rules/                   règles auto-chargées par glob
+│   ├── architecture-mvc.md  (always_on) MVC par page
+│   ├── php-backend.md       (back/**/*.php)
+│   ├── sql-data.md          (sql/**/*.sql)
+│   └── style-javascript.md  (front/**/*.js|html)
+└── skills/                  procédures à ouvrir AVANT de coder (voir 12.9)
+    └── verifier-mvc/scripts/check-mvc.js   contrôle statique obligatoire
+sql/glaces.sql               schéma + seeds (rejouable : DROP puis CREATE)
+back/
+├── index.php                point d'entrée unique : autoload, config, PDO, injection, session, Router
+├── config/config.php        chemin du projet, identifiants BDD (SECRETS, ne jamais afficher), debug
+├── config/.htaccess         Require all denied
+└── src/
+    ├── .htaccess            Require all denied
+    ├── routes.php           table 'METHODE /api/chemin' => [Controleur::class, 'methode']
+    ├── Core/                Database (PDO singleton), Request, Response (json/erreur + exit), Router
+    ├── Controller/          AuthController, ProduitController, StatsController
+    └── Model/               ProduitModel, UtilisateurModel
+front/
+├── index.html               page unique : police Inter, script inline du thème, #app, main.js
+├── vite.config.js           BASE = "/~bellevert1/SAE301-Starter/", proxy /api → mmi.unilim.fr
+├── package.json             scripts dev / build / preview ; deps : vite 8, tailwindcss 4
+├── public/images/           bandeau-accueil.png + produits/*.svg (12 visuels) → copiés dans dist/
+├── dist/                    BUILD GÉNÉRÉ (npm run build) : ne jamais éditer à la main
+└── src/
+    ├── main.js              déclaration du routeur, du layout et des routes
+    ├── global.css           Tailwind v4 + tokens (primitives / sémantique / dimensions) + thème sombre
+    ├── layouts/root/        RootLayout : header + <slot> page + footer
+    ├── pages/<nom>/         page.js (M/C/V) + template.html (+ sous-templates)
+    ├── ui/<nom>/            composants présentatifs : index.js + template.html (+ sous-templates)
+    ├── data/                couche réseau / stockage, un module par ressource
+    └── lib/                 router, utils (rendu), api-request, format, stock, theme
+```
+
+### 12.3 Cycle d'une requête
+
+| Étape | Navigateur → | Fichier qui répond |
+| --- | --- | --- |
+| 1 | `GET /~bellevert1/SAE301-Starter/produit/cookie-dough` | `.htaccess` règle 2 → `front/dist/produit/...` inexistant → règle 3 → `front/dist/index.html` |
+| 2 | `index.html` charge `main.js` | `Router.start()` → `handleRoute()` |
+| 3 | route `/produit/:slug` trouvée | `ProduitPage({ slug })` → `C.init()` |
+| 4 | `C.charger()` → `ProduitData.fetchOne(slug)` | `lib/api-request.js` → `fetch(BASE + "api/produit?slug=...")` |
+| 5 | `/api/produit` | `.htaccess` règle 1 → `back/index.php` → `Router::traiter()` → `ProduitController::show()` → `ProduitModel::findBySlug()` |
+| 6 | réponse JSON (ou `{ erreur }` + statut) | `Response::json()` / `Response::erreur()` puis `exit` |
+| 7 | retour en front | `ErreurApi(message, statut)` si `!ok` ; sinon M rempli → `V.init()` renvoie un fragment |
+| 8 | rendu | le routeur insère la page dans le `<slot>` du layout, met `aria-current`, `scrollTo(0,0)` |
+
+En dev (`npm run dev`), l'étape 5 passe par le proxy Vite vers
+`https://mmi.unilim.fr` : **le back doit être déployé** pour que l'API réponde.
+
+### 12.4 Routes front (`front/src/main.js`)
+
+| Route | Page | US | État |
+| --- | --- | --- | --- |
+| `/` | `pages/produits` (catalogue, filtres catégorie, « Voir plus » par 8, bandeau) | DEC-b + STK-b | fait |
+| `/produit/:slug` | `pages/produit` (galerie, variantes, quantité, ajout panier ; 404 si slug inconnu) | DEC-c | fait |
+| `/panier` | `pages/panier` (lignes, ±, suppression, résumé, réconciliation avec l'API) | CMD-b | en cours (« Valider » : non connecté → `/connexion?retour=/panier` ; connecté → message provisoire, attend CMD-a) |
+| `/admin` | `pages/admin` (connexion + stats, 401/403 affichés) | socle GOF-b | démo |
+| `/connexion` | `pages/connexion` (formulaire, ou « connecté » + déconnexion ; `?retour=` filtré) | CMD-c | fait |
+| `/inscription` | `pages/inscription` (validation client + serveur, connecte aussitôt) | CMD-c | fait |
+| `*` | `pages/404` (statique, renvoie une chaîne) | — | fait |
+| `/categorie/:slug` | — | DEC-a | **à faire** (le filtre actuel est local, sans URL) |
+
+Ajouter une route : `import` + `router.addRoute(...)` **avant** `"*"`.
+
+### 12.5 Composants UI (`front/src/ui/`)
+
+| Composant (objet exporté) | API | Données reçues → callbacks | Utilisé par |
+| --- | --- | --- | --- |
+| `header` (`HeaderView`) | `html`, `dom`, `updateCount(n)` | `{ panierCount }` ; gère seul le bouton thème ; icône « Mon compte » → `/connexion` + e-mail du connecté + bouton « Se déconnecter » ; `dom(data, { surDeconnexion })`, `updateAccount(email)` | `RootLayout`, pages produit/panier (compteur) |
+| `footer` (`FooterView`) | `html`, `dom` | aucune | `RootLayout` |
+| `bandeau` (`BandeauView`) | `dom(image, surDecouvrir)` | URL visuel | produits |
+| `message` (`MessageView`) | `html`, `dom` | `{ type: "erreur"\|"succes", texte }` ou `null` | toutes les pages dynamiques |
+| `filtres-categories` (`FiltresCategoriesView`) | `dom(chips, surChoix)` ; sous-template `chip.html` | `[{ slug, libelle, selectionne }]` | produits |
+| `grille-produits` (`GrilleProduitsView`) | `dom(produits)` ; `vide.html` si liste vide | produits avec `statutStock` | produits |
+| `carte-produit` (`CarteProduitView`) | `dom(produit)` ; `bouton-choisir.html` / `bouton-epuise.html` | `{ nom, slug, teinte, image, prixMin, statutStock }` | grille-produits |
+| `badge-stock` (`BadgeStockView`) | `html(statut)`, `dom(statut)` | `"disponible"\|"bientot"\|"epuise"` | carte, fiche |
+| `fiche-produit` (`FicheProduitView`) | `dom(data, actions)`, `domVariante`, `domVignette` ; rend lui-même le focus | voir JSDoc ; `surVariante`, `surImage`, `surQuantite`, `surAjout` | produit |
+| `ligne-panier` (`LignePanierView`) | `dom(data, actions)` | `{ variantId, nom, slug, libelle, image, teinte, quantite, totalCents, moinsPossible }` ; `surQuantite(id, ±1)`, `surSuppression(id)` | panier |
+| `resume-commande` (`ResumeCommandeView`) | `dom(data, actions)` | `{ sousTotalCents, totalCents }` ; `surValidation` | panier |
+| `formulaire-login` (`FormulaireLoginView`) | `dom(data, actions)` | `{ email }` ; `surConnexion(email, mdp)`, `surInscription` | connexion |
+| `formulaire-inscription` (`FormulaireInscriptionView`) | `dom(data, actions)` | `{ email }` ; `surInscription(email, mdp, confirmation)`, `surConnexion` | inscription |
+| `formulaire-connexion` (`FormulaireConnexionView`) | `html`, `dom(data, actions)` | `{ login }` ; `surConnexion(login, mdp)`, `surDeconnexion` | admin |
+| `statistiques` (`StatistiquesView`) | `dom(stats)` ; `ligne-categorie.html` | `{ total, stockTotal, prixMoyenCents, parCategorie }` | admin |
+
+Conventions observées : dossier kebab-case français, objet `<Nom>View`,
+callbacks nommés `sur<Action>`, variantes de style dans un objet de constantes
+(`ETATS`, `BADGES`, `COULEURS`), écouteur **délégué** sur
+`fragment.firstElementChild`, attributs `data-action`, `data-variante-id`,
+`data-quantite-delta`, `data-image-index`, `data-categorie` pour identifier
+les boutons. Booléens dans un template : `{{desactivee}}` vaut `"disabled"` ou
+`""` (pas de condition dans un template).
+
+### 12.6 Modules `lib/` et `data/`
+
+| Fichier | Exporte | Rôle |
+| --- | --- | --- |
+| `lib/router.js` | `Router` | routes avec `:param`, layouts par plus long préfixe, `data-link`, `basename`, anti-course (`this.navigation`) |
+| `lib/utils.js` | `genericRenderer`, `htmlToFragment` | `{{cle}}` **échappé** ; chaîne → `DocumentFragment` |
+| `lib/api-request.js` | `getRequest`, `postRequest`, `ErreurApi` | `fetch` JSON sur `BASE_URL + "api/"`, erreur `{ erreur }` → `ErreurApi(message, statut)` |
+| `lib/format.js` | `formaterPrix(centimes)` | « 7,90 € » (affichage uniquement) |
+| `lib/stock.js` | `statutStock(stock)` | seuil `SEUIL_BIENTOT_EPUISE = 5` **en dur** (ira en table de paramètres) |
+| `lib/navigation.js` | `goTo(path)`, `reload()`, `readQuery(name)`, `safeReturnPath(raw)` | redirection depuis une page (pushState + `popstate`, sans toucher au routeur) ; `retour` limité aux chemins internes |
+| `lib/theme.js` | `basculerTheme()` | classe `.theme-dark` sur `<html>` + `localStorage["theme"]` |
+| `data/produit.js` | `ProduitData.fetchAll / fetchOne(slug) / fetchVariantes(ids)` | préfixe les images par `BASE_URL` |
+| `data/auth.js` | `AuthData.login(email, mdp) / register / me / logout`, `knownEmail` | session PHP ; `knownEmail` = dernier e-mail connu, pour le header |
+| `data/stats.js` | `StatsData.fetch()` | `admin/stats` |
+| `data/panier.js` | `PanierData.read / write / add / setQuantity / remove / clear / count` | `localStorage["panier"]` = `[{ variantId, quantite }]` uniquement, validé à la lecture, plafond 99 |
+
+Seuls `data/panier.js` et `lib/theme.js` (+ le script inline d'`index.html`)
+touchent au `localStorage`.
+
+### 12.7 API PHP (`back/src/routes.php`)
+
+| Route | Contrôleur::méthode | Modèle | Réponse / erreurs |
+| --- | --- | --- | --- |
+| `GET /api/produits` | `ProduitController::index` | `lister()` | `{ produits, total }` (prixMin, stock total, categorieSlug) |
+| `GET /api/produit?slug=` | `ProduitController::show` | `findBySlug()` | `{ produit }` ; 400 slug invalide (`^[a-z0-9-]{1,120}$`), 404 |
+| `GET /api/panier?ids=3,5` | `ProduitController::panier` | `findVariantesByIds()` | `{ variantes }` (prix actuel) ; 400 ids invalides ou > 50 |
+| `POST /api/login` | `AuthController::login` | `UtilisateurModel::findByEmail()` | corps `{ email, mdp }` → `{ connecte, email, role }` ; 400 champ vide, 401 identifiants |
+| `POST /api/inscription` | `AuthController::register` | `UtilisateurModel::create()` | corps `{ email, mdp, confirmation }` → 201 `{ connecte, email, role: "client" }` (connecte aussitôt) ; 400 validation (`filter_var`), 409 e-mail pris |
+| `GET /api/me` | `AuthController::me` | — (lit la session) | `{ connecte: false }` ou `{ connecte, email, role }` |
+| `POST /api/logout` | `AuthController::logout` | — | `{ connecte: false }` |
+| `GET /api/admin/stats` | `StatsController::index` | `statistiques()` | 403 si `$_SESSION['role'] !== 'admin'` |
+
+Ajouter une route back = **3 endroits** : la ligne dans `routes.php`, l'instance
+du contrôleur dans le tableau `$controleurs` de `back/index.php` (sinon
+`RuntimeException`), et la méthode du contrôleur/modèle. Le modèle convertit
+les nombres MySQL en `int` et renvoie des clés **camelCase** (`prixCents`,
+`categorieSlug`) à partir de colonnes **snake_case** (`prix_cents`).
+Itérations PHP : `for` ou `array_map`, jamais `foreach`.
+
+### 12.8 Base de données (`sql/glaces.sql`)
+
+| Table | Colonnes clés | Contraintes |
+| --- | --- | --- |
+| `categorie` | `id`, `libelle`, `slug` | `UNIQUE(slug)` |
+| `produit` | `categorie_id`, `nom`, `slug`, `description`, `teinte` (0-359), `image`, `description_longue`, `ingredients` | `UNIQUE(slug)`, FK → categorie `RESTRICT` |
+| `produit_image` | `produit_id`, `chemin`, `position` | `UNIQUE(produit_id, position)`, FK `CASCADE` |
+| `variante` | `produit_id`, `libelle`, `prix_cents`, `stock` | `UNIQUE(produit_id, libelle)`, FK `CASCADE` |
+| `utilisateur` | `email` (minuscules), `mot_de_passe` (hachage `password_hash`), `role` (`client`\|`admin`), `cree_le` | `UNIQUE(email)` |
+
+Seeds : 3 catégories (pots classiques, sans lactose, sorbets) × 4 produits,
+2 variantes chacun (« Pot 100 ml » 2,90 €, « Pot 465 ml » 7,90 €), stocks
+variés (certains ≤ 5 pour tester « Bientôt épuisé »). Comptes de démo
+`alice@example.com`/`azerty` (client) et `admin@example.com`/`motdepasse` (admin). InnoDB, `utf8mb4`.
+**Absentes pour l'instant** : `commande`, `ligne_commande`,
+`option`, `mouvement_stock`, `parametre` (à créer selon §7 et l'ordre §8).
+
+### 12.9 Quel skill ouvrir pour quelle tâche
+
+| Tâche | Skill (`.agents/skills/…/SKILL.md`) |
+| --- | --- |
+| nouvelle page / route | `creer-page` |
+| nouveau composant visuel | `creer-composant-ui` |
+| nouvel appel API ou stockage local | `creer-module-data` |
+| écrire / modifier du Tailwind | `styler-tailwind-tokens` |
+| fonctionnalité front complète | `ajouter-fonctionnalite-mvc` |
+| fin de toute tâche front | `verifier-mvc` |
+
+### 12.10 Écarts connus et points de vigilance (diagnostic)
+
+| # | Constat | Conséquence pour la suite |
+| --- | --- | --- |
+| 1 | `README.md` ne mentionne pas encore la page `/panier` ni `GET /api/panier` (tableau d'état « Panier : à venir ») | le mettre à jour quand CMD-b sera terminée |
+| 2 | Le skill `creer-module-data` §4 décrit des lignes panier avec `label` et `unitPriceCents` ; le code ne stocke que `{ variantId, quantite }` et relit les prix via l'API | **le code fait foi** ; ajouter `options` avec OPT-a |
+| 3 | Port de dev : `5174` (AGENTS §1, choisi car 5173 souvent occupé) vs `5173` (README) | utiliser le lien affiché par `npm run dev` |
+| 4 | Nommage mixte : `C.charger`, `V.rafraichir`, `M.produitsFiltres` (français, ancien) et `C.handler_selectVariante`, `M.addToCart` (anglais) | nouveau code en **anglais** (§1), ne pas renommer l'existant sans demande |
+| 5 | `ui/message` utilise des couleurs Tailwind brutes (`text-red-700` + `dark:`) au lieu de tokens | exception connue ; ne pas la recopier |
+| 6 | `lib/stock.js` : seuil 5 en dur | à remplacer par STK-b (table de paramètres). Comptes en dur : **résolu** (CMD-c, table `utilisateur`) |
+| 7 | `config.php` : `debug => true` ; contient de vrais identifiants | passer à `false` en prod ; ne jamais afficher ni committer les identifiants |
+| 8 | Commentaires de `lib/api-request.js` et `lib/router.js` citent `/~login/Base/` (héritage du TP) | sans effet ; ne pas « corriger » sans demande |
+| 9 | Pas de jeton CSRF ni de route d'écriture sécurisée encore | à prévoir dès la première écriture admin/commande |
+| 10 | Aucun `foreach` dans le code applicatif (`for…of` dans le routeur, `forEach` seulement dans `check-mvc.js`, outil hors application) | garder la règle §1 |
+
+### 12.11 Check-list avant toute construction
+
+- [ ] Relire §1, §3 et §8 ; vérifier que les dépendances de l'US sont terminées.
+- [ ] Repérer dans 12.4 à 12.8 les fichiers concernés, puis les **lire** avec leurs appelants.
+- [ ] Ouvrir le skill adapté (12.9).
+- [ ] Proposer le découpage M / V / C (et back/SQL si besoin) et attendre l'accord.
+- [ ] Ne modifier que les fichiers nécessaires ; JSDoc/PHPDoc ; cibles ≥ 40 px ; pas de `foreach`.
+- [ ] `node .agents/skills/verifier-mvc/scripts/check-mvc.js .` puis `cd front && npm run build`.
+- [ ] Vérifier 320/375, 768, 1440 px en clair et sombre.
+- [ ] Compte rendu §11 **et mise à jour de cette section 12** (route, composant, table, écart résolu).
+- [ ] Aucun commit/push sans demande.

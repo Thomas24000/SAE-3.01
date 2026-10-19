@@ -3,6 +3,17 @@ import { basculerTheme } from "../../lib/theme.js";
 import template from "./template.html?raw";
 
 /**
+ * Texte lu par les lecteurs d'écran pour le lien du compte.
+ *
+ * @param {string|null} email - l'e-mail du visiteur connecté, ou null.
+ * @returns {string}
+ */
+function libelleCompte(email) {
+  if (email === null) return "Mon compte";
+  return `Mon compte (connecté : ${email})`;
+}
+
+/**
  * Texte lu par les lecteurs d'écran pour le lien du panier.
  *
  * @param {number} nombre - le nombre d'articles du panier.
@@ -17,11 +28,15 @@ function libelleLien(nombre) {
 // de thème, dont il gère lui-même le clic.
 let HeaderView = {
   /**
-   * @param {{panierCount: number}} data - panierCount : le nombre d'articles du panier.
+   * @param {{panierCount: number, email: string|null}} data - panierCount : le nombre
+   *   d'articles du panier ; email : l'e-mail du visiteur connecté, ou null.
    * @returns {string}
    */
   html: function (data) {
     return genericRenderer(template, {
+      compteLibelle: libelleCompte(data.email),
+      email: data.email ?? "",
+      masqueConnecte: data.email === null ? "hidden" : "",
       libelle: libelleLien(data.panierCount),
       nombre: data.panierCount,
       masque: data.panierCount === 0 ? "hidden" : "",
@@ -29,12 +44,16 @@ let HeaderView = {
   },
 
   /**
-   * @param {{panierCount: number}} data - panierCount : le nombre d'articles du panier.
+   * @param {{panierCount: number, email: string|null}} data - voir html.
+   * @param {{surDeconnexion: function(): void}} actions - appelée au clic sur « Se déconnecter ».
    * @returns {DocumentFragment}
    */
-  dom: function (data) {
+  dom: function (data, actions) {
     let fragment = htmlToFragment(HeaderView.html(data));
     fragment.querySelector('[data-action="theme"]').addEventListener("click", basculerTheme);
+    fragment
+      .querySelector('[data-action="deconnexion"]')
+      .addEventListener("click", () => actions.surDeconnexion());
     return fragment;
   },
 
@@ -53,6 +72,26 @@ let HeaderView = {
     lien.setAttribute("aria-label", libelleLien(nombre));
     compteur.textContent = nombre;
     compteur.hidden = nombre === 0;
+  },
+
+  /**
+   * Met à jour l'e-mail affiché à côté de l'icône du compte, et le bouton de
+   * déconnexion, dans le header déjà affiché. Sert quand une connexion ou une déconnexion a lieu
+   * sans changement d'adresse, ou quand la réponse du serveur arrive après le
+   * premier affichage.
+   *
+   * @param {string|null} email - l'e-mail du visiteur connecté, ou null.
+   */
+  updateAccount: function (email) {
+    let lien = document.querySelector("[data-compte-lien]");
+    let texte = document.querySelector("[data-compte-email]");
+    let deconnexion = document.querySelector('[data-action="deconnexion"]');
+    if (lien === null || texte === null || deconnexion === null) return;
+
+    lien.setAttribute("aria-label", libelleCompte(email));
+    texte.textContent = email ?? "";
+    texte.hidden = email === null;
+    deconnexion.hidden = email === null;
   },
 };
 

@@ -1,0 +1,17 @@
+<div class="flex flex-1 flex-col">
+  <slot name="barre"></slot>
+
+  <div class="flex flex-col gap-6 p-4 md:p-6 lg:p-8">
+    <slot name="message"></slot>
+    <slot name="entete"></slot>
+    <slot name="filtres"></slot>
+    <slot name="liste"></slot>
+
+    <div class="flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
+      <p class="text-xs text-fg-muted">{{resume}}</p>
+      <slot name="pagination"></slot>
+    </div>
+  </div>
+
+  <slot name="modale"></slot>
+</div>

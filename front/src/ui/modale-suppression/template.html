@@ -1,0 +1,21 @@
+<dialog aria-labelledby="titre-modale" class="m-auto w-[calc(100%-2rem)] max-w-120 rounded-lg border border-border-default bg-bg-default p-0 text-fg-default backdrop:bg-bg-inverse/60">
+  <form novalidate class="flex flex-col gap-4 p-6">
+    <div class="flex items-center gap-3">
+      <img src="{{images}}alerte.svg" alt="" width="24" height="24" class="size-6 shrink-0 dark:invert" />
+      <h2 id="titre-modale" class="flex-1 text-lg leading-tight font-bold">Supprimer la catégorie « {{nom}} » ?</h2>
+    </div>
+
+    <p class="text-sm text-fg-muted">{{explication}}</p>
+
+    <slot name="message"></slot>
+    <slot name="reaffectation"></slot>
+
+    <div class="flex flex-wrap justify-end gap-3">
+      <button type="button" data-action="annuler" class="flex min-h-10 items-center justify-center rounded-md border border-border-strong px-5 py-2 text-sm leading-tight font-semibold transition-colors hover:bg-bg-subtle">Annuler</button>
+      <button type="submit" class="flex min-h-10 items-center justify-center gap-2 rounded-md bg-bg-brand px-5 py-2 text-sm leading-tight font-semibold text-fg-on-brand hover:opacity-90 aria-disabled:cursor-not-allowed aria-disabled:opacity-60" aria-disabled="{{enCours}}">
+        <img src="{{images}}corbeille.svg" alt="" width="18" height="18" class="size-4.5 brightness-0 invert dark:invert-0" />
+        {{bouton}}
+      </button>
+    </div>
+  </form>
+</dialog>

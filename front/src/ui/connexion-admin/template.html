@@ -1,0 +1,27 @@
+<section class="flex w-full max-w-100 flex-col gap-5 rounded-lg border border-border-default bg-bg-default p-8">
+  <div class="flex items-center gap-3">
+    <div class="flex h-10 w-30 items-center justify-center rounded-md bg-bg-placeholder text-xs text-fg-muted">Logo Ben &amp; Jerry's</div>
+    <span class="rounded-full bg-bg-accent px-2 py-0.5 text-[11px] font-medium text-fg-brand">Back-office</span>
+  </div>
+
+  <div class="flex flex-col gap-1">
+    <h1 class="text-2xl leading-tight font-bold tracking-tight">Connexion administrateur</h1>
+    <p class="text-xs text-fg-muted">Accès réservé à l'équipe. Les comptes clients ne permettent pas de se connecter ici.</p>
+  </div>
+
+  <slot name="message"></slot>
+
+  <form novalidate class="flex flex-col gap-5">
+    <label class="flex flex-col gap-2 text-sm">
+      E-mail administrateur
+      <input name="email" type="email" autocomplete="username" value="{{email}}" class="h-12 rounded-md border border-border-default bg-bg-default px-3 text-base transition-colors hover:border-border-strong" />
+    </label>
+
+    <label class="flex flex-col gap-2 text-sm">
+      Mot de passe
+      <input name="mdp" type="password" autocomplete="current-password" class="h-12 rounded-md border border-border-default bg-bg-default px-3 text-base transition-colors hover:border-border-strong" />
+    </label>
+
+    <button type="submit" class="flex min-h-12 w-full items-center justify-center rounded-md bg-bg-brand px-6 py-3 leading-tight font-semibold text-fg-on-brand hover:opacity-90">Se connecter</button>
+  </form>
+</section>

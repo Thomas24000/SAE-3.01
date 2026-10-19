@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Controller\AdminAuthController;
+use App\Controller\AdminCategorieController;
+use App\Controller\AdminProduitController;
 use App\Controller\AuthController;
 use App\Controller\CommandeController;
 use App\Controller\ProduitController;
@@ -27,5 +30,21 @@ return [
     'POST /api/logout'      => [AuthController::class,      'logout'],
     'POST /api/commande'    => [CommandeController::class,  'store'],
     'GET  /api/commande'    => [CommandeController::class,  'show'],
+    'POST /api/admin/login'  => [AdminAuthController::class, 'login'],
+    'GET  /api/admin/me'     => [AdminAuthController::class, 'me'],
+    'POST /api/admin/logout' => [AdminAuthController::class, 'logout'],
+    'GET  /api/admin/categories'            => [AdminCategorieController::class, 'index'],
+    'POST /api/admin/categories'            => [AdminCategorieController::class, 'create'],
+    'POST /api/admin/categories/modifier'   => [AdminCategorieController::class, 'update'],
+    'POST /api/admin/categories/supprimer'  => [AdminCategorieController::class, 'delete'],
+    'GET  /api/admin/produits'              => [AdminProduitController::class, 'index'],
+    'GET  /api/admin/produit'               => [AdminProduitController::class, 'show'],
+    'POST /api/admin/produits'              => [AdminProduitController::class, 'create'],
+    'POST /api/admin/produits/modifier'     => [AdminProduitController::class, 'update'],
+    'POST /api/admin/produits/supprimer'    => [AdminProduitController::class, 'delete'],
+    'POST /api/admin/produits/images'            => [AdminProduitController::class, 'uploadImages'],
+    'POST /api/admin/produits/images/supprimer' => [AdminProduitController::class, 'deleteImage'],
+    'POST /api/admin/produits/images/principale' => [AdminProduitController::class, 'setMainImage'],
+    'POST /api/admin/parametres/seuil'      => [AdminProduitController::class, 'updateThreshold'],
     'GET  /api/admin/stats' => [StatsController::class,     'index'],
 ];

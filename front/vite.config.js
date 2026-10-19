@@ -25,6 +25,8 @@ export default defineConfig({
   server: {
     proxy: {
       [BASE + "api"]: { target: SERVEUR, changeOrigin: true },
+      // Images téléversées depuis le back-office : elles vivent sur le serveur.
+      [BASE + "uploads"]: { target: SERVEUR, changeOrigin: true },
     },
   },
 

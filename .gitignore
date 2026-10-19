@@ -8,3 +8,7 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Images téléversées depuis le back-office (GOF-a) : propres à chaque serveur
+uploads/*
+!uploads/.htaccess

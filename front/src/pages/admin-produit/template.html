@@ -1,0 +1,15 @@
+<div class="flex flex-1 flex-col">
+  <slot name="barre"></slot>
+
+  <div class="flex flex-col gap-6 p-4 md:p-6 lg:p-8">
+    <nav aria-label="Fil d'Ariane" class="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+      <a href="/admin/produits" data-link class="flex min-h-10 items-center hover:underline">Produits</a>
+      <span aria-hidden="true">›</span>
+      <span aria-current="page" class="text-fg-default">{{nomCourant}}</span>
+    </nav>
+    <slot name="entete"></slot>
+    <slot name="formulaire"></slot>
+  </div>
+
+  <slot name="modale"></slot>
+</div>

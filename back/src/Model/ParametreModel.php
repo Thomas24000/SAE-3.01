@@ -40,4 +40,18 @@ final class ParametreModel
 
         return (int) $valeur;
     }
+
+    /**
+     * Fixe le stock à partir duquel (inclus) un produit est « Bientôt épuisé ».
+     *
+     * @param int $seuil Un entier positif ou nul.
+     */
+    public function definirSeuilBientotEpuise(int $seuil): void
+    {
+        $requete = $this->pdo->prepare(
+            'INSERT INTO parametre (cle, valeur) VALUES (:cle, :valeur)
+             ON DUPLICATE KEY UPDATE valeur = VALUES(valeur)'
+        );
+        $requete->execute(['cle' => 'seuil_bientot_epuise', 'valeur' => (string) $seuil]);
+    }
 }

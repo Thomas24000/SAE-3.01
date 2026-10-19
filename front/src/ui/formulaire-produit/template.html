@@ -1,0 +1,65 @@
+<form id="formulaire-produit" novalidate class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_21.25rem] lg:items-start">
+  <div class="flex min-w-0 flex-col gap-6">
+    <slot name="message"></slot>
+
+    <section class="flex flex-col gap-5 rounded-lg border border-border-default bg-bg-default p-4 md:p-6">
+      <h2 class="text-lg leading-tight font-bold">Informations</h2>
+
+      <label class="flex flex-col gap-2 text-sm">
+        Nom du produit *
+        <input name="nom" type="text" maxlength="120" required autocomplete="off" value="{{nom}}" class="h-12 rounded-md border border-border-default bg-bg-default px-3 text-base transition-colors hover:border-border-strong" />
+      </label>
+
+      <label class="flex flex-col gap-2 text-sm">
+        Catégorie *
+        <select name="categorie" required class="h-12 rounded-md border border-border-default bg-bg-default px-3 text-base transition-colors hover:border-border-strong"></select>
+      </label>
+
+      <label class="flex flex-col gap-2 text-sm">
+        Description *
+        <textarea name="description" maxlength="400" rows="4" required class="rounded-md border border-border-default bg-bg-default px-3 py-3 text-base transition-colors hover:border-border-strong">{{description}}</textarea>
+        <span class="text-xs text-fg-muted">Affichée sur la carte produit. 400 caractères au maximum.</span>
+      </label>
+
+      <label class="flex flex-col gap-2 text-sm">
+        Description détaillée
+        <textarea name="descriptionLongue" maxlength="800" rows="5" class="rounded-md border border-border-default bg-bg-default px-3 py-3 text-base transition-colors hover:border-border-strong">{{descriptionLongue}}</textarea>
+        <span class="text-xs text-fg-muted">Affichée sur la fiche produit. 800 caractères au maximum.</span>
+      </label>
+
+      <label class="flex flex-col gap-2 text-sm">
+        Ingrédients et allergènes
+        <textarea name="ingredients" maxlength="600" rows="4" class="rounded-md border border-border-default bg-bg-default px-3 py-3 text-base transition-colors hover:border-border-strong">{{ingredients}}</textarea>
+        <span class="text-xs text-fg-muted">600 caractères au maximum.</span>
+      </label>
+    </section>
+
+    <slot name="images"></slot>
+
+    <section class="flex flex-col gap-4 rounded-lg border border-border-default bg-bg-default p-4 md:p-6">
+      <div class="flex flex-col gap-1">
+        <h2 class="text-lg leading-tight font-bold">Formats et prix</h2>
+        <p class="text-xs text-fg-muted">Chaque format a son propre prix et son propre stock. Gardez un seul format si le produit n'a pas d'options.</p>
+      </div>
+
+      <div class="flex flex-col gap-4">
+        <slot name="formats"></slot>
+      </div>
+
+      <button type="button" data-action="ajouter-format" class="flex min-h-10 w-fit items-center justify-center gap-2 rounded-md border border-border-strong px-5 py-2 text-sm leading-tight font-semibold transition-colors hover:bg-bg-subtle">
+        <img src="{{images}}plus.svg" alt="" width="18" height="18" class="size-4.5 dark:invert" />
+        Ajouter un format
+      </button>
+    </section>
+  </div>
+
+  <div class="flex flex-col gap-6">
+    <slot name="seuil"></slot>
+
+    <section class="flex flex-col gap-4 rounded-lg border border-border-default bg-bg-default p-4 md:p-6">
+      <button type="submit" class="flex min-h-12 items-center justify-center rounded-md bg-bg-brand px-6 py-3 leading-tight font-semibold text-fg-on-brand hover:opacity-90 aria-disabled:cursor-not-allowed aria-disabled:opacity-60" aria-disabled="{{enCours}}">{{bouton}}</button>
+      <a href="/admin/produits" data-link class="flex min-h-12 items-center justify-center rounded-md border border-border-strong px-6 py-3 leading-tight font-semibold transition-colors hover:bg-bg-subtle">Annuler</a>
+      <slot name="suppression"></slot>
+    </section>
+  </div>
+</form>

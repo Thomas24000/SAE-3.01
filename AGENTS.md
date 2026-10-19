@@ -463,7 +463,8 @@ Ajouter une route : `import` + `router.addRoute(...)` **avant** `"*"`.
 | `grille-produits` (`GrilleProduitsView`) | `dom(produits)` ; `vide.html` si liste vide | produits avec `statutStock` | produits |
 | `carte-produit` (`CarteProduitView`) | `dom(produit)` ; `bouton-choisir.html` / `bouton-epuise.html` | `{ nom, slug, teinte, image, prixMin, statutStock }` | grille-produits |
 | `badge-stock` (`BadgeStockView`) | `html(statut)`, `dom(statut)` | `"disponible"\|"bientot"\|"epuise"` | carte, fiche |
-| `fiche-produit` (`FicheProduitView`) | `dom(data, actions)`, `domVariante`, `domVignette` ; rend lui-même le focus | voir JSDoc ; `surVariante`, `surImage`, `surQuantite`, `surAjout` | produit |
+| `fiche-produit` (`FicheProduitView`) | `dom(data, actions)`, `domVariante`, `domVignette` ; rend lui-même le focus | voir JSDoc ; `surVariante`, `surImage`, `surQuantite`, `surAjout`, `surOption` | produit |
+| `selecteur-options` (`SelecteurOptionsView`) | `dom(groupes, onPick)`, `domGroupe`, `domChoix` ; sous-templates `groupe.html`, `choix.html` | groupes `{ id, libelle, multiple, obligatoire, choix: [{ id, libelle, supplementCents, selectionne }] }` ; `onPick(groupeId, choixId)` ; radio ou case à cocher, rend lui-même le focus | fiche-produit |
 | `ligne-panier` (`LignePanierView`) | `dom(data, actions)` | `{ variantId, nom, slug, libelle, image, teinte, quantite, totalCents, moinsPossible, plusPossible }` (« + » désactivé et « Stock maximum atteint » si `plusPossible` est faux) ; `surQuantite(id, ±1)`, `surSuppression(id)` | panier |
 | `resume-commande` (`ResumeCommandeView`) | `dom(data, actions)` | `{ sousTotalCents, totalCents }` ; `surValidation` | panier |
 | `ligne-commande` (`LigneCommandeView`) | `dom(data)` | `{ nom, libelle, quantite, prixUnitaireCents, totalCents }` (lecture seule) | commande, confirmation |
@@ -496,7 +497,7 @@ les boutons. Booléens dans un template : `{{desactivee}}` vaut `"disabled"` ou
 | `data/auth.js` | `AuthData.login(email, mdp) / register / me / logout`, `knownEmail` | session PHP ; `knownEmail` = dernier e-mail connu, pour le header |
 | `data/commande.js` | `CommandeData.create(lignes) / fetchOne(numero)` | `POST` puis `GET /api/commande` ; n'envoie que `{ variantId, quantite }` |
 | `data/stats.js` | `StatsData.fetch()` | `admin/stats` |
-| `data/panier.js` | `PanierData.read / write / add / setQuantity / remove / clear / count` | `localStorage["panier"]` = `[{ variantId, quantite }]` uniquement, validé à la lecture, plafond 99 |
+| `data/panier.js` | `PanierData.read / write / add / setQuantity / remove / clear / count` | `localStorage["panier"]` = `[{ variantId, quantite, options }]` (options = ids de choix, OPT-c), validé à la lecture, plafond 99 |
 
 Seuls `data/panier.js` et `lib/theme.js` (+ le script inline d'`index.html`)
 touchent au `localStorage`.
@@ -506,7 +507,7 @@ touchent au `localStorage`.
 | Route | Contrôleur::méthode | Modèle | Réponse / erreurs |
 | --- | --- | --- | --- |
 | `GET /api/produits` | `ProduitController::index` | `lister()` | `{ produits, total, seuilBientotEpuise }` (prixMin, stock total, categorieSlug) |
-| `GET /api/produit?slug=` | `ProduitController::show` | `findBySlug()` | `{ produit, seuilBientotEpuise }` ; 400 slug invalide (`^[a-z0-9-]{1,120}$`), 404 |
+| `GET /api/produit?slug=` | `ProduitController::show` | `findBySlug()` | `{ produit (dont `options` : groupes + choix, OPT-c), seuilBientotEpuise }` ; 400 slug invalide (`^[a-z0-9-]{1,120}$`), 404 |
 | `GET /api/panier?ids=3,5` | `ProduitController::panier` | `findVariantesByIds()` | `{ variantes, seuilBientotEpuise }` (prix et `stock` actuels, STK-c) ; 400 ids invalides ou > 50 |
 | `POST /api/login` | `AuthController::login` | `UtilisateurModel::findByEmail()` | corps `{ email, mdp }` → `{ connecte, email, role }` ; 400 champ vide, 401 identifiants |
 | `POST /api/inscription` | `AuthController::register` | `UtilisateurModel::create()` | corps `{ email, mdp, confirmation }` → 201 `{ connecte, email, role: "client" }` (connecte aussitôt) ; 400 validation (`filter_var`), 409 e-mail pris |
@@ -547,8 +548,13 @@ variés (certains ≤ 5 pour tester « Bientôt épuisé »). Comptes de démo
 `alice@example.com`/`azerty` (client) et `admin@example.com`/`motdepasse` (admin). InnoDB, `utf8mb4`.
 | `parametre` | `cle` (PK), `valeur` ; seed `seuil_bientot_epuise` = 5 | lue par `ParametreModel` (repli sur 5 si absente) |
 
-**Absentes pour l'instant** :
-`option` (à créer selon §7 et l'ordre §8).
+| `option_groupe` | `produit_id`, `libelle`, `multiple`, `obligatoire`, `position` ; seeds « Service » (1 choix, obligatoire) et « Toppings » (plusieurs, facultatif) par produit | `UNIQUE(produit_id, libelle)`, FK produit `CASCADE` |
+| `option_choix` | `groupe_id`, `libelle`, `supplement_cents`, `position` ; seeds cuillère / coupelle / cône, toppings selon la catégorie | `UNIQUE(groupe_id, libelle)`, FK groupe `CASCADE` |
+
+**Options (OPT-c)** : schéma, seeds, API (`options` dans `GET /api/produit`) et
+choix sur la fiche produit (prix mis à jour, `PanierData.add(variantId, quantite, options)`).
+Le panier stocke `options: [idChoix]` mais ne les affiche ni ne les chiffre
+encore ; le serveur ne les valide ni ne les fige pas dans `ligne_commande` : OPT-a.
 
 **Stock (STK-a)** : `CommandeModel::mouvementer()` est le seul endroit qui
 écrit `variante.stock` ; `creer()` l'appelle (sortie) et `changerStatut()`

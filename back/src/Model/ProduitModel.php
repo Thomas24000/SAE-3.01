@@ -175,7 +175,9 @@ final class ProduitModel
      *               descriptionLongue:string, ingredients:string, teinte:int,
      *               image:string, images:array<int, string>,
      *               categorie:array{libelle:string, slug:string},
-     *               variantes:array<int, array{id:int, libelle:string, prixCents:int, stock:int}>}|null
+     *               variantes:array<int, array{id:int, libelle:string, prixCents:int, stock:int}>,
+     *               options:array<int, array{id:int, libelle:string, multiple:bool, obligatoire:bool,
+     *                                        choix:array<int, array{id:int, libelle:string, supplementCents:int}>}>}|null
      *         null si aucun produit ne porte ce slug.
      */
     public function findBySlug(string $slug): ?array
@@ -244,6 +246,57 @@ final class ProduitModel
                 ],
                 $variantes
             ),
+            'options'     => $this->findOptionsByProduit((int) $produit['id']),
         ];
+    }
+
+    /**
+     * Les groupes d'options d'un produit (service, toppings...), chacun avec
+     * ses choix et leur supplément de prix, dans l'ordre d'affichage.
+     *
+     * @param int $produitId Identifiant du produit.
+     * @return array<int, array{id:int, libelle:string, multiple:bool, obligatoire:bool,
+     *                          choix:array<int, array{id:int, libelle:string, supplementCents:int}>}>
+     */
+    private function findOptionsByProduit(int $produitId): array
+    {
+        $requete = $this->pdo->prepare(
+            'SELECT option_groupe.id          AS groupe_id,
+                    option_groupe.libelle     AS groupe_libelle,
+                    option_groupe.multiple,
+                    option_groupe.obligatoire,
+                    option_choix.id           AS choix_id,
+                    option_choix.libelle      AS choix_libelle,
+                    option_choix.supplement_cents
+               FROM option_groupe
+         INNER JOIN option_choix ON option_choix.groupe_id = option_groupe.id
+              WHERE option_groupe.produit_id = :produit_id
+           ORDER BY option_groupe.position, option_groupe.id, option_choix.position, option_choix.id'
+        );
+        $requete->execute(['produit_id' => $produitId]);
+
+        // Les lignes arrivent à plat (une par choix) : on les regroupe par
+        // groupe en conservant l'ordre de la requête.
+        return array_values(array_reduce(
+            $requete->fetchAll(),
+            static function (array $groupes, array $ligne): array {
+                $id = (int) $ligne['groupe_id'];
+                $groupes[$id] ??= [
+                    'id'          => $id,
+                    'libelle'     => $ligne['groupe_libelle'],
+                    'multiple'    => (bool) $ligne['multiple'],
+                    'obligatoire' => (bool) $ligne['obligatoire'],
+                    'choix'       => [],
+                ];
+                $groupes[$id]['choix'][] = [
+                    'id'              => (int) $ligne['choix_id'],
+                    'libelle'         => $ligne['choix_libelle'],
+                    'supplementCents' => (int) $ligne['supplement_cents'],
+                ];
+
+                return $groupes;
+            },
+            []
+        ));
     }
 }

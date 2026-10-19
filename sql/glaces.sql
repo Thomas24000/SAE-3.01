@@ -8,7 +8,8 @@
 -- parfum ont chacun le leur). Les prix sont des entiers en centimes : un
 -- décimal flottant arrondirait mal.
 --
--- 3 catégories de 4 produits, chaque produit avec 2 variantes.
+-- 3 catégories de 4 produits, chaque produit avec 2 variantes et 2 groupes
+-- d'options (service, toppings).
 -- Les textes de description longue et d'ingrédients/allergènes sont des exemples
 -- provisoires : ils ne remplacent pas les vraies informations produit.
 -- L'import est rejouable : les tables sont supprimées avant d'être recréées.
@@ -17,6 +18,8 @@
 SET NAMES utf8mb4;
 
 DROP TABLE IF EXISTS parametre;
+DROP TABLE IF EXISTS option_choix;
+DROP TABLE IF EXISTS option_groupe;
 DROP TABLE IF EXISTS mouvement_stock;
 DROP TABLE IF EXISTS ligne_commande;
 DROP TABLE IF EXISTS commande;
@@ -110,6 +113,53 @@ CREATE TABLE variante (
 
     CONSTRAINT fk_variante_produit
         FOREIGN KEY (produit_id) REFERENCES produit (id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
+-- Options d'un produit (US OPT-c), en deux niveaux
+--
+-- option_groupe : une question posée sur la fiche produit (« Service »,
+-- « Toppings »). multiple = 1 permet de cocher plusieurs choix, sinon un seul.
+-- obligatoire = 1 impose au moins un choix avant l'ajout au panier.
+-- option_choix : une réponse possible. supplement_cents s'ajoute au prix de la
+-- variante (centimes, 0 si gratuit). Le serveur relit ces prix : le navigateur
+-- ne fait jamais foi. Le figement dans les lignes de commande est l'US OPT-a.
+-- ---------------------------------------------------------------------------
+CREATE TABLE option_groupe (
+    id          INT UNSIGNED      NOT NULL AUTO_INCREMENT,
+    produit_id  SMALLINT UNSIGNED NOT NULL,
+    libelle     VARCHAR(60)       NOT NULL,
+    multiple    TINYINT(1)        NOT NULL DEFAULT 0,
+    obligatoire TINYINT(1)        NOT NULL DEFAULT 0,
+    position    TINYINT UNSIGNED  NOT NULL,
+
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_option_groupe_libelle (produit_id, libelle),
+
+    CONSTRAINT fk_option_groupe_produit
+        FOREIGN KEY (produit_id) REFERENCES produit (id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE option_choix (
+    id               INT UNSIGNED     NOT NULL AUTO_INCREMENT,
+    groupe_id        INT UNSIGNED     NOT NULL,
+    libelle          VARCHAR(60)      NOT NULL,
+    supplement_cents INT UNSIGNED     NOT NULL DEFAULT 0,
+    position         TINYINT UNSIGNED NOT NULL,
+
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_option_choix_libelle (groupe_id, libelle),
+
+    CONSTRAINT fk_option_choix_groupe
+        FOREIGN KEY (groupe_id) REFERENCES option_groupe (id)
         ON DELETE CASCADE
         ON UPDATE CASCADE
 ) ENGINE = InnoDB
@@ -309,6 +359,43 @@ INSERT INTO variante (produit_id, libelle, prix_cents, stock) VALUES
     (10, 'Pot 100 ml', 270, 27), (10, 'Pot 465 ml', 720, 11),
     (11, 'Pot 100 ml', 270, 24), (11, 'Pot 465 ml', 720, 9),
     (12, 'Pot 100 ml', 270, 29), (12, 'Pot 465 ml', 720, 15);
+
+-- Options : chaque produit a un groupe « Service » (un seul choix, obligatoire)
+-- et un groupe « Toppings » (plusieurs choix, facultatif).
+INSERT INTO option_groupe (produit_id, libelle, multiple, obligatoire, position)
+SELECT id, 'Service',  0, 1, 1 FROM produit
+UNION ALL
+SELECT id, 'Toppings', 1, 0, 2 FROM produit;
+
+INSERT INTO option_choix (groupe_id, libelle, supplement_cents, position)
+SELECT g.id, c.libelle, c.supplement_cents, c.position
+  FROM option_groupe g
+ CROSS JOIN (
+       SELECT 'Cuillère en bois' AS libelle, 0 AS supplement_cents, 1 AS position
+ UNION SELECT 'Coupelle',                   30,                      2
+ UNION SELECT 'Cône gaufrette',             60,                      3
+ ) AS c
+ WHERE g.libelle = 'Service';
+
+-- Toppings adaptés à la catégorie : pas de chantilly (lait) pour le sans
+-- lactose, des garnitures fruitées pour les sorbets.
+INSERT INTO option_choix (groupe_id, libelle, supplement_cents, position)
+SELECT g.id, t.libelle, t.supplement_cents, t.position
+  FROM option_groupe g
+  JOIN produit p ON p.id = g.produit_id
+  JOIN (
+       SELECT 1 AS categorie_id, 'Sauce chocolat' AS libelle, 50 AS supplement_cents, 1 AS position
+ UNION SELECT 1, 'Sauce caramel',      50, 2
+ UNION SELECT 1, 'Chantilly',          40, 3
+ UNION SELECT 1, 'Pépites de chocolat', 40, 4
+ UNION SELECT 2, 'Sauce chocolat',     50, 1
+ UNION SELECT 2, 'Sauce caramel',      50, 2
+ UNION SELECT 2, 'Amandes effilées',   40, 3
+ UNION SELECT 3, 'Coulis de fruits rouges', 50, 1
+ UNION SELECT 3, 'Feuilles de menthe', 30, 2
+ UNION SELECT 3, 'Éclats de meringue', 40, 3
+  ) AS t ON t.categorie_id = p.categorie_id
+ WHERE g.libelle = 'Toppings';
 
 INSERT INTO parametre (cle, valeur) VALUES
     ('seuil_bientot_epuise', '5');

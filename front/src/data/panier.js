@@ -1,7 +1,8 @@
 /**
  * Le panier, stocké dans le localStorage du navigateur.
  *
- * Une ligne est de la forme { variantId, quantite }, rien d'autre : nom, format,
+ * Une ligne est de la forme { variantId, quantite, options }, où options liste
+ * les identifiants des choix d'options (vide sans option) : nom, format,
  * prix et image sont relus auprès de l'API à l'affichage, pour ne jamais
  * montrer un prix périmé. Le localStorage étant modifiable par le client, le
  * panier ne sert qu'à l'affichage : le serveur recalcule tout à la validation.
@@ -22,20 +23,27 @@ let PanierData = {};
  * (le client peut modifier le localStorage) donnent un panier vide, ou
  * ignorent la ligne.
  *
- * @returns {Array<{variantId: number, quantite: number}>} les lignes du panier.
+ * @returns {Array<{variantId: number, quantite: number, options: number[]}>} les lignes du panier.
  */
 PanierData.read = function () {
   try {
     let lignes = JSON.parse(localStorage.getItem(CLE_PANIER));
     if (!Array.isArray(lignes)) return [];
 
-    return lignes.filter(
-      (ligne) =>
-        Number.isInteger(ligne?.variantId) &&
-        ligne.variantId > 0 &&
-        Number.isInteger(ligne.quantite) &&
-        ligne.quantite > 0
-    );
+    return lignes
+      .filter(
+        (ligne) =>
+          Number.isInteger(ligne?.variantId) &&
+          ligne.variantId > 0 &&
+          Number.isInteger(ligne.quantite) &&
+          ligne.quantite > 0
+      )
+      .map((ligne) => ({
+        ...ligne,
+        options: Array.isArray(ligne.options)
+          ? ligne.options.filter((id) => Number.isInteger(id) && id > 0)
+          : [],
+      }));
   } catch (erreur) {
     return [];
   }
@@ -56,20 +64,24 @@ PanierData.write = function (lignes) {
 };
 
 /**
- * Ajoute une variante au panier. Si elle y est déjà, les quantités s'additionnent.
+ * Ajoute une variante au panier. Si elle y est déjà, les quantités s'additionnent
+ * et les options choisies remplacent les précédentes (une ligne par variante
+ * tant que les lignes distinctes selon les options ne sont pas gérées : US OPT-a).
  *
  * @param {number} variantId - l'identifiant de la variante.
  * @param {number} quantite - la quantité à ajouter, au moins 1.
- * @returns {Array<{variantId: number, quantite: number}>} le panier mis à jour.
+ * @param {number[]} [options] - les identifiants des choix d'options retenus.
+ * @returns {Array<{variantId: number, quantite: number, options: number[]}>} le panier mis à jour.
  */
-PanierData.add = function (variantId, quantite) {
+PanierData.add = function (variantId, quantite, options = []) {
   let lignes = PanierData.read();
   let existante = lignes.find((ligne) => ligne.variantId === variantId);
 
   if (existante === undefined) {
-    lignes.push({ variantId: variantId, quantite: Math.min(quantite, QUANTITE_MAX) });
+    lignes.push({ variantId: variantId, quantite: Math.min(quantite, QUANTITE_MAX), options: options });
   } else {
     existante.quantite = Math.min(existante.quantite + quantite, QUANTITE_MAX);
+    existante.options = options;
   }
 
   PanierData.write(lignes);

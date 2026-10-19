@@ -451,7 +451,7 @@ Ajouter une route : `import` + `router.addRoute(...)` **avant** `"*"`.
 
 | Composant (objet exporté) | API | Données reçues → callbacks | Utilisé par |
 | --- | --- | --- | --- |
-| `header` (`HeaderView`) | `html`, `dom`, `updateCount(n)` | `{ panierCount }` ; gère seul le bouton thème ; icône « Mon compte » → `/connexion` | `RootLayout`, pages produit/panier (compteur) |
+| `header` (`HeaderView`) | `html`, `dom`, `updateCount(n)` | `{ panierCount }` ; gère seul le bouton thème ; icône « Mon compte » → `/connexion` + e-mail du connecté + bouton « Se déconnecter » ; `dom(data, { surDeconnexion })`, `updateAccount(email)` | `RootLayout`, pages produit/panier (compteur) |
 | `footer` (`FooterView`) | `html`, `dom` | aucune | `RootLayout` |
 | `bandeau` (`BandeauView`) | `dom(image, surDecouvrir)` | URL visuel | produits |
 | `message` (`MessageView`) | `html`, `dom` | `{ type: "erreur"\|"succes", texte }` ou `null` | toutes les pages dynamiques |
@@ -462,8 +462,8 @@ Ajouter une route : `import` + `router.addRoute(...)` **avant** `"*"`.
 | `fiche-produit` (`FicheProduitView`) | `dom(data, actions)`, `domVariante`, `domVignette` ; rend lui-même le focus | voir JSDoc ; `surVariante`, `surImage`, `surQuantite`, `surAjout` | produit |
 | `ligne-panier` (`LignePanierView`) | `dom(data, actions)` | `{ variantId, nom, slug, libelle, image, teinte, quantite, totalCents, moinsPossible }` ; `surQuantite(id, ±1)`, `surSuppression(id)` | panier |
 | `resume-commande` (`ResumeCommandeView`) | `dom(data, actions)` | `{ sousTotalCents, totalCents }` ; `surValidation` | panier |
-| `formulaire-login` (`FormulaireLoginView`) | `dom(data, actions)` | `{ login }` ; `surConnexion(login, mdp)`, `surInscription` | connexion |
-| `formulaire-inscription` (`FormulaireInscriptionView`) | `dom(data, actions)` | `{ login }` ; `surInscription(login, mdp, confirmation)`, `surConnexion` | inscription |
+| `formulaire-login` (`FormulaireLoginView`) | `dom(data, actions)` | `{ email }` ; `surConnexion(email, mdp)`, `surInscription` | connexion |
+| `formulaire-inscription` (`FormulaireInscriptionView`) | `dom(data, actions)` | `{ email }` ; `surInscription(email, mdp, confirmation)`, `surConnexion` | inscription |
 | `formulaire-connexion` (`FormulaireConnexionView`) | `html`, `dom(data, actions)` | `{ login }` ; `surConnexion(login, mdp)`, `surDeconnexion` | admin |
 | `statistiques` (`StatistiquesView`) | `dom(stats)` ; `ligne-categorie.html` | `{ total, stockTotal, prixMoyenCents, parCategorie }` | admin |
 
@@ -484,10 +484,10 @@ les boutons. Booléens dans un template : `{{desactivee}}` vaut `"disabled"` ou
 | `lib/api-request.js` | `getRequest`, `postRequest`, `ErreurApi` | `fetch` JSON sur `BASE_URL + "api/"`, erreur `{ erreur }` → `ErreurApi(message, statut)` |
 | `lib/format.js` | `formaterPrix(centimes)` | « 7,90 € » (affichage uniquement) |
 | `lib/stock.js` | `statutStock(stock)` | seuil `SEUIL_BIENTOT_EPUISE = 5` **en dur** (ira en table de paramètres) |
-| `lib/navigation.js` | `goTo(path)`, `readQuery(name)`, `safeReturnPath(raw)` | redirection depuis une page (pushState + `popstate`, sans toucher au routeur) ; `retour` limité aux chemins internes |
+| `lib/navigation.js` | `goTo(path)`, `reload()`, `readQuery(name)`, `safeReturnPath(raw)` | redirection depuis une page (pushState + `popstate`, sans toucher au routeur) ; `retour` limité aux chemins internes |
 | `lib/theme.js` | `basculerTheme()` | classe `.theme-dark` sur `<html>` + `localStorage["theme"]` |
 | `data/produit.js` | `ProduitData.fetchAll / fetchOne(slug) / fetchVariantes(ids)` | préfixe les images par `BASE_URL` |
-| `data/auth.js` | `AuthData.login / register / me / logout` | session PHP |
+| `data/auth.js` | `AuthData.login(email, mdp) / register / me / logout`, `knownEmail` | session PHP ; `knownEmail` = dernier e-mail connu, pour le header |
 | `data/stats.js` | `StatsData.fetch()` | `admin/stats` |
 | `data/panier.js` | `PanierData.read / write / add / setQuantity / remove / clear / count` | `localStorage["panier"]` = `[{ variantId, quantite }]` uniquement, validé à la lecture, plafond 99 |
 
@@ -501,9 +501,9 @@ touchent au `localStorage`.
 | `GET /api/produits` | `ProduitController::index` | `lister()` | `{ produits, total }` (prixMin, stock total, categorieSlug) |
 | `GET /api/produit?slug=` | `ProduitController::show` | `findBySlug()` | `{ produit }` ; 400 slug invalide (`^[a-z0-9-]{1,120}$`), 404 |
 | `GET /api/panier?ids=3,5` | `ProduitController::panier` | `findVariantesByIds()` | `{ variantes }` (prix actuel) ; 400 ids invalides ou > 50 |
-| `POST /api/login` | `AuthController::login` | `UtilisateurModel::findByLogin()` | `{ connecte, login, role }` ; 400 champ vide, 401 identifiants |
-| `POST /api/inscription` | `AuthController::register` | `UtilisateurModel::create()` | 201 `{ connecte, login, role: "client" }` (connecte aussitôt) ; 400 validation, 409 login pris |
-| `GET /api/me` | `AuthController::me` | — (lit la session) | `{ connecte: false }` ou `{ connecte, login, role }` |
+| `POST /api/login` | `AuthController::login` | `UtilisateurModel::findByEmail()` | corps `{ email, mdp }` → `{ connecte, email, role }` ; 400 champ vide, 401 identifiants |
+| `POST /api/inscription` | `AuthController::register` | `UtilisateurModel::create()` | corps `{ email, mdp, confirmation }` → 201 `{ connecte, email, role: "client" }` (connecte aussitôt) ; 400 validation (`filter_var`), 409 e-mail pris |
+| `GET /api/me` | `AuthController::me` | — (lit la session) | `{ connecte: false }` ou `{ connecte, email, role }` |
 | `POST /api/logout` | `AuthController::logout` | — | `{ connecte: false }` |
 | `GET /api/admin/stats` | `StatsController::index` | `statistiques()` | 403 si `$_SESSION['role'] !== 'admin'` |
 
@@ -522,12 +522,12 @@ Itérations PHP : `for` ou `array_map`, jamais `foreach`.
 | `produit` | `categorie_id`, `nom`, `slug`, `description`, `teinte` (0-359), `image`, `description_longue`, `ingredients` | `UNIQUE(slug)`, FK → categorie `RESTRICT` |
 | `produit_image` | `produit_id`, `chemin`, `position` | `UNIQUE(produit_id, position)`, FK `CASCADE` |
 | `variante` | `produit_id`, `libelle`, `prix_cents`, `stock` | `UNIQUE(produit_id, libelle)`, FK `CASCADE` |
-| `utilisateur` | `login`, `mot_de_passe` (hachage `password_hash`), `role` (`client`\|`admin`), `cree_le` | `UNIQUE(login)` |
+| `utilisateur` | `email` (minuscules), `mot_de_passe` (hachage `password_hash`), `role` (`client`\|`admin`), `cree_le` | `UNIQUE(email)` |
 
 Seeds : 3 catégories (pots classiques, sans lactose, sorbets) × 4 produits,
 2 variantes chacun (« Pot 100 ml » 2,90 €, « Pot 465 ml » 7,90 €), stocks
 variés (certains ≤ 5 pour tester « Bientôt épuisé »). Comptes de démo
-`alice`/`azerty` (client) et `admin`/`motdepasse` (admin). InnoDB, `utf8mb4`.
+`alice@example.com`/`azerty` (client) et `admin@example.com`/`motdepasse` (admin). InnoDB, `utf8mb4`.
 **Absentes pour l'instant** : `commande`, `ligne_commande`,
 `option`, `mouvement_stock`, `parametre` (à créer selon §7 et l'ordre §8).
 

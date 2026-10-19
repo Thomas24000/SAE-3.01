@@ -13,11 +13,12 @@ import template from "./template.html?raw";
  * redirige. Le serveur ouvre la session dès que le compte est créé.
  */
 
-const LOGIN_REGEX = /^[A-Za-z0-9._-]{3,40}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_MAX = 254;
 const MDP_MIN = 8;
 
 let M = {
-  login: "", // dernier identifiant saisi, pour pré-remplir le formulaire
+  email: "", // dernier e-mail saisi, pour pré-remplir le formulaire
   retour: "/", // chemin où aller une fois le compte créé
   message: null, // { type, texte }, ou null
 };
@@ -25,17 +26,14 @@ let M = {
 /**
  * Vérifie les champs avant l'envoi. Mêmes règles que le serveur, qui les
  * revérifie : ce contrôle évite seulement un aller-retour inutile.
- * . login : l'identifiant saisi
+ * . email : l'e-mail saisi
  * . mdp : le mot de passe saisi
  * . confirmation : la confirmation du mot de passe
  * > { texte, champ } pour la première erreur trouvée, ou null si tout est valide
  */
-M.validate = function (login, mdp, confirmation) {
-  if (!LOGIN_REGEX.test(login)) {
-    return {
-      texte: "L'identifiant doit faire de 3 à 40 caractères : lettres, chiffres, point, tiret ou souligné.",
-      champ: "login",
-    };
+M.validate = function (email, mdp, confirmation) {
+  if (email.length > EMAIL_MAX || !EMAIL_REGEX.test(email)) {
+    return { texte: "Saisis une adresse e-mail valide.", champ: "email" };
   }
   if (mdp.length < MDP_MIN) {
     return { texte: `Le mot de passe doit contenir au moins ${MDP_MIN} caractères.`, champ: "mdp" };
@@ -59,14 +57,14 @@ C.charger = function () {
 /**
  * Soumission du formulaire : valide, crée le compte puis renvoie vers la
  * page demandée (le compte est déjà connecté).
- * . login : l'identifiant saisi
+ * . email : l'e-mail saisi
  * . mdp : le mot de passe saisi
  * . confirmation : la confirmation du mot de passe
  */
-C.handler_register = async function (login, mdp, confirmation) {
-  M.login = login;
+C.handler_register = async function (email, mdp, confirmation) {
+  M.email = email;
 
-  let probleme = M.validate(login, mdp, confirmation);
+  let probleme = M.validate(email, mdp, confirmation);
   if (probleme !== null) {
     M.message = { type: "erreur", texte: probleme.texte };
     V.refresh(C.viewData(), `input[name="${probleme.champ}"]`);
@@ -74,10 +72,10 @@ C.handler_register = async function (login, mdp, confirmation) {
   }
 
   try {
-    await AuthData.register(login, mdp, confirmation);
+    await AuthData.register(email, mdp, confirmation);
   } catch (erreur) {
     M.message = { type: "erreur", texte: erreur.message };
-    V.refresh(C.viewData(), 'input[name="login"]');
+    V.refresh(C.viewData(), 'input[name="email"]');
     return;
   }
 
@@ -93,10 +91,10 @@ C.handler_goLogin = function () {
 
 /**
  * Les données dont la Vue a besoin pour afficher la page.
- * > { login, message }
+ * > { email, message }
  */
 C.viewData = function () {
-  return { login: M.login, message: M.message };
+  return { email: M.email, message: M.message };
 };
 
 C.init = function () {
@@ -131,7 +129,7 @@ V.createPageFragment = function (data) {
   page.querySelector('slot[name="message"]').replaceWith(MessageView.dom(data.message));
   page.querySelector('slot[name="formulaire"]').replaceWith(
     FormulaireInscriptionView.dom(
-      { login: data.login },
+      { email: data.email },
       { surInscription: C.handler_register, surConnexion: C.handler_goLogin }
     )
   );

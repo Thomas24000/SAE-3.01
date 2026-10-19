@@ -112,19 +112,20 @@ CREATE TABLE variante (
 -- ---------------------------------------------------------------------------
 -- Utilisateurs (US CMD-c)
 --
+-- email : identifiant de connexion, unique (stocké en minuscules par l'API).
 -- mot_de_passe : hachage produit par password_hash() (jamais le mot de passe
 -- en clair) ; 255 caractères laissent la place aux futurs algorithmes.
 -- role : décidé ici, côté serveur ; le navigateur ne peut pas le choisir.
 -- ---------------------------------------------------------------------------
 CREATE TABLE utilisateur (
     id           INT UNSIGNED            NOT NULL AUTO_INCREMENT,
-    login        VARCHAR(40)             NOT NULL,
+    email        VARCHAR(254)            NOT NULL,
     mot_de_passe VARCHAR(255)            NOT NULL,
     role         ENUM('client', 'admin') NOT NULL DEFAULT 'client',
     cree_le      DATETIME                NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (id),
-    UNIQUE KEY uq_utilisateur_login (login)
+    UNIQUE KEY uq_utilisateur_email (email)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
@@ -196,8 +197,8 @@ INSERT INTO variante (produit_id, libelle, prix_cents, stock) VALUES
     (11, 'Pot 100 ml', 270, 24), (11, 'Pot 465 ml', 720, 9),
     (12, 'Pot 100 ml', 270, 29), (12, 'Pot 465 ml', 720, 15);
 
--- Comptes de démonstration : alice / azerty (client), admin / motdepasse
--- (admin). Les mots de passe sont stockés hachés.
-INSERT INTO utilisateur (login, mot_de_passe, role) VALUES
-    ('alice', '$2y$12$usrCg0MWBP4EzYZMwaL.xuLJL2dw9Rz36dZg3tNLXTivNt8NVv3PW', 'client'),
-    ('admin', '$2y$12$8APxNRkGWxMMBSamJ1eewuXeMWJ7Eq/sZBm.466uy0pt4.MCQWyzi', 'admin');
+-- Comptes de démonstration : alice@example.com / azerty (client),
+-- admin@example.com / motdepasse (admin). Les mots de passe sont stockés hachés.
+INSERT INTO utilisateur (email, mot_de_passe, role) VALUES
+    ('alice@example.com', '$2y$12$usrCg0MWBP4EzYZMwaL.xuLJL2dw9Rz36dZg3tNLXTivNt8NVv3PW', 'client'),
+    ('admin@example.com', '$2y$12$8APxNRkGWxMMBSamJ1eewuXeMWJ7Eq/sZBm.466uy0pt4.MCQWyzi', 'admin');

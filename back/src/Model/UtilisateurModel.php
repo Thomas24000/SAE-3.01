@@ -23,19 +23,19 @@ final class UtilisateurModel
     }
 
     /**
-     * Le compte qui porte ce login, avec son mot de passe haché.
+     * Le compte qui porte cet e-mail, avec son mot de passe haché.
      *
-     * @return array{id:int, login:string, motDePasse:string, role:string}|null
-     *         null si aucun compte ne porte ce login.
+     * @return array{id:int, email:string, motDePasse:string, role:string}|null
+     *         null si aucun compte ne porte cet e-mail.
      */
-    public function findByLogin(string $login): ?array
+    public function findByEmail(string $email): ?array
     {
         $requete = $this->pdo->prepare(
-            'SELECT id, login, mot_de_passe, role
+            'SELECT id, email, mot_de_passe, role
                FROM utilisateur
-              WHERE login = :login'
+              WHERE email = :email'
         );
-        $requete->execute(['login' => $login]);
+        $requete->execute(['email' => $email]);
         $ligne = $requete->fetch();
 
         if ($ligne === false) {
@@ -44,7 +44,7 @@ final class UtilisateurModel
 
         return [
             'id'         => (int) $ligne['id'],
-            'login'      => $ligne['login'],
+            'email'      => $ligne['email'],
             'motDePasse' => $ligne['mot_de_passe'],
             'role'       => $ligne['role'],
         ];
@@ -53,19 +53,19 @@ final class UtilisateurModel
     /**
      * Crée un compte client.
      *
-     * Lève une PDOException (SQLSTATE 23000) si le login est déjà pris : la
+     * Lève une PDOException (SQLSTATE 23000) si l'e-mail est déjà pris : la
      * contrainte UNIQUE tranche même si deux inscriptions arrivent en même temps.
      *
      * @param string $hash Mot de passe déjà haché par password_hash().
      * @return int Identifiant du compte créé.
      */
-    public function create(string $login, string $hash): int
+    public function create(string $email, string $hash): int
     {
         $requete = $this->pdo->prepare(
-            "INSERT INTO utilisateur (login, mot_de_passe, role)
-             VALUES (:login, :mot_de_passe, 'client')"
+            "INSERT INTO utilisateur (email, mot_de_passe, role)
+             VALUES (:email, :mot_de_passe, 'client')"
         );
-        $requete->execute(['login' => $login, 'mot_de_passe' => $hash]);
+        $requete->execute(['email' => $email, 'mot_de_passe' => $hash]);
 
         return (int) $this->pdo->lastInsertId();
     }

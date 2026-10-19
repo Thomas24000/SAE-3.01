@@ -5,19 +5,19 @@ import template from "./template.html?raw";
 // validation est faite par la page, puis par le serveur.
 let FormulaireInscriptionView = {
   /**
-   * @param {{login: string}} data - identifiant à pré-remplir.
+   * @param {{email: string}} data - e-mail à pré-remplir.
    * @param {{surInscription: function(string, string, string): void,
    *          surConnexion: function(): void}} actions
    * @returns {DocumentFragment}
    */
   dom: function (data, actions) {
-    let fragment = htmlToFragment(genericRenderer(template, { login: data.login }));
+    let fragment = htmlToFragment(genericRenderer(template, { email: data.email }));
     let formulaire = fragment.firstElementChild;
 
     formulaire.addEventListener("submit", (ev) => {
       ev.preventDefault();
       actions.surInscription(
-        formulaire.elements.login.value.trim(),
+        formulaire.elements.email.value.trim(),
         formulaire.elements.mdp.value,
         formulaire.elements.confirmation.value
       );

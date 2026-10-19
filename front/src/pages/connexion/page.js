@@ -16,8 +16,8 @@ import templateConnecte from "./connecte.html?raw";
  */
 
 let M = {
-  login: "", // dernier identifiant saisi, pour pré-remplir le formulaire
-  session: null, // { connecte, login?, role? } renvoyé par le serveur, ou null
+  email: "", // dernier e-mail saisi, pour pré-remplir le formulaire
+  session: null, // { connecte, email?, role? } renvoyé par le serveur, ou null
   retour: "/", // chemin où aller une fois connecté
   message: null, // { type, texte }, ou null
 };
@@ -33,12 +33,12 @@ M.isConnected = function () {
 /**
  * Vérifie les champs avant l'envoi. Le serveur revérifie : ce contrôle évite
  * seulement un aller-retour inutile.
- * . login : l'identifiant saisi
+ * . email : l'e-mail saisi
  * . mdp : le mot de passe saisi
  * > un texte d'erreur, ou null si les champs sont renseignés
  */
-M.validate = function (login, mdp) {
-  if (login === "" || mdp === "") return "Renseigne ton identifiant et ton mot de passe.";
+M.validate = function (email, mdp) {
+  if (email === "" || mdp === "") return "Renseigne ton e-mail et ton mot de passe.";
   return null;
 };
 
@@ -61,21 +61,21 @@ C.charger = async function () {
 
 /**
  * Soumission du formulaire : connecte puis renvoie vers la page demandée.
- * . login : l'identifiant saisi
+ * . email : l'e-mail saisi
  * . mdp : le mot de passe saisi
  */
-C.handler_login = async function (login, mdp) {
-  M.login = login;
+C.handler_login = async function (email, mdp) {
+  M.email = email;
 
-  let probleme = M.validate(login, mdp);
+  let probleme = M.validate(email, mdp);
   if (probleme !== null) {
     M.message = { type: "erreur", texte: probleme };
-    V.refresh(C.viewData(), 'input[name="login"]');
+    V.refresh(C.viewData(), 'input[name="email"]');
     return;
   }
 
   try {
-    await AuthData.login(login, mdp);
+    await AuthData.login(email, mdp);
   } catch (erreur) {
     M.message = { type: "erreur", texte: erreur.message };
     V.refresh(C.viewData(), 'input[name="mdp"]');
@@ -109,14 +109,14 @@ C.handler_logout = async function () {
 
 /**
  * Les données dont la Vue a besoin pour afficher la page.
- * > { login, message, connecte, loginConnecte }
+ * > { email, message, connecte, emailConnecte }
  */
 C.viewData = function () {
   return {
-    login: M.login,
+    email: M.email,
     message: M.message,
     connecte: M.isConnected(),
-    loginConnecte: M.isConnected() ? M.session.login : "",
+    emailConnecte: M.isConnected() ? M.session.email : "",
   };
 };
 
@@ -144,7 +144,7 @@ V.refresh = function (data, focusSelector) {
   V.racine = nouvelleRacine;
 
   // Le header est hors de la page : après une déconnexion, on le met à jour.
-  HeaderView.updateAccount(data.connecte ? data.loginConnecte : null);
+  HeaderView.updateAccount(data.connecte ? data.emailConnecte : null);
   document.querySelector(focusSelector)?.focus();
 };
 
@@ -156,7 +156,7 @@ V.createPageFragment = function (data) {
   let slotFormulaire = page.querySelector('slot[name="formulaire"]');
 
   if (data.connecte) {
-    let connecte = htmlToFragment(genericRenderer(templateConnecte, { login: data.loginConnecte }));
+    let connecte = htmlToFragment(genericRenderer(templateConnecte, { email: data.emailConnecte }));
     connecte
       .querySelector('[data-action="deconnexion"]')
       .addEventListener("click", () => C.handler_logout());
@@ -164,7 +164,7 @@ V.createPageFragment = function (data) {
   } else {
     slotFormulaire.replaceWith(
       FormulaireLoginView.dom(
-        { login: data.login },
+        { email: data.email },
         { surConnexion: C.handler_login, surInscription: C.handler_goRegister }
       )
     );

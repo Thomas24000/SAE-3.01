@@ -24,6 +24,15 @@ export function goTo(path) {
 }
 
 /**
+ * Réaffiche la page courante, comme si on venait d'y arriver : elle relit ses
+ * données et le layout reconstruit le header. Sert après un changement de
+ * session (déconnexion) qui touche tout ce qui est affiché.
+ */
+export function reload() {
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+/**
  * Valeur d'un paramètre de la query string de l'adresse courante.
  *
  * @param {string} name - nom du paramètre.

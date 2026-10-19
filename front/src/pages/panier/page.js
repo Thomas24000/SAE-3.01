@@ -22,7 +22,7 @@ import templateVide from "./vide.html?raw";
 let M = {
   lignes: [], // [{ variantId, quantite }] : le panier du navigateur
   variantes: [], // les variantes de ces lignes, telles que l'API les renvoie
-  session: null, // { connecte, login?, role? } renvoyé par le serveur, ou null
+  session: null, // { connecte, email?, role? } renvoyé par le serveur, ou null
   echec: false, // true si l'API n'a pas pu répondre
   message: null, // { type, texte }, ou null
 };

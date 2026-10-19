@@ -398,7 +398,7 @@ back/
     ├── .htaccess            Require all denied
     ├── routes.php           table 'METHODE /api/chemin' => [Controleur::class, 'methode']
     ├── Core/                Database (PDO singleton), Request, Response (json/erreur + exit), Router
-    ├── Controller/          AuthController, CommandeController, ProduitController, StatsController
+    ├── Controller/          AuthController, CommandeController, CompteController, ProduitController, StatsController
     └── Model/               CommandeModel, ParametreModel, ProduitModel, UtilisateurModel
 back/tests/stock.php         tests CLI du stock STK-a (base jetable, `Require all denied`)
 front/
@@ -442,6 +442,9 @@ En dev (`npm run dev`), l'étape 5 passe par le proxy Vite vers
 | `/panier` | `pages/panier` (lignes, ±, suppression, résumé, réconciliation avec l'API) | CMD-b | fait (« Valider » : non connecté → `/connexion?retour=/commande` ; connecté → `/commande`) |
 | `/commande` | `pages/commande` (récapitulatif en lecture seule, bouton « Confirmer ma commande », redirige vers la connexion si besoin) | CMD-a | fait (à tester en navigateur) |
 | `/commande/:numero` | `pages/confirmation` (numéro, statut, date, lignes aux prix figés, total ; 401/404 affichés) | CMD-a | fait (à tester en navigateur) |
+| `/compte` | `pages/compte` (bonjour personnalisé, infos, 3 dernières commandes ; 401 → `/connexion?retour=/compte`) | SUI-b | fait (à tester en navigateur) |
+| `/compte/profil` | `pages/compte-profil` (nom + e-mail) | SUI-b | fait (à tester en navigateur) |
+| `/compte/mot-de-passe` | `pages/compte-mot-de-passe` (ancien exigé) | SUI-b | fait (à tester en navigateur) |
 | `/admin` | `pages/admin` (connexion + stats, 401/403 affichés) | socle GOF-b | démo |
 | `/connexion` | `pages/connexion` (formulaire, ou « connecté » + déconnexion ; `?retour=` filtré) | CMD-c | fait |
 | `/inscription` | `pages/inscription` (validation client + serveur, connecte aussitôt) | CMD-c | fait |
@@ -454,7 +457,7 @@ Ajouter une route : `import` + `router.addRoute(...)` **avant** `"*"`.
 
 | Composant (objet exporté) | API | Données reçues → callbacks | Utilisé par |
 | --- | --- | --- | --- |
-| `header` (`HeaderView`) | `html`, `dom`, `updateCount(n)` | `{ panierCount }` ; gère seul le bouton thème ; icône « Mon compte » → `/connexion` + e-mail du connecté + bouton « Se déconnecter » ; `dom(data, { surDeconnexion })`, `updateAccount(email)` | `RootLayout`, pages produit/panier (compteur) |
+| `header` (`HeaderView`) | `html`, `dom`, `updateCount(n)` | `{ panierCount }` ; gère seul le bouton thème ; icône « Mon compte » → `/compte` si connecté, `/connexion` sinon + e-mail du connecté + bouton « Se déconnecter » ; `dom(data, { surDeconnexion })`, `updateAccount(email)` | `RootLayout`, pages produit/panier (compteur) |
 | `footer` (`FooterView`) | `html`, `dom` | aucune | `RootLayout` |
 | `bandeau` (`BandeauView`) | `dom(image, surDecouvrir)` | URL visuel | produits |
 | `message` (`MessageView`) | `html`, `dom` | `{ type: "erreur"\|"succes", texte }` ou `null` | toutes les pages dynamiques |
@@ -470,6 +473,10 @@ Ajouter une route : `import` + `router.addRoute(...)` **avant** `"*"`.
 | `formulaire-login` (`FormulaireLoginView`) | `dom(data, actions)` | `{ email }` ; `surConnexion(email, mdp)`, `surInscription` | connexion |
 | `formulaire-inscription` (`FormulaireInscriptionView`) | `dom(data, actions)` | `{ email }` ; `surInscription(email, mdp, confirmation)`, `surConnexion` | inscription |
 | `formulaire-connexion` (`FormulaireConnexionView`) | `html`, `dom(data, actions)` | `{ login }` ; `surConnexion(login, mdp)`, `surDeconnexion` | admin |
+| `navigation-compte` (`NavigationCompteView`) | `dom()` | aucune ; 3 liens `data-link`, `aria-current` posé par le routeur | pages compte* |
+| `formulaire-profil` (`FormulaireProfilView`) | `dom(data, actions)` | `{ nom, email }` ; `surEnregistrement(nom, email)` | compte-profil |
+| `formulaire-mot-de-passe` (`FormulaireMotDePasseView`) | `dom(actions)` | aucune donnée (champs jamais pré-remplis) ; `surChangement(ancien, nouveau, confirmation)` | compte-mot-de-passe |
+| `apercu-commandes` (`ApercuCommandesView`) | `dom(data)` ; `ligne.html`, `vide.html` | `{ resume, commandes: [{ numero, statut, date, totalCents }] }` | compte |
 | `statistiques` (`StatistiquesView`) | `dom(stats)` ; `ligne-categorie.html` | `{ total, stockTotal, prixMoyenCents, parCategorie }` | admin |
 
 Conventions observées : dossier kebab-case français, objet `<Nom>View`,
@@ -494,6 +501,7 @@ les boutons. Booléens dans un template : `{{desactivee}}` vaut `"disabled"` ou
 | `data/produit.js` | `ProduitData.fetchAll / fetchOne(slug) / fetchVariantes(ids)` | préfixe les images par `BASE_URL` |
 | `data/auth.js` | `AuthData.login(email, mdp) / register / me / logout`, `knownEmail` | session PHP ; `knownEmail` = dernier e-mail connu, pour le header |
 | `data/commande.js` | `CommandeData.create(lignes) / fetchOne(numero)` | `POST` puis `GET /api/commande` ; n'envoie que `{ variantId, quantite }` |
+| `data/compte.js` | `CompteData.fetch / updateProfile(nom, email) / updatePassword(ancien, nouveau, confirmation)` | `GET /api/compte`, `POST /api/compte/profil` et `/mot-de-passe` ; met à jour `AuthData.knownEmail` |
 | `data/stats.js` | `StatsData.fetch()` | `admin/stats` |
 | `data/panier.js` | `PanierData.read / write / add / setQuantity / remove / clear / count` | `localStorage["panier"]` = `[{ variantId, quantite }]` uniquement, validé à la lecture, plafond 99 |
 
@@ -513,6 +521,9 @@ touchent au `localStorage`.
 | `POST /api/logout` | `AuthController::logout` | — | `{ connecte: false }` |
 | `POST /api/commande` | `CommandeController::store` | `CommandeModel::creer()` | corps `{ lignes: [{ variantId, quantite }] }` → 201 `{ commande: { numero, statut, totalCents } }` ; 401 non connecté, 400 lignes invalides (vide, > 50, doublon, quantité hors 1-99), 409 variante disparue **ou stock insuffisant**. Transaction : variantes verrouillées `FOR UPDATE` par id croissant, prix relus en base (prix du client ignoré), stock décrémenté et journalisé (STK-a) |
 | `GET /api/commande?numero=` | `CommandeController::show` | `CommandeModel::findByNumero()` | `{ commande: { numero, statut, totalCents, creeLe, email, lignes } }` ; 401, 400 numéro mal formé, 404 inconnue **ou à un autre client** |
+| `GET /api/compte` | `CompteController::show` | `UtilisateurModel::findById()`, `CommandeModel::findRecentes()` / `countByUtilisateur()` | `{ profil: { email, nom, creeLe }, commandes: { total, recentes[3] } }` ; 401 (SUI-b) |
+| `POST /api/compte/profil` | `CompteController::updateProfile` | `UtilisateurModel::updateProfile()` | corps `{ nom, email }` → `{ profil }` (nom vide = effacé, session alignée) ; 401, 400 (nom > 100, e-mail invalide), 409 e-mail pris |
+| `POST /api/compte/mot-de-passe` | `CompteController::updatePassword` | `findHashById()`, `updatePassword()` | corps `{ ancien, nouveau, confirmation }` → `{ modifie: true }` ; **exige l'ancien** : 403 s'il est faux ; 400 règles du nouveau ; `session_regenerate_id(true)` |
 | `GET /api/admin/stats` | `StatsController::index` | `statistiques()` | 403 si `$_SESSION['role'] !== 'admin'` |
 
 Ajouter une route back = **3 endroits** : la ligne dans `routes.php`, l'instance
@@ -530,7 +541,7 @@ Itérations PHP : `for` ou `array_map`, jamais `foreach`.
 | `produit` | `categorie_id`, `nom`, `slug`, `description`, `teinte` (0-359), `image`, `description_longue`, `ingredients` | `UNIQUE(slug)`, FK → categorie `RESTRICT` |
 | `produit_image` | `produit_id`, `chemin`, `position` | `UNIQUE(produit_id, position)`, FK `CASCADE` |
 | `variante` | `produit_id`, `libelle`, `prix_cents`, `stock` | `UNIQUE(produit_id, libelle)`, FK `CASCADE` |
-| `utilisateur` | `email` (minuscules), `mot_de_passe` (hachage `password_hash`), `role` (`client`\|`admin`), `cree_le` | `UNIQUE(email)` |
+| `utilisateur` | `email` (minuscules), `nom` (NULL, facultatif), `mot_de_passe` (hachage `password_hash`), `role` (`client`\|`admin`), `cree_le` | `UNIQUE(email)` |
 | `commande` | `numero` (`CC-AAAA-000123`), `utilisateur_id`, `statut` (`en_cours`\|`prete`\|`retiree`\|`annulee`, défaut `en_cours`), `total_cents`, `cree_le` | `UNIQUE(numero)`, FK → utilisateur `RESTRICT` |
 | `ligne_commande` | `commande_id`, `variante_id` (NULL si supprimée), `produit_nom`, `variante_libelle`, `prix_unitaire_cents`, `quantite` | FK commande `CASCADE`, FK variante `SET NULL` ; nom, format et prix **figés** à la commande |
 | `mouvement_stock` | `variante_id` (NULL si supprimée), `commande_id`, `type` (`sortie`\|`retour`), `quantite`, `stock_avant`, `stock_apres`, `cree_le` | `UNIQUE(commande_id, variante_id, type)` (idempotence), FK variante `SET NULL`, FK commande `CASCADE` ; `variante.stock` a en plus `CHECK (stock >= 0)` |

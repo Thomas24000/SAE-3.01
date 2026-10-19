@@ -243,6 +243,50 @@ final class CommandeModel
     }
 
     /**
+     * Les dernières commandes d'un client, de la plus récente à la plus ancienne.
+     *
+     * @param int $utilisateurId Identifiant du client connecté.
+     * @param int $limite Nombre maximal de commandes renvoyées.
+     * @return array<int, array{numero:string, statut:string, totalCents:int, creeLe:string}>
+     */
+    public function findRecentes(int $utilisateurId, int $limite): array
+    {
+        $requete = $this->pdo->prepare(
+            'SELECT numero, statut, total_cents, cree_le
+               FROM commande
+              WHERE utilisateur_id = :utilisateur
+           ORDER BY cree_le DESC, id DESC
+              LIMIT :limite'
+        );
+        $requete->bindValue('utilisateur', $utilisateurId, PDO::PARAM_INT);
+        $requete->bindValue('limite', $limite, PDO::PARAM_INT);
+        $requete->execute();
+
+        return array_map(
+            static fn (array $ligne): array => [
+                'numero'     => $ligne['numero'],
+                'statut'     => $ligne['statut'],
+                'totalCents' => (int) $ligne['total_cents'],
+                'creeLe'     => $ligne['cree_le'],
+            ],
+            $requete->fetchAll()
+        );
+    }
+
+    /**
+     * Le nombre total de commandes d'un client.
+     */
+    public function countByUtilisateur(int $utilisateurId): int
+    {
+        $requete = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM commande WHERE utilisateur_id = :utilisateur'
+        );
+        $requete->execute(['utilisateur' => $utilisateurId]);
+
+        return (int) $requete->fetchColumn();
+    }
+
+    /**
      * Rend au stock les quantités d'une commande annulée, ligne par ligne.
      * À appeler dans une transaction ouverte.
      *

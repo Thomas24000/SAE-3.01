@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Controller\AuthController;
 use App\Controller\CommandeController;
+use App\Controller\CompteController;
 use App\Controller\ProduitController;
 use App\Controller\StatsController;
 
@@ -27,5 +28,8 @@ return [
     'POST /api/logout'      => [AuthController::class,      'logout'],
     'POST /api/commande'    => [CommandeController::class,  'store'],
     'GET  /api/commande'    => [CommandeController::class,  'show'],
+    'GET  /api/compte'              => [CompteController::class,    'show'],
+    'POST /api/compte/profil'       => [CompteController::class,    'updateProfile'],
+    'POST /api/compte/mot-de-passe' => [CompteController::class,    'updatePassword'],
     'GET  /api/admin/stats' => [StatsController::class,     'index'],
 ];

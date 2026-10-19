@@ -135,11 +135,13 @@ CREATE TABLE parametre (
 -- email : identifiant de connexion, unique (stocké en minuscules par l'API).
 -- mot_de_passe : hachage produit par password_hash() (jamais le mot de passe
 -- en clair) ; 255 caractères laissent la place aux futurs algorithmes.
+-- nom : nom d'affichage facultatif, modifiable dans l'espace personnel (SUI-b).
 -- role : décidé ici, côté serveur ; le navigateur ne peut pas le choisir.
 -- ---------------------------------------------------------------------------
 CREATE TABLE utilisateur (
     id           INT UNSIGNED            NOT NULL AUTO_INCREMENT,
     email        VARCHAR(254)            NOT NULL,
+    nom          VARCHAR(100)            NULL,
     mot_de_passe VARCHAR(255)            NOT NULL,
     role         ENUM('client', 'admin') NOT NULL DEFAULT 'client',
     cree_le      DATETIME                NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -314,6 +316,6 @@ INSERT INTO parametre (cle, valeur) VALUES
 
 -- Comptes de démonstration : alice@example.com / azerty (client),
 -- admin@example.com / motdepasse (admin). Les mots de passe sont stockés hachés.
-INSERT INTO utilisateur (email, mot_de_passe, role) VALUES
-    ('alice@example.com', '$2y$12$usrCg0MWBP4EzYZMwaL.xuLJL2dw9Rz36dZg3tNLXTivNt8NVv3PW', 'client'),
-    ('admin@example.com', '$2y$12$8APxNRkGWxMMBSamJ1eewuXeMWJ7Eq/sZBm.466uy0pt4.MCQWyzi', 'admin');
+INSERT INTO utilisateur (email, nom, mot_de_passe, role) VALUES
+    ('alice@example.com', 'Alice Martin', '$2y$12$usrCg0MWBP4EzYZMwaL.xuLJL2dw9Rz36dZg3tNLXTivNt8NVv3PW', 'client'),
+    ('admin@example.com', NULL, '$2y$12$8APxNRkGWxMMBSamJ1eewuXeMWJ7Eq/sZBm.466uy0pt4.MCQWyzi', 'admin');

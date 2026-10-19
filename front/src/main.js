@@ -7,6 +7,9 @@ import { CommandePage } from "./pages/commande/page.js";
 import { ConfirmationPage } from "./pages/confirmation/page.js";
 import { ConnexionPage } from "./pages/connexion/page.js";
 import { InscriptionPage } from "./pages/inscription/page.js";
+import { ComptePage } from "./pages/compte/page.js";
+import { CompteProfilPage } from "./pages/compte-profil/page.js";
+import { CompteMotDePassePage } from "./pages/compte-mot-de-passe/page.js";
 import { AdminPage } from "./pages/admin/page.js";
 import { The404Page } from "./pages/404/page.js";
 
@@ -22,6 +25,9 @@ router.addRoute("/commande", CommandePage);
 router.addRoute("/commande/:numero", ConfirmationPage);
 router.addRoute("/connexion", ConnexionPage);
 router.addRoute("/inscription", InscriptionPage);
+router.addRoute("/compte", ComptePage);
+router.addRoute("/compte/profil", CompteProfilPage);
+router.addRoute("/compte/mot-de-passe", CompteMotDePassePage);
 router.addRoute("/admin", AdminPage);
 
 // En dernier : toute adresse qui ne correspond à aucune route.

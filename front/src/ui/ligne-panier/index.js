@@ -7,8 +7,9 @@ let LignePanierView = {
   /**
    * @param {{variantId: number, nom: string, slug: string, libelle: string,
    *          image: string, teinte: number, quantite: number, totalCents: number,
-   *          moinsPossible: boolean}} data
-   *        totalCents : prix de la ligne en centimes (prix du format × quantité).
+   *          moinsPossible: boolean, plusPossible: boolean}} data
+   *        totalCents : prix de la ligne en centimes (prix du format × quantité) ;
+   *        plusPossible : false quand la quantité atteint le stock de la variante.
    * @param {{surQuantite: function(number, number): void, surSuppression: function(number): void}} actions
    *        surQuantite reçoit l'identifiant de la variante puis -1 ou 1 ;
    *        surSuppression reçoit l'identifiant de la variante.
@@ -26,6 +27,8 @@ let LignePanierView = {
         quantite: data.quantite,
         prix: formaterPrix(data.totalCents),
         moinsDesactive: data.moinsPossible ? "" : "disabled",
+        plusDesactive: data.plusPossible ? "" : "disabled",
+        alerteStock: data.plusPossible ? "hidden" : "",
       })
     );
 

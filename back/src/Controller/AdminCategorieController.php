@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Core\Request;
 use App\Core\Response;
 use App\Core\SessionAdmin;
+use App\Core\Texte;
 use App\Model\CategorieModel;
 use DomainException;
 use PDOException;
@@ -130,8 +131,8 @@ final class AdminCategorieController
      */
     private function donneesValides(array $corps): array
     {
-        $libelle     = $this->nettoyer($corps['libelle'] ?? null);
-        $description = $this->nettoyer($corps['description'] ?? null);
+        $libelle     = Texte::nettoyer($corps['libelle'] ?? null);
+        $description = Texte::nettoyer($corps['description'] ?? null);
 
         if (mb_strlen($libelle) < self::LIBELLE_MIN || mb_strlen($libelle) > self::LIBELLE_MAX) {
             Response::erreur(
@@ -144,24 +145,12 @@ final class AdminCategorieController
             Response::erreur('La description est limitée à ' . self::DESCRIPTION_MAX . ' caractères.', 400);
         }
 
-        $slug = $this->slug($libelle);
+        $slug = Texte::slug($libelle);
         if ($slug === '') {
             Response::erreur('Le nom doit contenir au moins une lettre ou un chiffre.', 400);
         }
 
         return ['libelle' => $libelle, 'slug' => $slug, 'description' => $description];
-    }
-
-    /**
-     * Texte reçu sans espaces superflus (début, fin et doublons) ; '' si ce n'est pas un texte.
-     */
-    private function nettoyer(mixed $valeur): string
-    {
-        if (!is_string($valeur)) {
-            return '';
-        }
-
-        return trim((string) preg_replace('/\s+/u', ' ', $valeur));
     }
 
     /**
@@ -177,21 +166,6 @@ final class AdminCategorieController
         }
 
         Response::erreur('Identifiant de catégorie invalide.', 400);
-    }
-
-    /**
-     * Slug d'un nom : minuscules, sans accents, mots séparés par des tirets.
-     * « Sans Lactose » devient « sans-lactose ».
-     */
-    private function slug(string $libelle): string
-    {
-        $sansAccents = strtr(mb_strtolower($libelle), [
-            'à' => 'a', 'â' => 'a', 'ä' => 'a', 'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
-            'î' => 'i', 'ï' => 'i', 'ô' => 'o', 'ö' => 'o', 'ù' => 'u', 'û' => 'u', 'ü' => 'u',
-            'ç' => 'c', 'œ' => 'oe', 'æ' => 'ae', 'ÿ' => 'y',
-        ]);
-
-        return trim((string) preg_replace('/[^a-z0-9]+/', '-', $sansAccents), '-');
     }
 
     /**

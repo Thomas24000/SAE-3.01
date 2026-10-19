@@ -4,11 +4,11 @@ import { htmlToFragment } from "../../lib/utils.js";
 import { NavigationAdminView } from "../../ui/navigation-admin/index.js";
 import template from "./template.html?raw";
 
-// Sections du back-office. Une section pas encore construite est affichée
-// grisée, sans lien (voir GOF-a pour les produits).
+// Sections du back-office. Une section pas encore construite serait affichée
+// grisée, sans lien (disponible: false).
 const LIENS = [
   { libelle: "Tableau de bord", href: "/admin", icone: "tableau", disponible: true },
-  { libelle: "Produits", href: "/admin/produits", icone: "produits", disponible: false },
+  { libelle: "Produits", href: "/admin/produits", icone: "produits", disponible: true },
   { libelle: "Catégories", href: "/admin/categories", icone: "categories", disponible: true },
 ];
 

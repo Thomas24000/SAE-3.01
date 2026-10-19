@@ -1,0 +1,9 @@
+<nav aria-label="Pagination" class="flex items-center gap-2">
+  <button type="button" data-page="{{precedente}}" aria-label="Page précédente" {{precedenteDesactivee}} class="flex size-10 items-center justify-center rounded-full border border-border-default bg-bg-default transition-colors hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-40">
+    <img src="{{images}}chevron-gauche.svg" alt="" width="16" height="16" class="size-4 dark:invert" />
+  </button>
+  <slot name="pages"></slot>
+  <button type="button" data-page="{{suivante}}" aria-label="Page suivante" {{suivanteDesactivee}} class="flex size-10 items-center justify-center rounded-full border border-border-default bg-bg-default transition-colors hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-40">
+    <img src="{{images}}chevron-droite.svg" alt="" width="16" height="16" class="size-4 dark:invert" />
+  </button>
+</nav>

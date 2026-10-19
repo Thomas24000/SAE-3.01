@@ -70,4 +70,18 @@ let postRequest = function (uri, data = {}, headers = {}) {
   });
 };
 
-export { getRequest, postRequest, ErreurApi };
+/**
+ * Envoi d'un formulaire multipart (téléversement de fichiers). Le navigateur
+ * fixe lui-même le Content-Type, avec la séparation des parties : on ne le
+ * renseigne donc pas. Par exemple :
+ * await postFormRequest("admin/produits/images?id=3", formData, { "X-CSRF-Token": jeton })
+ */
+let postFormRequest = function (uri, formData, headers = {}) {
+  return request(uri, {
+    method: "POST",
+    headers: { Accept: "application/json", ...headers },
+    body: formData,
+  });
+};
+
+export { getRequest, postRequest, postFormRequest, ErreurApi };

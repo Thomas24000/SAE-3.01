@@ -1,0 +1,6 @@
+# Images téléversées depuis le back-office : on ne sert que des images.
+# Aucun script ne s'exécute ici, quel que soit le nom du fichier.
+Options -Indexes -ExecCGI
+<FilesMatch "\.(php[0-9]?|phtml|phar|cgi|pl|py|sh)$">
+    Require all denied
+</FilesMatch>

@@ -378,7 +378,8 @@ ne jamais reprendre leur vocabulaire « films » (voir skill
 ### 12.2 Arborescence commentée de `SAE301-Starter/`
 
 ```
-.htaccess                    /api/* → back/index.php ; le reste → front/dist/ (fallback index.html)
+.htaccess                    /api/* → back/index.php ; /uploads/* servi tel quel ; le reste → front/dist/ (fallback index.html)
+uploads/                     images téléversées (GOF-a), ignorées par Git ; .htaccess : aucun script exécuté
 .gitignore                   ignore front/node_modules/ et front/dist/
 AGENTS.md / README.md        règles (ce fichier) / doc d'installation pour humains
 .agents/
@@ -397,9 +398,9 @@ back/
 └── src/
     ├── .htaccess            Require all denied
     ├── routes.php           table 'METHODE /api/chemin' => [Controleur::class, 'methode']
-    ├── Core/                Database (PDO singleton), Request (+ en-têtes), Response (json/erreur + exit), Router, SessionAdmin (garde admin + jeton CSRF)
-    ├── Controller/          AdminAuthController, AdminCategorieController, AuthController, CommandeController, ProduitController, StatsController
-    └── Model/               CategorieModel, CommandeModel, ParametreModel, ProduitModel, UtilisateurModel
+    ├── Core/                Database (PDO singleton), Request (+ en-têtes), Response (json/erreur + exit), Router, SessionAdmin (garde admin + jeton CSRF), Texte (slug, nettoyage), Televersement (images : contrôle, GD, miniatures)
+    ├── Controller/          AdminAuthController, AdminCategorieController, AdminProduitController, AuthController, CommandeController, ProduitController, StatsController
+    └── Model/               CategorieModel, CommandeModel, ProduitAdminModel, ParametreModel, ProduitModel, UtilisateurModel
 back/tests/stock.php         tests CLI du stock STK-a (base jetable, `Require all denied`)
 front/
 ├── index.html               page unique : police Inter, script inline du thème, #app, main.js
@@ -448,6 +449,8 @@ En dev (`npm run dev`), l'étape 5 passe par le proxy Vite vers
 | `/inscription` | `pages/inscription` (validation client + serveur, connecte aussitôt) | CMD-c | fait |
 | `/admin/categories` | `pages/admin-categories` (liste, modale de suppression avec réaffectation) | GOF-c | fait (non testée en navigateur ni sur la vraie base) |
 | `/admin/categories/nouvelle`, `/admin/categories/:id/modifier` | `pages/admin-categorie` (même formulaire création / modification) | GOF-c | fait (non testée) |
+| `/admin/produits` | `pages/admin-produits` (recherche, filtres catégorie/stock, pagination par 6, modale de suppression) | GOF-a | fait (testée avec jsdom + faux serveur, pas sur la vraie base) |
+| `/admin/produits/nouveau`, `/admin/produits/:id/modifier` | `pages/admin-produit` (informations, images, formats et prix, seuil, suppression) | GOF-a | fait (idem) |
 | `*` | `pages/404` (statique, renvoie une chaîne) | — | fait |
 | `/categorie/:slug` | — | DEC-a | **à faire** (le filtre actuel est local, sans URL) |
 
@@ -483,6 +486,13 @@ Ajouter une route : `import` + `router.addRoute(...)` **avant** `"*"`.
 | `liste-categories` (`ListeCategoriesView`) | `dom(categories, actions)` ; `ligne.html`, `vide.html` | `[{ id, libelle, description, nombreProduits }]` ; `surSuppression(id)` | admin-categories |
 | `formulaire-categorie` (`FormulaireCategorieView`) | `dom(data, actions)` | `{ libelle, description, bouton, enCours, message }` ; `surEnvoi(libelle, description)` | admin-categorie |
 | `modale-suppression` (`ModaleSuppressionView`) | `dom(data, actions)` ; `reaffectation.html` ; `<dialog>` natif (la page appelle `showModal()`) | `{ nom, nombreProduits, cibles, cible, enCours, message }` ; `surConfirmation(cible)`, `surChoixCible`, `surAnnulation` | admin-categories |
+| `modale-confirmation` (`ModaleConfirmationView`) | `dom(data, actions)` ; `<dialog>` natif | `{ titre, texte, bouton, enCours, message }` ; `surConfirmation()`, `surAnnulation()` | admin-produits, admin-produit |
+| `pagination` (`PaginationView`) | `dom(data, actions)` ; `page.html` | `{ page, pages }` ; `surPage(n)` | admin-produits |
+| `filtres-produits` (`FiltresProduitsView`) | `dom(data, actions)` | `{ recherche, categorieId, stock, categories }` ; `surChangement({ recherche, categorieId, stock })` | admin-produits |
+| `liste-produits` (`ListeProduitsView`) | `dom(produits, actions)` ; `ligne.html`, `vide.html` | `[{ id, nom, categorie, miniature, prixMin, stock, nombreFormats, nombreImages, statut }]` ; `surSuppression(id)` | admin-produits |
+| `panneau-images` (`PanneauImagesView`) | `dom(data, actions)` ; dépôt (clic ou glisser-déposer), vignettes | `{ actif, enCours, images, message }` ; `surFichiers(File[])`, `surPrincipale(id)`, `surSuppression(id)` | admin-produit |
+| `panneau-seuil` (`PanneauSeuilView`) | `dom(data, actions)` | `{ seuil, stock, statut, enCours, message }` ; `surEnregistrement(texte)` | admin-produit |
+| `formulaire-produit` (`FormulaireProduitView`) | `dom(data, panneaux, actions)`, `lireEtat(form)` ; `format.html`, `suppression.html` | voir JSDoc ; `surEnvoi(etat)`, `surAjoutFormat(etat)`, `surRetraitFormat(i, etat)`, `surSuppressionProduit()` | admin-produit |
 | `statistiques` (`StatistiquesView`) | `dom(stats)` ; `ligne-categorie.html` | `{ total, stockTotal, prixMoyenCents, parCategorie }` | admin |
 
 Conventions observées : dossier kebab-case français, objet `<Nom>View`,
@@ -499,7 +509,7 @@ les boutons. Booléens dans un template : `{{desactivee}}` vaut `"disabled"` ou
 | --- | --- | --- |
 | `lib/router.js` | `Router` | routes avec `:param`, layouts par plus long préfixe, `data-link`, `basename`, anti-course (`this.navigation`) |
 | `lib/utils.js` | `genericRenderer`, `htmlToFragment` | `{{cle}}` **échappé** ; chaîne → `DocumentFragment` |
-| `lib/api-request.js` | `getRequest`, `postRequest`, `ErreurApi` | `fetch` JSON sur `BASE_URL + "api/"`, erreur `{ erreur }` → `ErreurApi(message, statut)` |
+| `lib/api-request.js` | `getRequest`, `postRequest(uri, data, headers)`, `postFormRequest(uri, formData, headers)`, `ErreurApi` | `fetch` JSON sur `BASE_URL + "api/"`, erreur `{ erreur }` → `ErreurApi(message, statut)` |
 | `lib/format.js` | `formaterPrix(centimes)` | « 7,90 € » (affichage uniquement) |
 | `lib/stock.js` | `statutStock(stock, seuil)` | seuil fourni par l'API (`seuilBientotEpuise`, table `parametre`) |
 | `lib/navigation.js` | `goTo(path)`, `reload()`, `readQuery(name)`, `safeReturnPath(raw)` | redirection depuis une page (pushState + `popstate`, sans toucher au routeur) ; `retour` limité aux chemins internes |
@@ -509,6 +519,7 @@ les boutons. Booléens dans un template : `{{desactivee}}` vaut `"disabled"` ou
 | `data/commande.js` | `CommandeData.create(lignes) / fetchOne(numero)` | `POST` puis `GET /api/commande` ; n'envoie que `{ variantId, quantite }` |
 | `data/admin.js` | `AdminData.login(email, mdp) / me / logout`, `knownEmail` | `admin/login`, `admin/me`, `admin/logout` (session admin séparée) |
 | `data/categories.js` | `CategorieData.fetchAll / create / update / remove(id, reaffecterVers)` | `admin/categories…` ; joint le jeton CSRF (`AdminData.csrf`) en-tête `X-CSRF-Token` |
+| `data/produit-admin.js` | `ProduitAdminData.fetchAll / fetchOne(id) / create / update / remove / uploadImages(id, files) / removeImage / setMainImage / saveThreshold` | `admin/produits…` ; jeton CSRF ; adresses d'images complétées par `BASE_URL` |
 | `data/stats.js` | `StatsData.fetch()` | `admin/stats` (inclut `commandes`) |
 | `data/panier.js` | `PanierData.read / write / add / setQuantity / remove / clear / count` | `localStorage["panier"]` = `[{ variantId, quantite }]` uniquement, validé à la lecture, plafond 99 |
 
@@ -535,6 +546,14 @@ touchent au `localStorage`.
 | `POST /api/admin/categories` | `AdminCategorieController::create` | `creer()` | corps `{ libelle, description }` → 201 `{ categorie }` ; 400 (nom 2-60, description ≤ 255), 401, 403 (CSRF), 409 (nom/slug déjà pris) |
 | `POST /api/admin/categories/modifier` | `AdminCategorieController::update` | `modifier()` | corps `{ id, libelle, description }` → `{ categorie }` ; 400, 401, 403, 404, 409 |
 | `POST /api/admin/categories/supprimer` | `AdminCategorieController::delete` | `supprimer()` | corps `{ id, reaffecterVers? }` → `{ supprimee, reaffectes }`. **Règle** : catégorie vide → suppression directe ; avec produits → `reaffecterVers` obligatoire (autre catégorie existante), sinon 409 ; transaction (verrou, UPDATE produit, DELETE) ; 400 cible invalide, 404 |
+| `GET /api/admin/produits` | `AdminProduitController::index` | `ProduitAdminModel::lister()` | `{ produits: [{ id, nom, slug, categorieId, categorie, image, miniature, prixMin, stock, nombreFormats, nombreImages }], categories, seuilBientotEpuise }` ; 401 |
+| `GET /api/admin/produit?id=` | `AdminProduitController::show` | `trouver()` | `{ produit: { …, variantes, images }, categories, seuilBientotEpuise }` ; 400, 401, 404 |
+| `POST /api/admin/produits` | `create` | `creer()` | corps `{ nom, categorieId, description, descriptionLongue, ingredients, variantes: [{ libelle, prixCents, stock }] }` → 201 `{ produit: { id, nom, slug } }` ; 400, 401, 403 (CSRF), 409 (nom ou format en double). Slug généré à la création et **jamais modifié** ; teinte = crc32(nom) % 360 ; image par défaut `images/produits/placeholder.svg` |
+| `POST /api/admin/produits/modifier` | `update` | `modifier()` | corps comme ci-dessus + `id` ; format avec `id` mis à jour, sans `id` créé, absent supprimé (transaction, de 1 à 10 formats) |
+| `POST /api/admin/produits/supprimer` | `delete` | `supprimer()` | `{ id }` → `{ supprime }` ; variantes et lignes d'images supprimées en cascade, fichiers effacés, commandes passées intactes (instantané) |
+| `POST /api/admin/produits/images?id=` | `uploadImages` | `ajouterImage()`, `Televersement::enregistrerImage()` | multipart `images[]` ; type **réel** contrôlé, 5 Mo, ≤ 8000 px, ≤ 10 images/produit ; réencodé en JPEG (1200 px) + miniature 400 px (`-m.jpg`), nom aléatoire dans `uploads/produits/` → `{ images }` |
+| `POST /api/admin/produits/images/supprimer` et `…/principale` | `deleteImage`, `setMainImage` | `supprimerImage()`, `definirPrincipale()` | `{ id, imageId }` → `{ images }` ; la 1ʳᵉ image (position 1) est `produit.image` |
+| `POST /api/admin/parametres/seuil` | `updateThreshold` | `ParametreModel::definirSeuilBientotEpuise()` | `{ seuil }` (entier 0-100000) → `{ seuilBientotEpuise }` |
 | `GET /api/admin/stats` | `StatsController::index` | `ProduitModel::statistiques()`, `compterSousSeuil()`, `CommandeModel::statistiques()`, `ParametreModel::seuilBientotEpuise()` | `{ total (produits), stockTotal, prixMoyenCents, parCategorie, commandes, commandesAujourdhui, commandesEnCours, bientotEpuises }` ; 401 sans `$_SESSION['admin']` |
 
 Ajouter une route back = **3 endroits** : la ligne dans `routes.php`, l'instance
@@ -597,6 +616,9 @@ le stock uniquement au passage à `annulee`. Test : `back/tests/stock.php`.
 | 9 | CSRF : **résolu pour l'admin** (jeton en session, `SessionAdmin::exigerEcriture`, en-tête `X-CSRF-Token`) ; `POST /api/commande` (client) s'appuie toujours sur `SameSite=Lax` | utiliser `exigerEcriture` pour toute écriture admin |
 | 11 | Stock décrémenté, journalisé et recrédité : **résolu** (STK-a). Reste : messages et affichage côté front d'un refus pour stock insuffisant (409), ajustement du panier | STK-c |
 | 12 | Aucun e-mail de confirmation : la confirmation est la page `/commande/:numero` | hors périmètre actuel |
+| 13 | Stock saisi en back-office (GOF-a) : **non journalisé** dans `mouvement_stock` (réservé aux commandes) et écrasé tel quel : une commande passée entre le chargement du formulaire et l'enregistrement est perdue pour ce format | acceptable en MVP ; journal d'ajustements à prévoir si besoin |
+| 14 | Options de type topping/cône (§7) : **absentes** ; GOF-a les assimile aux formats (variantes), les options viennent avec OPT-c | à faire en OPT-c |
+| 15 | Images : pas de réordonnancement par glisser-déposer (étoile = principale seulement) ; limites PHP (`upload_max_filesize` 2 Mo en local) à vérifier sur mmi.unilim.fr ; la description produit est limitée à 400 caractères (colonne SQL), la maquette annonce 500 | à tester sur le serveur |
 | 10 | Aucun `foreach` dans le code applicatif (`for…of` dans le routeur, `forEach` seulement dans `check-mvc.js`, outil hors application) | garder la règle §1 |
 
 ### 12.11 Check-list avant toute construction

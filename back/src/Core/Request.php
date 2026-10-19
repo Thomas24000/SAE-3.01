@@ -27,13 +27,17 @@ final class Request
     /** En-têtes HTTP, clés en minuscules (ex. « x-csrf-token »). */
     private array $entetes;
 
-    private function __construct(string $methode, string $chemin, array $parametres, array $corps, array $entetes)
+    /** Fichiers téléversés ($_FILES), tels que PHP les fournit. */
+    private array $fichiers;
+
+    private function __construct(string $methode, string $chemin, array $parametres, array $corps, array $entetes, array $fichiers)
     {
         $this->methode    = $methode;
         $this->chemin     = $chemin;
         $this->parametres = $parametres;
         $this->corps      = $corps;
         $this->entetes    = $entetes;
+        $this->fichiers   = $fichiers;
     }
 
     /**
@@ -75,6 +79,7 @@ final class Request
             $_GET,
             $corps,
             $entetes,
+            $_FILES,
         );
     }
 
@@ -115,6 +120,43 @@ final class Request
     public function entete(string $nom): ?string
     {
         return $this->entetes[strtolower($nom)] ?? null;
+    }
+
+    /**
+     * Les fichiers reçus dans un champ de formulaire multipart, un ou plusieurs
+     * (champ « images[] »), sous une forme uniforme.
+     *
+     * @param string $champ Nom du champ (ex. « images »).
+     * @return array<int, array{name:string, tmp_name:string, error:int, size:int}>
+     *         Vide si le champ est absent.
+     */
+    public function fichiers(string $champ): array
+    {
+        $recu = $this->fichiers[$champ] ?? null;
+        if (!is_array($recu) || !isset($recu['name'])) {
+            return [];
+        }
+
+        if (!is_array($recu['name'])) {
+            return [[
+                'name'     => (string) $recu['name'],
+                'tmp_name' => (string) $recu['tmp_name'],
+                'error'    => (int) $recu['error'],
+                'size'     => (int) $recu['size'],
+            ]];
+        }
+
+        $liste = [];
+        for ($i = 0; $i < count($recu['name']); $i++) {
+            $liste[] = [
+                'name'     => (string) $recu['name'][$i],
+                'tmp_name' => (string) $recu['tmp_name'][$i],
+                'error'    => (int) $recu['error'][$i],
+                'size'     => (int) $recu['size'][$i],
+            ];
+        }
+
+        return $liste;
     }
 
     /**

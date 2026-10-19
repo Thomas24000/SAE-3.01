@@ -1,0 +1,15 @@
+<div class="flex flex-col gap-3 md:flex-row md:items-center">
+  <label class="flex items-center gap-2 rounded-full border border-border-default bg-bg-default px-4 md:w-80">
+    <img src="{{images}}recherche.svg" alt="" width="16" height="16" class="size-4 shrink-0 dark:invert" />
+    <span class="sr-only">Rechercher un produit</span>
+    <input name="recherche" type="search" placeholder="Rechercher un produit…" autocomplete="off" value="{{recherche}}" class="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-fg-muted" />
+  </label>
+  <label class="flex flex-col md:w-55">
+    <span class="sr-only">Catégorie</span>
+    <select name="categorie" class="h-11 rounded-md border border-border-default bg-bg-default px-3 text-sm transition-colors hover:border-border-strong"></select>
+  </label>
+  <label class="flex flex-col md:w-50">
+    <span class="sr-only">Stock</span>
+    <select name="stock" class="h-11 rounded-md border border-border-default bg-bg-default px-3 text-sm transition-colors hover:border-border-strong"></select>
+  </label>
+</div>

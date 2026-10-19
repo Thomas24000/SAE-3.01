@@ -1,0 +1,18 @@
+<section class="flex flex-col gap-4 rounded-lg border border-border-default bg-bg-default p-4 md:p-6">
+  <h2 class="text-lg leading-tight font-bold">Stock et alerte</h2>
+
+  <slot name="message"></slot>
+
+  <label class="flex flex-col gap-2 text-sm">
+    Seuil « Bientôt épuisé »
+    <input name="seuil" type="number" min="0" max="100000" step="1" inputmode="numeric" value="{{seuil}}" class="h-12 rounded-md border border-border-default bg-bg-default px-3 text-base transition-colors hover:border-border-strong" />
+    <span class="text-xs text-fg-muted">Sous ce stock, le badge « Bientôt épuisé » s'affiche sur le site. Ce réglage concerne tous les produits.</span>
+  </label>
+
+  <button type="button" data-action="seuil" class="flex min-h-10 items-center justify-center rounded-md border border-border-strong px-5 py-2 text-sm leading-tight font-semibold transition-colors hover:bg-bg-subtle aria-disabled:cursor-not-allowed aria-disabled:opacity-60" aria-disabled="{{enCours}}">Enregistrer le seuil</button>
+
+  <p class="flex items-center justify-between gap-2 text-sm">
+    <span>Stock total</span>
+    <span class="flex items-center gap-2"><strong>{{stock}} {{unite}}</strong><slot name="badge"></slot></span>
+  </p>
+</section>

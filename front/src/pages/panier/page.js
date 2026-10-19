@@ -1,5 +1,7 @@
+import { AuthData } from "../../data/auth.js";
 import { PanierData } from "../../data/panier.js";
 import { ProduitData } from "../../data/produit.js";
+import { goTo } from "../../lib/navigation.js";
 import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { HeaderView } from "../../ui/header/index.js";
 import { LignePanierView } from "../../ui/ligne-panier/index.js";
@@ -20,6 +22,7 @@ import templateVide from "./vide.html?raw";
 let M = {
   lignes: [], // [{ variantId, quantite }] : le panier du navigateur
   variantes: [], // les variantes de ces lignes, telles que l'API les renvoie
+  session: null, // { connecte, login?, role? } renvoyé par le serveur, ou null
   echec: false, // true si l'API n'a pas pu répondre
   message: null, // { type, texte }, ou null
 };
@@ -115,6 +118,14 @@ M.remove = function (variantId) {
   M.lignes = PanierData.read();
 };
 
+/**
+ * Le visiteur est-il connecté d'après le serveur ?
+ * > true si une session est ouverte
+ */
+M.isConnected = function () {
+  return M.session !== null && M.session.connecte === true;
+};
+
 let C = {};
 
 /**
@@ -179,10 +190,24 @@ C.handler_remove = function (variantId) {
 };
 
 /**
- * Clic sur « Valider ma commande ». La validation est l'objet de la US CMD-a :
- * en attendant, la page l'indique à l'utilisateur.
+ * Clic sur « Valider ma commande ». Le serveur dit si le visiteur est connecté :
+ * sinon on l'envoie à la connexion, avec retour au panier. La validation
+ * elle-même est l'objet de la US CMD-a : en attendant, la page l'indique.
  */
-C.handler_validate = function () {
+C.handler_validate = async function () {
+  try {
+    M.session = await AuthData.me();
+  } catch (erreur) {
+    M.message = { type: "erreur", texte: `Impossible de vérifier ta connexion : ${erreur.message}` };
+    V.refresh(C.viewData(), "h1[data-titre]");
+    return;
+  }
+
+  if (!M.isConnected()) {
+    goTo("/connexion?retour=" + encodeURIComponent("/panier"));
+    return;
+  }
+
   M.message = { type: "erreur", texte: "La validation de la commande n'est pas encore disponible." };
   V.refresh(C.viewData(), "h1[data-titre]");
 };

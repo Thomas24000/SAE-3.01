@@ -20,6 +20,7 @@ use App\Controller\AuthController;
 use App\Controller\ProduitController;
 use App\Controller\StatsController;
 use App\Model\ProduitModel;
+use App\Model\UtilisateurModel;
 
 // --- Chargement automatique des classes ------------------------------------
 // App\Core\Router  ->  back/src/Core/Router.php
@@ -59,11 +60,12 @@ try {
     // --- Assemblage ---------------------------------------------------------
     // Les dépendances sont créées explicitement : le modèle reçoit la connexion,
     // le contrôleur reçoit le modèle. Aucune magie, tout est lisible ici.
-    $produits = new ProduitModel($pdo);
+    $produits     = new ProduitModel($pdo);
+    $utilisateurs = new UtilisateurModel($pdo);
 
     $controleurs = [
         ProduitController::class   => new ProduitController($produits),
-        AuthController::class      => new AuthController(),
+        AuthController::class      => new AuthController($utilisateurs),
         StatsController::class     => new StatsController($produits),
     ];
 

@@ -3,6 +3,8 @@ import { RootLayout } from "./layouts/root/layout.js";
 import { ProduitsPage } from "./pages/produits/page.js";
 import { ProduitPage } from "./pages/produit/page.js";
 import { PanierPage } from "./pages/panier/page.js";
+import { ConnexionPage } from "./pages/connexion/page.js";
+import { InscriptionPage } from "./pages/inscription/page.js";
 import { AdminPage } from "./pages/admin/page.js";
 import { The404Page } from "./pages/404/page.js";
 
@@ -14,6 +16,8 @@ router.addLayout("/", RootLayout);
 router.addRoute("/", ProduitsPage);
 router.addRoute("/produit/:slug", ProduitPage);
 router.addRoute("/panier", PanierPage);
+router.addRoute("/connexion", ConnexionPage);
+router.addRoute("/inscription", InscriptionPage);
 router.addRoute("/admin", AdminPage);
 
 // En dernier : toute adresse qui ne correspond à aucune route.

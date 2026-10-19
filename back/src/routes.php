@@ -20,7 +20,9 @@ return [
     'GET  /api/produits'    => [ProduitController::class,   'index'],
     'GET  /api/produit'     => [ProduitController::class,   'show'],
     'GET  /api/panier'      => [ProduitController::class,   'panier'],
-    'POST /api/login'    => [AuthController::class,      'login'],
+    'POST /api/login'       => [AuthController::class,      'login'],
+    'POST /api/inscription' => [AuthController::class,      'register'],
+    'GET  /api/me'          => [AuthController::class,      'me'],
     'POST /api/logout'      => [AuthController::class,      'logout'],
     'GET  /api/admin/stats' => [StatsController::class,     'index'],
 ];

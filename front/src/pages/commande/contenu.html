@@ -1,0 +1,13 @@
+<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_290px] lg:gap-x-10">
+  <ul aria-label="Articles de la commande" class="flex flex-col divide-y divide-border-default border-b border-border-default lg:col-start-1">
+    <slot name="lignes"></slot>
+  </ul>
+
+  <div class="lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
+    <slot name="encart"></slot>
+  </div>
+
+  <a href="/panier" data-link class="flex min-h-12 w-full items-center justify-center rounded-md border border-border-strong px-6 py-3 font-semibold md:min-h-10 md:w-fit md:justify-start md:border-0 md:p-0 md:text-sm md:font-normal md:hover:underline lg:col-start-1">
+    <span aria-hidden="true" class="hidden md:inline">‹&nbsp;</span>Modifier mon panier
+  </a>
+</div>

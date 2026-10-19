@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Tests du stock (US STK-a), en ligne de commande, sur une base JETABLE.
+ * Tests du stock (US STK-a et STK-c), en ligne de commande, sur une base JETABLE.
  *
  * ATTENTION : le script réimporte les données de test (il remet des stocks et
  * efface les commandes). Ne le pointez jamais sur la vraie base.
@@ -14,10 +14,13 @@ declare(strict_types=1);
  *
  * Il vérifie : décrément et journal, recrédit à l'annulation uniquement,
  * atomicité (rollback), stock jamais négatif et la concurrence (deux processus
- * PHP commandent en même temps la dernière unité).
+ * PHP commandent en même temps la dernière unité), puis (STK-c) le stock renvoyé
+ * pour le panier et les contraintes par variante : variante épuisée, stock
+ * inférieur à la quantité, stock modifié entre la lecture et la validation.
  */
 
 use App\Model\CommandeModel;
+use App\Model\ProduitModel;
 
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
@@ -25,6 +28,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 require_once __DIR__ . '/../src/Model/CommandeModel.php';
+require_once __DIR__ . '/../src/Model/ProduitModel.php';
 
 /**
  * Ouvre la connexion de test d'après les variables d'environnement.
@@ -223,7 +227,67 @@ for ($i = 1; $i <= $tours; $i++) {
 
 verifier("sur $tours tours : toujours 1 commande acceptée, 1 refusée, stock 0, 1 sortie journalisée", $ok);
 
-reinitialiser($pdo, $variant, 40);
+$produits = new ProduitModel($pdo);
+
+/**
+ * Le stock que l'API du panier renverrait pour une variante (null si absente).
+ */
+function stockApi(ProduitModel $produits, int $variantId): ?int
+{
+    $trouvees = array_values(array_filter(
+        $produits->findVariantesByIds([$variantId]),
+        static fn (array $v): bool => $v['variantId'] === $variantId
+    ));
+
+    return $trouvees === [] ? null : $trouvees[0]['stock'];
+}
+
+/**
+ * Tente une commande d'une variante et renvoie le message du refus, ou null si elle passe.
+ */
+function tenter(CommandeModel $model, int $variantId, int $quantite): ?string
+{
+    try {
+        $model->creer(1, [['variantId' => $variantId, 'quantite' => $quantite]]);
+        return null;
+    } catch (DomainException $e) {
+        return $e->getMessage();
+    }
+}
+
+echo "7. Le stock renvoyé pour le panier est celui de la base (STK-c)\n";
+reinitialiser($pdo, 1, 4);
+$pdo->exec('UPDATE variante SET stock = 0 WHERE id = 2');
+$reponse = $produits->findVariantesByIds([1, 2]);
+verifier('chaque variante porte un stock entier', array_map(static fn (array $v): int => $v['stock'], $reponse) === [4, 0]);
+$pdo->exec('UPDATE variante SET stock = 9 WHERE id = 1');
+verifier('un stock modifié en base est vu à la lecture suivante', stockApi($produits, 1) === 9);
+verifier('une variante inconnue est absente', stockApi($produits, 999999) === null);
+
+echo "8. Contraintes par variante (deux formats du même produit)\n";
+reinitialiser($pdo, 1, 0);
+$pdo->exec('UPDATE variante SET stock = 5 WHERE id = 2');
+verifier('variante épuisée : commande refusée, message clair', str_contains((string) tenter($model, 1, 1), 'Stock insuffisant'));
+verifier('la variante sœur en stock se commande normalement', tenter($model, 2, 5) === null && stock($pdo, 2) === 0);
+$message = (string) tenter($model, 2, 1);
+verifier('plus rien : refus qui cite le produit, le format et ce qu\'il reste (0)', str_contains($message, 'il en reste 0')
+    && str_contains($message, 'Pot 465 ml'));
+
+reinitialiser($pdo, 1, 3);
+$message = (string) tenter($model, 1, 5);
+verifier('quantité 5 pour un stock de 3 : refus « il en reste 3 », stock intact', str_contains($message, 'il en reste 3')
+    && stock($pdo, 1) === 3);
+verifier('quantité égale au stock (3) : acceptée, stock 0', tenter($model, 1, 3) === null && stock($pdo, 1) === 0);
+
+echo "9. Stock modifié pendant la session\n";
+reinitialiser($pdo, 1, 5);
+verifier('le client voit 5 au moment de remplir son panier', stockApi($produits, 1) === 5);
+tenter($model, 1, 4); // un autre client passe commande entre-temps
+verifier('à la validation du 1er client (3), le serveur refuse : il en reste 1', str_contains((string) tenter($model, 1, 3), 'il en reste 1'));
+verifier('la relecture du panier voit le nouveau stock (1)', stockApi($produits, 1) === 1);
+verifier('après ajustement à 1, la commande passe', tenter($model, 1, 1) === null && stock($pdo, 1) === 0);
+
+reinitialiser($pdo, 1, 40);
 $pdo->exec('UPDATE variante SET stock = 25 WHERE id = 2');
 
 echo $echecs === 0 ? "\nTous les tests passent.\n" : "\n$echecs test(s) en échec.\n";

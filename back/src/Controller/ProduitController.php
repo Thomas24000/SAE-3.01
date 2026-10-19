@@ -75,10 +75,10 @@ final class ProduitController
 
     /**
      * GET /api/panier?ids=3,5 : les variantes du panier, avec leur produit
-     * et leur prix actuel. Le panier du navigateur ne sert qu'à l'affichage :
-     * le prix vient toujours d'ici.
+     * leur prix et leur stock actuels. Le panier du navigateur ne sert qu'à
+     * l'affichage : prix et stock viennent toujours d'ici (US STK-c).
      *
-     * Réponse : { variantes: [...] }. Une variante inconnue est absente.
+     * Réponse : { variantes: [...], seuilBientotEpuise: n }. Une variante inconnue est absente.
      * Erreurs : 400 si « ids » est absent, mal formé ou trop long.
      */
     public function panier(Request $requete): void
@@ -96,6 +96,9 @@ final class ProduitController
             Response::erreur('Le panier contient trop de lignes.', 400);
         }
 
-        Response::json(['variantes' => $this->produits->findVariantesByIds($ids)]);
+        Response::json([
+            'variantes'          => $this->produits->findVariantesByIds($ids),
+            'seuilBientotEpuise' => $this->parametres->seuilBientotEpuise(),
+        ]);
     }
 }

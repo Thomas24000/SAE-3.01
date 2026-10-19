@@ -397,10 +397,11 @@ back/
 └── src/
     ├── .htaccess            Require all denied
     ├── routes.php           table 'METHODE /api/chemin' => [Controleur::class, 'methode']
-    ├── Core/                Database (PDO singleton), Request, Response (json/erreur + exit), Router
-    ├── Controller/          AuthController, CommandeController, ProduitController, StatsController
-    └── Model/               CommandeModel, ParametreModel, ProduitModel, UtilisateurModel
-back/tests/stock.php         tests CLI du stock STK-a (base jetable, `Require all denied`)
+    ├── Core/                Csrf (jeton de session des écritures admin), Database (PDO singleton), Request, Response (json/erreur + exit), Router
+    ├── Controller/          AuthController, CategorieController, CommandeController, ProduitController, StatsController
+    └── Model/               CategorieModel, CommandeModel, ParametreModel, ProduitModel, UtilisateurModel
+back/tests/stock.php         tests CLI du stock STK-a et STK-c (base jetable, `Require all denied`)
+front/tests/stock.test.mjs   tests Node de `lib/stock.js` STK-c : `node front/tests/stock.test.mjs` (sans dépendance)
 front/
 ├── index.html               page unique : police Inter, script inline du thème, #app, main.js
 ├── vite.config.js           BASE = "/~bellevert1/SAE301-Starter/", proxy /api → mmi.unilim.fr
@@ -438,9 +439,9 @@ En dev (`npm run dev`), l'étape 5 passe par le proxy Vite vers
 | Route | Page | US | État |
 | --- | --- | --- | --- |
 | `/` | `pages/produits` (catalogue, filtres catégorie, « Voir plus » par 8, bandeau) | DEC-b + STK-b | fait |
-| `/produit/:slug` | `pages/produit` (galerie, variantes, quantité, ajout panier ; 404 si slug inconnu) | DEC-c | fait |
-| `/panier` | `pages/panier` (lignes, ±, suppression, résumé, réconciliation avec l'API) | CMD-b | fait (« Valider » : non connecté → `/connexion?retour=/commande` ; connecté → `/commande`) |
-| `/commande` | `pages/commande` (récapitulatif en lecture seule, bouton « Confirmer ma commande », redirige vers la connexion si besoin) | CMD-a | fait (à tester en navigateur) |
+| `/produit/:slug` | `pages/produit` (galerie, variantes, quantité, ajout panier avec relecture du stock et plafond « stock − déjà au panier » (STK-c) ; 404 si slug inconnu) | DEC-c | fait |
+| `/panier` | `pages/panier` (lignes, ±, suppression, résumé, réconciliation avec l'API ; quantités ajustées au stock avec message, STK-c) | CMD-b | fait (« Valider » : non connecté → `/connexion?retour=/commande` ; connecté → `/commande`) |
+| `/commande` | `pages/commande` (récapitulatif en lecture seule, bouton « Confirmer ma commande » ; stock relu et panier ajusté avant l'envoi et après un 409, STK-c ; redirige vers la connexion si besoin) | CMD-a | fait (à tester en navigateur) |
 | `/commande/:numero` | `pages/confirmation` (numéro, statut, date, lignes aux prix figés, total ; 401/404 affichés) | CMD-a | fait (à tester en navigateur) |
 | `/admin` | `pages/admin` (connexion + stats, 401/403 affichés) | socle GOF-b | démo |
 | `/connexion` | `pages/connexion` (formulaire, ou « connecté » + déconnexion ; `?retour=` filtré) | CMD-c | fait |
@@ -463,7 +464,7 @@ Ajouter une route : `import` + `router.addRoute(...)` **avant** `"*"`.
 | `carte-produit` (`CarteProduitView`) | `dom(produit)` ; `bouton-choisir.html` / `bouton-epuise.html` | `{ nom, slug, teinte, image, prixMin, statutStock }` | grille-produits |
 | `badge-stock` (`BadgeStockView`) | `html(statut)`, `dom(statut)` | `"disponible"\|"bientot"\|"epuise"` | carte, fiche |
 | `fiche-produit` (`FicheProduitView`) | `dom(data, actions)`, `domVariante`, `domVignette` ; rend lui-même le focus | voir JSDoc ; `surVariante`, `surImage`, `surQuantite`, `surAjout` | produit |
-| `ligne-panier` (`LignePanierView`) | `dom(data, actions)` | `{ variantId, nom, slug, libelle, image, teinte, quantite, totalCents, moinsPossible }` ; `surQuantite(id, ±1)`, `surSuppression(id)` | panier |
+| `ligne-panier` (`LignePanierView`) | `dom(data, actions)` | `{ variantId, nom, slug, libelle, image, teinte, quantite, totalCents, moinsPossible, plusPossible }` (« + » désactivé et « Stock maximum atteint » si `plusPossible` est faux) ; `surQuantite(id, ±1)`, `surSuppression(id)` | panier |
 | `resume-commande` (`ResumeCommandeView`) | `dom(data, actions)` | `{ sousTotalCents, totalCents }` ; `surValidation` | panier |
 | `ligne-commande` (`LigneCommandeView`) | `dom(data)` | `{ nom, libelle, quantite, prixUnitaireCents, totalCents }` (lecture seule) | commande, confirmation |
 | `encart-validation` (`EncartValidationView`) | `dom(data, actions)` | `{ totalCents, email, enCours }` ; `surConfirmation` (bouton `aria-disabled` pendant l'envoi) | commande |
@@ -488,7 +489,7 @@ les boutons. Booléens dans un template : `{{desactivee}}` vaut `"disabled"` ou
 | `lib/utils.js` | `genericRenderer`, `htmlToFragment` | `{{cle}}` **échappé** ; chaîne → `DocumentFragment` |
 | `lib/api-request.js` | `getRequest`, `postRequest`, `ErreurApi` | `fetch` JSON sur `BASE_URL + "api/"`, erreur `{ erreur }` → `ErreurApi(message, statut)` |
 | `lib/format.js` | `formaterPrix(centimes)` | « 7,90 € » (affichage uniquement) |
-| `lib/stock.js` | `statutStock(stock, seuil)` | seuil fourni par l'API (`seuilBientotEpuise`, table `parametre`) |
+| `lib/stock.js` | `statutStock(stock, seuil)`, `ajusterLignes(lignes, variantes)`, `texteAjustements(ajustements, retirees)` | seuil fourni par l'API (`seuilBientotEpuise`, table `parametre`) ; `ajusterLignes` (pure, STK-c) plafonne les quantités au stock, retire les lignes épuisées et renvoie `{ lignes, ajustements }` ; `texteAjustements(ajustements, retirees)` en fait le message |
 | `lib/navigation.js` | `goTo(path)`, `reload()`, `readQuery(name)`, `safeReturnPath(raw)` | redirection depuis une page (pushState + `popstate`, sans toucher au routeur) ; `retour` limité aux chemins internes |
 | `lib/theme.js` | `basculerTheme()` | classe `.theme-dark` sur `<html>` + `localStorage["theme"]` |
 | `data/produit.js` | `ProduitData.fetchAll / fetchOne(slug) / fetchVariantes(ids)` | préfixe les images par `BASE_URL` |
@@ -506,7 +507,7 @@ touchent au `localStorage`.
 | --- | --- | --- | --- |
 | `GET /api/produits` | `ProduitController::index` | `lister()` | `{ produits, total, seuilBientotEpuise }` (prixMin, stock total, categorieSlug) |
 | `GET /api/produit?slug=` | `ProduitController::show` | `findBySlug()` | `{ produit, seuilBientotEpuise }` ; 400 slug invalide (`^[a-z0-9-]{1,120}$`), 404 |
-| `GET /api/panier?ids=3,5` | `ProduitController::panier` | `findVariantesByIds()` | `{ variantes }` (prix actuel) ; 400 ids invalides ou > 50 |
+| `GET /api/panier?ids=3,5` | `ProduitController::panier` | `findVariantesByIds()` | `{ variantes, seuilBientotEpuise }` (prix et `stock` actuels, STK-c) ; 400 ids invalides ou > 50 |
 | `POST /api/login` | `AuthController::login` | `UtilisateurModel::findByEmail()` | corps `{ email, mdp }` → `{ connecte, email, role }` ; 400 champ vide, 401 identifiants |
 | `POST /api/inscription` | `AuthController::register` | `UtilisateurModel::create()` | corps `{ email, mdp, confirmation }` → 201 `{ connecte, email, role: "client" }` (connecte aussitôt) ; 400 validation (`filter_var`), 409 e-mail pris |
 | `GET /api/me` | `AuthController::me` | — (lit la session) | `{ connecte: false }` ou `{ connecte, email, role }` |
@@ -514,6 +515,11 @@ touchent au `localStorage`.
 | `POST /api/commande` | `CommandeController::store` | `CommandeModel::creer()` | corps `{ lignes: [{ variantId, quantite }] }` → 201 `{ commande: { numero, statut, totalCents } }` ; 401 non connecté, 400 lignes invalides (vide, > 50, doublon, quantité hors 1-99), 409 variante disparue **ou stock insuffisant**. Transaction : variantes verrouillées `FOR UPDATE` par id croissant, prix relus en base (prix du client ignoré), stock décrémenté et journalisé (STK-a) |
 | `GET /api/commande?numero=` | `CommandeController::show` | `CommandeModel::findByNumero()` | `{ commande: { numero, statut, totalCents, creeLe, email, lignes } }` ; 401, 400 numéro mal formé, 404 inconnue **ou à un autre client** |
 | `GET /api/admin/stats` | `StatsController::index` | `statistiques()` | 403 si `$_SESSION['role'] !== 'admin'` |
+| `GET /api/admin/csrf` | `AuthController::csrf` | — (session) | `{ jeton }` à renvoyer dans l'en-tête `X-CSRF-Token` des écritures admin ; 403 si non admin |
+| `GET /api/admin/categories` | `CategorieController::index` | `CategorieModel::lister()` | `{ categories: [{ id, libelle, slug, description, nbProduits }] }` ; 403 |
+| `POST /api/admin/categories` | `CategorieController::store` | `creer()` | corps `{ libelle, description }` → 201 `{ categorie }` ; 400 validation (nom 2-60, description 5-255), 403 droits ou CSRF, 409 nom (slug) déjà pris. Le slug est déduit du libellé côté serveur |
+| `PUT /api/admin/categories?id=` | `CategorieController::update` | `modifier()` | mêmes corps et erreurs + 400 id, 404 inconnue |
+| `DELETE /api/admin/categories?id=` | `CategorieController::destroy` | `supprimer()` | `{ supprimee: true }` ; **409 si la catégorie contient des produits** (règle de blocage, FK `RESTRICT` en filet), 404, 403 |
 
 Ajouter une route back = **3 endroits** : la ligne dans `routes.php`, l'instance
 du contrôleur dans le tableau `$controleurs` de `back/index.php` (sinon
@@ -526,7 +532,7 @@ Itérations PHP : `for` ou `array_map`, jamais `foreach`.
 
 | Table | Colonnes clés | Contraintes |
 | --- | --- | --- |
-| `categorie` | `id`, `libelle`, `slug` | `UNIQUE(slug)` |
+| `categorie` | `id`, `libelle`, `slug`, `description` | `UNIQUE(slug)` |
 | `produit` | `categorie_id`, `nom`, `slug`, `description`, `teinte` (0-359), `image`, `description_longue`, `ingredients` | `UNIQUE(slug)`, FK → categorie `RESTRICT` |
 | `produit_image` | `produit_id`, `chemin`, `position` | `UNIQUE(produit_id, position)`, FK `CASCADE` |
 | `variante` | `produit_id`, `libelle`, `prix_cents`, `stock` | `UNIQUE(produit_id, libelle)`, FK `CASCADE` |
@@ -573,7 +579,7 @@ le stock uniquement au passage à `annulee`. Test : `back/tests/stock.php`.
 | 7 | `config.php` : `debug => true` ; contient de vrais identifiants | passer à `false` en prod ; ne jamais afficher ni committer les identifiants |
 | 8 | Commentaires de `lib/api-request.js` et `lib/router.js` citent `/~login/Base/` (héritage du TP) | sans effet ; ne pas « corriger » sans demande |
 | 9 | Pas de jeton CSRF : `POST /api/commande` s'appuie sur le cookie `SameSite=Lax` et le corps JSON | à prévoir avant les écritures admin |
-| 11 | Stock décrémenté, journalisé et recrédité : **résolu** (STK-a). Reste : messages et affichage côté front d'un refus pour stock insuffisant (409), ajustement du panier | STK-c |
+| 11 | Stock décrémenté, journalisé et recrédité : **résolu** (STK-a). Messages, ajustement du panier et contrôle avant ajout / validation : **résolus** (STK-c) | tests : `back/tests/stock.php`, `front/tests/stock.test.mjs` |
 | 12 | Aucun e-mail de confirmation : la confirmation est la page `/commande/:numero` | hors périmètre actuel |
 | 10 | Aucun `foreach` dans le code applicatif (`for…of` dans le routeur, `forEach` seulement dans `check-mvc.js`, outil hors application) | garder la règle §1 |
 

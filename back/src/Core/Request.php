@@ -85,6 +85,19 @@ final class Request
     }
 
     /**
+     * Un en-tête de la requête (par exemple « X-CSRF-Token »).
+     *
+     * @return string|null null si l'en-tête est absent.
+     */
+    public function entete(string $nom): ?string
+    {
+        $cle    = 'HTTP_' . strtoupper(str_replace('-', '_', $nom));
+        $valeur = $_SERVER[$cle] ?? null;
+
+        return is_string($valeur) ? $valeur : null;
+    }
+
+    /**
      * Le corps JSON de la requête, décodé en tableau associatif.
      */
     public function corps(): array

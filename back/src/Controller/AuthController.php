@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Core\Csrf;
 use App\Core\Request;
 use App\Core\Response;
 use App\Model\UtilisateurModel;
@@ -132,6 +133,21 @@ final class AuthController
             'email'    => $_SESSION['utilisateur'],
             'role'     => $_SESSION['role'],
         ]);
+    }
+
+    /**
+     * GET /api/admin/csrf : le jeton CSRF des écritures d'administration.
+     *
+     * Réponse : { jeton }
+     * Erreur : 403 si l'utilisateur connecté n'a pas le rôle admin.
+     */
+    public function csrf(): void
+    {
+        if (($_SESSION['role'] ?? '') !== 'admin') {
+            Response::erreur('Accès réservé aux administrateurs', 403);
+        }
+
+        Response::json(['jeton' => Csrf::jeton()]);
     }
 
     /**

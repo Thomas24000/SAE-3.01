@@ -32,6 +32,19 @@ inline` / `:root` + `.theme-dark`) plutôt qu'une valeur en dur.
 
 ## 2. Règles
 
+- **Jamais de valeur en dur dans un template** : aucune classe à valeur
+  arbitraire `classe-[valeur]` (`text-[11px]`, `leading-[1.3]`,
+  `tracking-[-1px]`, `min-h-[52px]`, `size-[72px]`, `grid-cols-[...]`,
+  `aria-[...]:`…). Utiliser dans l'ordre : (1) un token du projet ;
+  (2) l'échelle Tailwind (`text-xs`, `leading-snug`, `tracking-tight`,
+  `aspect-4/3`, `min-h-13`, `grid-cols-4` avec `col-span-3`…), en laissant
+  l'interligne par défaut de la taille de texte quand il convient ;
+  (3) si rien ne convient, proposer un token ou un `@utility` /
+  `@custom-variant` dans `global.css` et le faire valider. Si l'échelle
+  s'écarte un peu de la maquette, l'accepter plutôt que d'écrire une valeur
+  en dur. Contrôle avant de conclure :
+  `grep -rnE '[a-z-]+-\[[^]]+\]' front/src --include=*.html --include=*.js`
+  doit ne rien renvoyer.
 - **Classes écrites en entier**, jamais assemblées par concaténation : mettre
   les variantes dans un objet de constantes (voir `ui/badge-stock`).
 - Variables privées de composant pour les variantes (`--_bg`, `--_fg`) : le

@@ -17,9 +17,11 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Core\Router;
 use App\Controller\AuthController;
+use App\Controller\CategorieController;
 use App\Controller\CommandeController;
 use App\Controller\ProduitController;
 use App\Controller\StatsController;
+use App\Model\CategorieModel;
 use App\Model\CommandeModel;
 use App\Model\ParametreModel;
 use App\Model\ProduitModel;
@@ -67,12 +69,14 @@ try {
     $parametres   = new ParametreModel($pdo);
     $utilisateurs = new UtilisateurModel($pdo);
     $commandes    = new CommandeModel($pdo);
+    $categories   = new CategorieModel($pdo);
 
     $controleurs = [
         ProduitController::class   => new ProduitController($produits, $parametres),
         AuthController::class      => new AuthController($utilisateurs),
         CommandeController::class  => new CommandeController($commandes),
         StatsController::class     => new StatsController($produits),
+        CategorieController::class => new CategorieController($categories),
     ];
 
     $routes = require __DIR__ . '/src/routes.php';

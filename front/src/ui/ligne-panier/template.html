@@ -10,11 +10,12 @@
     <div class="flex flex-col items-start gap-2 pt-1 sm:flex-row sm:items-center sm:gap-4">
       <div role="group" aria-label="Quantité de {{nom}}" class="flex min-h-10 w-fit items-center gap-3 rounded-md border border-border-default px-2 py-1">
         <button type="button" data-variante-id="{{id}}" data-quantite-delta="-1" aria-label="Diminuer la quantité de {{nom}}" {{moinsDesactive}} class="flex size-8 items-center justify-center leading-none disabled:cursor-not-allowed disabled:opacity-40">−</button>
-        <output aria-live="polite" class="w-5 text-center text-sm font-semibold">{{quantite}}</output>
-        <button type="button" data-variante-id="{{id}}" data-quantite-delta="1" aria-label="Augmenter la quantité de {{nom}}" class="flex size-8 items-center justify-center leading-none disabled:cursor-not-allowed disabled:opacity-40">+</button>
+        <output aria-live="polite" class="w-5 text-center text-sm leading-[1.45] font-semibold">{{quantite}}</output>
+        <button type="button" data-variante-id="{{id}}" data-quantite-delta="1" aria-label="Augmenter la quantité de {{nom}}" {{plusDesactive}} class="flex size-8 items-center justify-center leading-none disabled:cursor-not-allowed disabled:opacity-40">+</button>
       </div>
       <button type="button" data-variante-id="{{id}}" data-action="supprimer" aria-label="Supprimer {{nom}} du panier" class="min-h-10 text-xs text-fg-muted hover:underline">Supprimer</button>
     </div>
+    <p {{alerteStock}} class="text-xs leading-[1.4] font-semibold text-fg-muted">Stock maximum atteint</p>
   </div>
 
   <p class="shrink-0 text-right text-base leading-snug font-bold">{{prix}}</p>

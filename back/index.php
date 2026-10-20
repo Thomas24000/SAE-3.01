@@ -16,13 +16,18 @@ use App\Core\Database;
 use App\Core\Request;
 use App\Core\Response;
 use App\Core\Router;
+use App\Controller\AdminAuthController;
+use App\Controller\AdminCategorieController;
+use App\Controller\AdminProduitController;
 use App\Controller\AuthController;
 use App\Controller\CommandeController;
 use App\Controller\CompteController;
 use App\Controller\ProduitController;
 use App\Controller\StatsController;
+use App\Model\CategorieModel;
 use App\Model\CommandeModel;
 use App\Model\ParametreModel;
+use App\Model\ProduitAdminModel;
 use App\Model\ProduitModel;
 use App\Model\UtilisateurModel;
 
@@ -68,13 +73,18 @@ try {
     $parametres   = new ParametreModel($pdo);
     $utilisateurs = new UtilisateurModel($pdo);
     $commandes    = new CommandeModel($pdo);
+    $categories   = new CategorieModel($pdo);
+    $produitsAdmin = new ProduitAdminModel($pdo);
 
     $controleurs = [
         ProduitController::class   => new ProduitController($produits, $parametres),
         AuthController::class      => new AuthController($utilisateurs),
         CommandeController::class  => new CommandeController($commandes),
         CompteController::class    => new CompteController($utilisateurs, $commandes),
-        StatsController::class     => new StatsController($produits),
+        StatsController::class     => new StatsController($produits, $commandes, $parametres),
+        AdminAuthController::class => new AdminAuthController($utilisateurs),
+        AdminCategorieController::class => new AdminCategorieController($categories),
+        AdminProduitController::class => new AdminProduitController($produitsAdmin, $categories, $parametres),
     ];
 
     $routes = require __DIR__ . '/src/routes.php';

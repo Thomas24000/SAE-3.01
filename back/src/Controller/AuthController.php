@@ -61,7 +61,9 @@ final class AuthController
         $valide = password_verify($mdp, $compte['motDePasse'] ?? self::HASH_LEURRE);
 
         // Même message dans les deux cas : on ne dit pas lequel des deux est faux.
-        if ($compte === null || !$valide) {
+        // Les administrateurs passent par /api/admin/login : leur authentification
+        // est séparée de celle des clients.
+        if ($compte === null || !$valide || $compte['role'] === 'admin') {
             Response::erreur('E-mail ou mot de passe incorrect.', 401);
         }
 

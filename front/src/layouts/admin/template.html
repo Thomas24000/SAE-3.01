@@ -1,0 +1,7 @@
+<div class="flex min-h-screen flex-col bg-bg-subtle md:flex-row">
+  <slot name="navigation"></slot>
+  <main class="flex min-w-0 flex-1 flex-col">
+    <!-- Le slot sans nom reçoit la page affichée (voir lib/router.js). -->
+    <slot></slot>
+  </main>
+</div>

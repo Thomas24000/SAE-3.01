@@ -74,11 +74,14 @@ final class ProduitController
     }
 
     /**
-     * GET /api/panier?ids=3,5 : les variantes du panier, avec leur produit
-     * et leur prix actuel. Le panier du navigateur ne sert qu'à l'affichage :
-     * le prix vient toujours d'ici.
+     * GET /api/panier?ids=3,5 : les variantes du panier, avec leur produit,
+     * leur prix et leur stock actuels. Le panier du navigateur ne sert qu'à
+     * l'affichage : prix et stock viennent toujours d'ici.
      *
-     * Réponse : { variantes: [...] }. Une variante inconnue est absente.
+     * Réponse : { variantes: [...], options: { idProduit: [groupes] }, seuilBientotEpuise: n }.
+     * Une variante inconnue est absente ; « options » donne tous les groupes
+     * d'options (avec leurs choix et suppléments) des produits du panier, pour
+     * chiffrer les lignes et en modifier les options.
      * Erreurs : 400 si « ids » est absent, mal formé ou trop long.
      */
     public function panier(Request $requete): void
@@ -96,6 +99,18 @@ final class ProduitController
             Response::erreur('Le panier contient trop de lignes.', 400);
         }
 
-        Response::json(['variantes' => $this->produits->findVariantesByIds($ids)]);
+        $variantes = $this->produits->findVariantesByIds($ids);
+
+        // Les groupes d'options des produits du panier, pour modifier les options d'une ligne.
+        $options = $this->produits->findOptionsByProduits(array_values(array_unique(array_map(
+            static fn (array $variante): int => $variante['produit']['id'],
+            $variantes
+        ))));
+
+        Response::json([
+            'variantes'          => $variantes,
+            'options'            => $options,
+            'seuilBientotEpuise' => $this->parametres->seuilBientotEpuise(),
+        ]);
     }
 }

@@ -1,0 +1,13 @@
+<section class="flex flex-col gap-4 rounded-lg border border-border-default bg-bg-default p-4 md:p-6">
+  <div class="flex flex-col gap-1">
+    <h2 class="text-lg leading-tight font-bold">Images</h2>
+    <p class="text-xs text-fg-muted">{{aide}}</p>
+  </div>
+
+  <slot name="message"></slot>
+  <slot name="depot"></slot>
+
+  <ul class="flex flex-wrap gap-4">
+    <slot name="vignettes"></slot>
+  </ul>
+</section>

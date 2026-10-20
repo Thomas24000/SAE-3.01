@@ -2,6 +2,7 @@ import { AuthData } from "../../data/auth.js";
 import { PanierData } from "../../data/panier.js";
 import { ProduitData } from "../../data/produit.js";
 import { goTo } from "../../lib/navigation.js";
+import { ajusterLignes, texteAjustements } from "../../lib/stock.js";
 import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { HeaderView } from "../../ui/header/index.js";
 import { LignePanierView } from "../../ui/ligne-panier/index.js";
@@ -37,8 +38,11 @@ M.findVariante = function (variantId) {
 };
 
 /**
- * Retire du panier les lignes dont la variante n'existe plus côté serveur.
- * > le nombre de lignes retirées
+ * Remet le panier d'accord avec le serveur : retire les lignes dont la variante
+ * n'existe plus, puis ramène les quantités au stock (US STK-c) en retirant les
+ * variantes épuisées.
+ * > { retirees, ajustements } : le nombre de lignes disparues du serveur et les
+ *   lignes de stock modifiées (voir ajusterLignes)
  */
 M.reconcile = function () {
   let retirees = 0;
@@ -50,8 +54,11 @@ M.reconcile = function () {
     }
   }
 
+  let ajuste = ajusterLignes(PanierData.read(), M.variantes);
+  PanierData.write(ajuste.lignes);
+
   M.lignes = PanierData.read();
-  return retirees;
+  return { retirees: retirees, ajustements: ajuste.ajustements };
 };
 
 /**
@@ -65,7 +72,7 @@ M.count = function () {
 /**
  * Les lignes prêtes à afficher.
  * > un tableau de { variantId, nom, slug, libelle, image, teinte, quantite,
- *   totalCents, moinsPossible }
+ *   totalCents, moinsPossible, plusPossible }
  */
 M.articles = function () {
   return M.lignes.map((ligne) => {
@@ -81,6 +88,7 @@ M.articles = function () {
       quantite: ligne.quantite,
       totalCents: variante.prixCents * ligne.quantite,
       moinsPossible: ligne.quantite > 1,
+      plusPossible: ligne.quantite < variante.stock,
     };
   });
 };
@@ -97,7 +105,7 @@ M.summary = function () {
 };
 
 /**
- * Change la quantité d'une ligne (1 au minimum).
+ * Change la quantité d'une ligne : 1 au minimum, le stock de la variante au maximum.
  * . variantId : l'identifiant de la variante
  * . delta : -1 ou 1
  */
@@ -105,7 +113,9 @@ M.changeQuantity = function (variantId, delta) {
   let ligne = M.lignes.find((autre) => autre.variantId === variantId);
   if (ligne === undefined) return;
 
-  PanierData.setQuantity(variantId, Math.max(ligne.quantite + delta, 1));
+  let stock = M.findVariante(variantId).stock;
+
+  PanierData.setQuantity(variantId, Math.min(Math.max(ligne.quantite + delta, 1), stock));
   M.lignes = PanierData.read();
 };
 
@@ -144,8 +154,10 @@ C.charger = async function () {
     let reponse = await ProduitData.fetchVariantes(M.lignes.map((ligne) => ligne.variantId));
     M.variantes = reponse.variantes;
 
-    if (M.reconcile() > 0) {
-      M.message = { type: "erreur", texte: "Un article qui n'est plus proposé a été retiré de ton panier." };
+    let reconciliation = M.reconcile();
+    let texte = texteAjustements(reconciliation.ajustements, reconciliation.retirees);
+    if (texte !== null) {
+      M.message = { type: "erreur", texte: texte };
     }
   } catch (erreur) {
     M.echec = true;

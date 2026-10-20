@@ -1,0 +1,21 @@
+<li class="flex flex-col gap-3 p-4 md:flex-row md:items-center md:gap-4">
+  <div class="flex min-w-0 flex-1 items-center gap-3">
+    <img src="{{miniature}}" alt="" width="48" height="48" loading="lazy" class="size-12 shrink-0 rounded-md bg-bg-placeholder object-cover" />
+    <div class="flex min-w-0 flex-col gap-0.5">
+      <p class="truncate text-sm font-semibold">{{nom}}</p>
+      <p class="text-xs text-fg-muted">{{details}}</p>
+    </div>
+  </div>
+  <p class="text-sm md:w-35"><span class="text-xs text-fg-muted md:hidden">Catégorie : </span>{{categorie}}</p>
+  <p class="text-sm md:w-25">{{prix}}</p>
+  <p class="text-sm md:w-20"><span class="text-xs text-fg-muted md:hidden">Stock : </span>{{stock}}</p>
+  <div class="flex md:w-35"><slot name="badge"></slot></div>
+  <div class="flex gap-1 md:w-22">
+    <a href="{{href}}" data-link title="Modifier" aria-label="Modifier le produit {{nom}}" class="flex size-10 items-center justify-center rounded-md transition-colors hover:bg-bg-subtle">
+      <img src="{{images}}crayon.svg" alt="" width="18" height="18" class="size-4.5 dark:invert" />
+    </a>
+    <button type="button" data-action="supprimer" data-id="{{id}}" title="Supprimer" aria-label="Supprimer le produit {{nom}}" class="flex size-10 items-center justify-center rounded-md transition-colors hover:bg-bg-subtle">
+      <img src="{{images}}corbeille.svg" alt="" width="18" height="18" class="size-4.5 dark:invert" />
+    </button>
+  </div>
+</li>

@@ -1,0 +1,12 @@
+<li class="flex w-30 flex-col gap-2">
+  <div class="overflow-hidden rounded-md border-2 {{classesBordure}}">
+    <img src="{{src}}" alt="{{alt}}" width="120" height="96" loading="lazy" class="h-24 w-full bg-bg-placeholder object-cover" />
+  </div>
+  <div class="flex items-center gap-1">
+    <slot name="principale"></slot>
+    <span class="flex-1"></span>
+    <button type="button" data-action="supprimer" data-id="{{id}}" title="Supprimer l'image" aria-label="Supprimer {{alt}}" class="flex size-10 items-center justify-center rounded-md transition-colors hover:bg-bg-subtle">
+      <img src="{{images}}corbeille.svg" alt="" width="18" height="18" class="size-4.5 dark:invert" />
+    </button>
+  </div>
+</li>

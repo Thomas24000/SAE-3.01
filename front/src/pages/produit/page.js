@@ -24,6 +24,7 @@ let M = {
   quantite: 1, // quantité choisie, entre 1 et le stock de la variante
   introuvable: false, // true si l'API a répondu 404
   message: null, // { type, texte }, ou null
+  ajoutEnCours: false, // true entre le clic sur « Ajouter » et la réponse du serveur
 };
 
 /**
@@ -55,21 +56,106 @@ M.stockStatus = function (variante) {
 };
 
 /**
- * Ramène une quantité entre 1 et le stock de la variante choisie.
+ * Quantité de la variante choisie déjà présente dans le panier.
+ * > la quantité au panier, 0 si la variante n'y est pas
+ */
+M.quantityInCart = function () {
+  let ligne = PanierData.read().find((autre) => autre.variantId === M.varianteId);
+
+  return ligne === undefined ? 0 : ligne.quantite;
+};
+
+/**
+ * Quantité encore ajoutable : le stock de la variante choisie moins ce que le
+ * panier en contient déjà (US STK-c).
+ * > la quantité ajoutable, 0 au minimum
+ */
+M.maxAddable = function () {
+  return Math.max(0, M.currentVariante().stock - M.quantityInCart());
+};
+
+/**
+ * Ramène une quantité entre 1 et la quantité encore ajoutable de la variante
+ * choisie (1 si plus rien n'est ajoutable : le refus est expliqué à l'ajout).
  * . quantite : la quantité souhaitée
  * > la quantité autorisée
  */
 M.clampQuantite = function (quantite) {
-  let max = Math.max(1, M.currentVariante().stock);
+  let max = Math.max(1, M.maxAddable());
 
   return Math.min(Math.max(quantite, 1), max);
 };
 
 /**
- * Ajoute au panier la quantité choisie de la variante choisie.
+ * Remplace le stock des variantes du produit par celui que le serveur vient
+ * de renvoyer, et le seuil « Bientôt épuisé ».
+ * . reponse : la réponse de ProduitData.fetchVariantes ({ variantes, seuilBientotEpuise })
  */
-M.addToCart = function () {
+M.applyFreshStock = function (reponse) {
+  M.seuil = reponse.seuilBientotEpuise;
+  M.produit = {
+    ...M.produit,
+    variantes: M.produit.variantes.map((variante) => {
+      let fraiche = reponse.variantes.find((autre) => autre.variantId === variante.id);
+
+      return fraiche === undefined ? variante : { ...variante, stock: fraiche.stock };
+    }),
+  };
+};
+
+/**
+ * Ajoute au panier la quantité choisie de la variante choisie, après avoir relu
+ * le stock auprès du serveur : rien n'est ajouté si le stock ne suffit pas, la
+ * quantité est alors ramenée à ce qui reste ajoutable.
+ * > { ajoute, message } : si l'ajout a eu lieu, et le message à montrer
+ *   (lève une ErreurApi si le serveur ne répond pas)
+ */
+M.addToCart = async function () {
+  let nom = M.produit.nom;
+  let libelle = M.currentVariante().libelle;
+  let reponse = await ProduitData.fetchVariantes([M.varianteId]);
+
+  if (reponse.variantes.length === 0) {
+    return { ajoute: false, message: { type: "erreur", texte: `« ${nom} » (${libelle}) n'est plus proposé.` } };
+  }
+
+  M.applyFreshStock(reponse);
+
+  let restant = M.maxAddable();
+  let deja = M.quantityInCart();
+
+  if (M.currentVariante().stock === 0) {
+    M.quantite = 1;
+    return { ajoute: false, message: { type: "erreur", texte: `« ${nom} » (${libelle}) est épuisé.` } };
+  }
+
+  if (restant === 0) {
+    M.quantite = 1;
+    return {
+      ajoute: false,
+      message: {
+        type: "erreur",
+        texte: `Ton panier contient déjà ${deja} « ${nom} » (${libelle}) : c'est tout le stock disponible.`,
+      },
+    };
+  }
+
+  if (M.quantite > restant) {
+    M.quantite = restant;
+    return {
+      ajoute: false,
+      message: {
+        type: "erreur",
+        texte:
+          `Il ne reste que ${M.currentVariante().stock} « ${nom} » (${libelle})` +
+          (deja > 0 ? `, dont ${deja} déjà dans ton panier` : "") +
+          `. La quantité est passée à ${restant} : valide-la pour l'ajouter.`,
+      },
+    };
+  }
+
   PanierData.add(M.varianteId, M.quantite);
+  return { ajoute: true, message: { type: "succes", texte: `${M.quantite} article(s) ajouté(s) au panier.` } };
 };
 
 /**
@@ -99,7 +185,7 @@ M.ficheData = function () {
     statutStock: M.stockStatus(variante),
     totalCents: variante.prixCents * M.quantite,
     moinsPossible: M.quantite > 1,
-    plusPossible: M.quantite < variante.stock,
+    plusPossible: M.quantite < M.maxAddable(),
     achatPossible: variante.stock > 0,
   };
 };
@@ -117,6 +203,7 @@ C.charger = async function (slug) {
   M.quantite = 1;
   M.introuvable = false;
   M.message = null;
+  M.ajoutEnCours = false;
 
   try {
     let reponse = await ProduitData.fetchOne(slug);
@@ -164,14 +251,23 @@ C.handler_changeQuantite = function (delta) {
 };
 
 /**
- * Clic sur « Ajouter au panier » : range la sélection dans le panier et
- * l'indique à l'utilisateur.
+ * Clic sur « Ajouter au panier » : relit le stock, range la sélection dans le
+ * panier si le stock suffit et explique à l'utilisateur ce qui s'est passé.
  */
-C.handler_addToCart = function () {
-  M.addToCart();
-  M.message = { type: "succes", texte: `${M.quantite} article(s) ajouté(s) au panier.` };
+C.handler_addToCart = async function () {
+  if (M.ajoutEnCours) return;
+  M.ajoutEnCours = true;
 
-  V.rafraichir();
+  try {
+    let resultat = await M.addToCart();
+    M.message = resultat.message;
+    M.quantite = M.clampQuantite(M.quantite);
+  } catch (erreur) {
+    M.message = { type: "erreur", texte: `Impossible de vérifier le stock : ${erreur.message}` };
+  }
+
+  M.ajoutEnCours = false;
+  V.rafraichir('button[data-action="ajouter"]');
   V.refreshCartCount(M.cartCount());
 };
 
@@ -196,12 +292,16 @@ V.init = function () {
 };
 
 // Toute la page se reconstruit à partir du modèle, comme la page Administration.
-// Le focus est rendu par la fiche elle-même (voir ui/fiche-produit).
-V.rafraichir = function () {
+// Le focus est rendu par la fiche elle-même (voir ui/fiche-produit), sauf après
+// une action asynchrone : la fiche l'a alors rendu avant la reconstruction, d'où
+// le sélecteur facultatif.
+V.rafraichir = function (focusSelector) {
   let fragment = V.createPageFragment();
   let nouvelleRacine = fragment.firstElementChild;
   V.racine.replaceWith(fragment);
   V.racine = nouvelleRacine;
+
+  if (focusSelector !== undefined) document.querySelector(focusSelector)?.focus();
 };
 
 // Le header est hors de la page : on met son compteur à jour sans le reconstruire.

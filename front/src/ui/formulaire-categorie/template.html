@@ -1,0 +1,24 @@
+<section class="flex w-full max-w-160 flex-col gap-5 rounded-lg border border-border-default bg-bg-default p-4 md:p-6">
+  <h2 class="text-lg leading-tight font-bold">Informations</h2>
+
+  <slot name="message"></slot>
+
+  <form novalidate class="flex flex-col gap-5">
+    <label class="flex flex-col gap-2 text-sm">
+      Nom *
+      <input name="libelle" type="text" maxlength="60" required autocomplete="off" value="{{libelle}}" class="h-12 rounded-md border border-border-default bg-bg-default px-3 text-base transition-colors hover:border-border-strong" />
+      <span class="text-xs text-fg-muted">2 à 60 caractères. Il doit être unique.</span>
+    </label>
+
+    <label class="flex flex-col gap-2 text-sm">
+      Description
+      <textarea name="description" maxlength="255" rows="5" class="rounded-md border border-border-default bg-bg-default px-3 py-3 text-base transition-colors hover:border-border-strong">{{description}}</textarea>
+      <span class="text-xs text-fg-muted">255 caractères au maximum.</span>
+    </label>
+
+    <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+      <a href="/admin/categories" data-link class="flex min-h-12 items-center justify-center rounded-md border border-border-strong px-6 py-3 leading-tight font-semibold transition-colors hover:bg-bg-subtle">Annuler</a>
+      <button type="submit" class="flex min-h-12 items-center justify-center rounded-md bg-bg-brand px-6 py-3 leading-tight font-semibold text-fg-on-brand hover:opacity-90 aria-disabled:cursor-not-allowed aria-disabled:opacity-60" aria-disabled="{{enCours}}">{{bouton}}</button>
+    </div>
+  </form>
+</section>

@@ -1,5 +1,6 @@
 import { CompteData } from "../../data/compte.js";
 import { goTo } from "../../lib/navigation.js";
+import { libelleStatut } from "../../lib/statut-commande.js";
 import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { ApercuCommandesView } from "../../ui/apercu-commandes/index.js";
 import { MessageView } from "../../ui/message/index.js";
@@ -16,13 +17,6 @@ import templateErreur from "./erreur.html?raw";
  * gabarit, les onglets et l'aperçu. C : charge, renvoie vers la connexion si
  * le serveur répond 401.
  */
-
-const LIBELLES_STATUT = {
-  en_cours: "En cours",
-  prete: "Prête",
-  retiree: "Retirée",
-  annulee: "Annulée",
-};
 
 let M = {
   profil: null, // { email, nom, creeLe }, ou null tant que le chargement n'a pas réussi
@@ -111,7 +105,7 @@ C.viewData = function () {
       resume: M.ordersSummary(),
       commandes: M.commandes.recentes.map((commande) => ({
         numero: commande.numero,
-        statut: LIBELLES_STATUT[commande.statut] ?? commande.statut,
+        statut: libelleStatut(commande.statut),
         date: M.formatDate(commande.creeLe, true),
         totalCents: commande.totalCents,
       })),

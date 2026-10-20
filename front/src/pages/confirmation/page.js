@@ -1,5 +1,6 @@
 import { CommandeData } from "../../data/commande.js";
 import { formaterPrix } from "../../lib/format.js";
+import { libelleStatut } from "../../lib/statut-commande.js";
 import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { LigneCommandeView } from "../../ui/ligne-commande/index.js";
 import { MessageView } from "../../ui/message/index.js";
@@ -14,13 +15,6 @@ import templateErreur from "./erreur.html?raw";
  * gabarit, le bloc de confirmation et les lignes. C : charge la commande.
  */
 
-const LIBELLES_STATUT = {
-  en_cours: "En cours",
-  prete: "Prête",
-  retiree: "Retirée",
-  annulee: "Annulée",
-};
-
 let M = {
   commande: null, // la commande de l'API, ou null tant que le chargement n'a pas réussi
   connexionRequise: false, // true si le serveur a répondu 401
@@ -33,7 +27,7 @@ let M = {
  * > le libellé affichable, ou le statut tel quel s'il est inconnu
  */
 M.statusLabel = function (statut) {
-  return LIBELLES_STATUT[statut] ?? statut;
+  return libelleStatut(statut);
 };
 
 /**

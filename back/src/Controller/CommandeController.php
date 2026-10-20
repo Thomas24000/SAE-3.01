@@ -13,13 +13,16 @@ use DomainException;
  * Validation d'une commande et consultation de sa confirmation (US CMD-a).
  *
  * Le client doit être connecté. Le panier reçu ne donne que des identifiants de
- * variantes et des quantités : prix, noms et total sont recalculés ici, d'après
- * la base.
+ * variantes, d'options et des quantités : prix, noms, suppléments et total sont
+ * recalculés ici, d'après la base.
  */
 final class CommandeController
 {
     /** Nombre maximal de lignes différentes dans une commande. */
     private const LIGNES_MAX = 50;
+
+    /** Nombre maximal de choix d'options sur une même ligne. */
+    private const OPTIONS_MAX = 20;
 
     /** Quantité maximale d'une même variante (comme le panier du navigateur). */
     private const QUANTITE_MAX = 99;
@@ -35,10 +38,11 @@ final class CommandeController
     /**
      * POST /api/commande : valide la commande du client connecté.
      *
-     * Corps : { lignes: [{ variantId, quantite }] }
+     * Corps : { lignes: [{ variantId, quantite, options?: [idChoix] }] }
      * Réponse (201) : { commande: { numero, statut, totalCents } }
      * Erreurs : 401 si personne n'est connecté, 400 si les lignes sont invalides,
-     * 409 si une variante n'existe plus.
+     * 409 si une variante ou une option n'existe plus, si les options ne sont pas
+     * valides pour le produit ou si le stock manque.
      */
     public function store(Request $requete): void
     {
@@ -58,6 +62,7 @@ final class CommandeController
      * GET /api/commande?numero=CC-2026-000123 : la confirmation d'une commande.
      *
      * Réponse : { commande: { numero, statut, totalCents, creeLe, email, lignes: [...] } }
+     * (chaque ligne porte ses options figées : groupe, libellé, supplément).
      * Erreurs : 401 si personne n'est connecté, 400 si le numéro est mal formé,
      * 404 si la commande n'existe pas ou appartient à un autre client.
      */
@@ -95,11 +100,14 @@ final class CommandeController
     }
 
     /**
-     * Contrôle les lignes reçues : un tableau non vide de { variantId, quantite }
-     * entiers positifs, sans variante en double.
+     * Contrôle les lignes reçues : un tableau non vide de { variantId, quantite,
+     * options } où variante, quantité et identifiants d'options sont des entiers
+     * positifs, sans couple variante + options en double (un même format peut
+     * revenir avec des options différentes). Les options sont triées et
+     * dédoublonnées ; absentes, elles valent [].
      *
      * @param mixed $brut La valeur du corps JSON, de n'importe quel type.
-     * @return array<int, array{variantId:int, quantite:int}>
+     * @return array<int, array{variantId:int, quantite:int, options:array<int, int>}>
      */
     private function lignesValides(mixed $brut): array
     {
@@ -112,18 +120,38 @@ final class CommandeController
         }
 
         $lignes = array_map(
-            static fn (mixed $ligne): ?array => is_array($ligne)
-                && is_int($ligne['variantId'] ?? null) && $ligne['variantId'] > 0
-                && is_int($ligne['quantite'] ?? null)
-                && $ligne['quantite'] >= 1 && $ligne['quantite'] <= self::QUANTITE_MAX
-                    ? ['variantId' => $ligne['variantId'], 'quantite' => $ligne['quantite']]
-                    : null,
+            static function (mixed $ligne): ?array {
+                if (!is_array($ligne)
+                    || !is_int($ligne['variantId'] ?? null) || $ligne['variantId'] < 1
+                    || !is_int($ligne['quantite'] ?? null)
+                    || $ligne['quantite'] < 1 || $ligne['quantite'] > self::QUANTITE_MAX) {
+                    return null;
+                }
+
+                $options = $ligne['options'] ?? [];
+
+                if (!is_array($options) || !array_is_list($options) || count($options) > self::OPTIONS_MAX
+                    || array_filter($options, static fn (mixed $id): bool => !is_int($id) || $id < 1) !== []) {
+                    return null;
+                }
+
+                $options = array_values(array_unique($options));
+                sort($options);
+
+                return ['variantId' => $ligne['variantId'], 'quantite' => $ligne['quantite'], 'options' => $options];
+            },
             $brut
         );
 
-        $ids = array_map(static fn (?array $ligne): ?int => $ligne['variantId'] ?? null, $lignes);
+        // Un couple variante + options ne peut figurer qu'une fois.
+        $cles = array_map(
+            static fn (?array $ligne): ?string => $ligne === null
+                ? null
+                : $ligne['variantId'] . ':' . implode(',', $ligne['options']),
+            $lignes
+        );
 
-        if (in_array(null, $lignes, true) || count(array_unique($ids)) !== count($ids)) {
+        if (in_array(null, $lignes, true) || count(array_unique($cles)) !== count($cles)) {
             Response::erreur('Les articles de ta commande sont invalides.', 400);
         }
 

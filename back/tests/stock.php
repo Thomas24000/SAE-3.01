@@ -45,10 +45,31 @@ function connecter(): PDO
     ]);
 }
 
+/**
+ * Les options minimales d'une variante : son groupe « Service » est obligatoire
+ * (US OPT-a), toute commande doit donc en choisir un.
+ *
+ * @return array<int, int> L'identifiant du premier choix du groupe « Service » du produit.
+ */
+function service(PDO $pdo, int $variantId): array
+{
+    $requete = $pdo->prepare(
+        "SELECT MIN(option_choix.id)
+           FROM variante
+     INNER JOIN option_groupe ON option_groupe.produit_id = variante.produit_id AND option_groupe.libelle = 'Service'
+     INNER JOIN option_choix  ON option_choix.groupe_id = option_groupe.id
+          WHERE variante.id = :id"
+    );
+    $requete->execute(['id' => $variantId]);
+
+    return [(int) $requete->fetchColumn()];
+}
+
 // Mode « ouvrier » : lancé par le test de concurrence, il attend l'instant de
 // départ puis commande une unité de la variante donnée.
 if (($argv[1] ?? '') === 'worker') {
-    $model = new CommandeModel(connecter());
+    $pdo   = connecter();
+    $model = new CommandeModel($pdo);
     $start = (float) $argv[3];
 
     while (microtime(true) < $start) {
@@ -56,7 +77,7 @@ if (($argv[1] ?? '') === 'worker') {
     }
 
     try {
-        $model->creer(1, [['variantId' => (int) $argv[2], 'quantite' => 1]]);
+        $model->creer(1, [['variantId' => (int) $argv[2], 'quantite' => 1, 'options' => service($pdo, (int) $argv[2])]]);
         echo 'OK';
     } catch (DomainException $e) {
         echo 'REFUS';
@@ -126,7 +147,7 @@ function commandeId(PDO $pdo, string $numero): int
 
 echo "1. Décrément à la validation + journal\n";
 reinitialiser($pdo, $variant, 10);
-$commande = $model->creer(1, [['variantId' => $variant, 'quantite' => 3]]);
+$commande = $model->creer(1, [['variantId' => $variant, 'quantite' => 3, 'options' => service($pdo, $variant)]]);
 verifier('le stock passe de 10 à 7', stock($pdo, $variant) === 7);
 $mouvement = $pdo->query('SELECT type, quantite, stock_avant, stock_apres FROM mouvement_stock')->fetch();
 verifier('le journal contient la sortie (3, 10 -> 7)', $mouvement === ['type' => 'sortie', 'quantite' => 3, 'stock_avant' => 10, 'stock_apres' => 7]);
@@ -146,7 +167,7 @@ try {
 verifier('une commande retirée ne peut pas être annulée', $refus && stock($pdo, $variant) === 7);
 
 echo "3. Recrédit à l'annulation, une seule fois\n";
-$commande = $model->creer(1, [['variantId' => $variant, 'quantite' => 2]]);
+$commande = $model->creer(1, [['variantId' => $variant, 'quantite' => 2, 'options' => service($pdo, $variant)]]);
 $id       = commandeId($pdo, $commande['numero']);
 verifier('stock à 5 après la 2e commande', stock($pdo, $variant) === 5);
 $model->changerStatut($id, 'annulee');
@@ -166,7 +187,10 @@ reinitialiser($pdo, $variant, 5);
 $pdo->exec('UPDATE variante SET stock = 1 WHERE id = 2');
 $refus = false;
 try {
-    $model->creer(1, [['variantId' => $variant, 'quantite' => 2], ['variantId' => 2, 'quantite' => 5]]);
+    $model->creer(1, [
+        ['variantId' => $variant, 'quantite' => 2, 'options' => service($pdo, $variant)],
+        ['variantId' => 2, 'quantite' => 5, 'options' => service($pdo, 2)],
+    ]);
 } catch (DomainException $e) {
     $refus = true;
 }
@@ -179,7 +203,7 @@ echo "5. Le stock ne devient jamais négatif\n";
 reinitialiser($pdo, $variant, 2);
 $refus = false;
 try {
-    $model->creer(1, [['variantId' => $variant, 'quantite' => 3]]);
+    $model->creer(1, [['variantId' => $variant, 'quantite' => 3, 'options' => service($pdo, $variant)]]);
 } catch (DomainException $e) {
     $refus = true;
 }

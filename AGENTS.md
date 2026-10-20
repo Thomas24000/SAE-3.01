@@ -402,6 +402,8 @@ back/
     ├── Controller/          AdminAuthController, AdminCategorieController, AdminProduitController, AuthController, CommandeController, ProduitController, StatsController
     └── Model/               CategorieModel, CommandeModel, ProduitAdminModel, ParametreModel, ProduitModel, UtilisateurModel
 back/tests/stock.php         tests CLI du stock STK-a (base jetable, `Require all denied`)
+back/tests/options.php       tests CLI des options dans les commandes OPT-a (base jetable : `STK_DSN`, `STK_USER`, `STK_PASS`)
+front/tests/options.test.mjs tests Node de `lib/options.js` : `node front/tests/options.test.mjs`
 front/
 ├── index.html               page unique : police Inter, script inline du thème, #app, main.js
 ├── vite.config.js           BASE = "/~bellevert1/SAE301-Starter/", proxy /api → mmi.unilim.fr
@@ -468,10 +470,11 @@ Ajouter une route : `import` + `router.addRoute(...)` **avant** `"*"`.
 | `grille-produits` (`GrilleProduitsView`) | `dom(produits)` ; `vide.html` si liste vide | produits avec `statutStock` | produits |
 | `carte-produit` (`CarteProduitView`) | `dom(produit)` ; `bouton-choisir.html` / `bouton-epuise.html` | `{ nom, slug, teinte, image, prixMin, statutStock }` | grille-produits |
 | `badge-stock` (`BadgeStockView`) | `html(statut)`, `dom(statut)` | `"disponible"\|"bientot"\|"epuise"` | carte, fiche |
-| `fiche-produit` (`FicheProduitView`) | `dom(data, actions)`, `domVariante`, `domVignette` ; rend lui-même le focus | voir JSDoc ; `surVariante`, `surImage`, `surQuantite`, `surAjout` | produit |
-| `ligne-panier` (`LignePanierView`) | `dom(data, actions)` | `{ variantId, nom, slug, libelle, image, teinte, quantite, totalCents, moinsPossible }` ; `surQuantite(id, ±1)`, `surSuppression(id)` | panier |
+| `fiche-produit` (`FicheProduitView`) | `dom(data, actions)`, `domVariante`, `domVignette` ; rend lui-même le focus | voir JSDoc ; `surVariante`, `surImage`, `surQuantite`, `surAjout`, `surOption` | produit |
+| `selecteur-options` (`SelecteurOptionsView`) | `dom(groupes, onPick)`, `domGroupe`, `domChoix` ; sous-templates `groupe.html`, `choix.html` | groupes `{ id, libelle, multiple, obligatoire, choix: [{ id, libelle, supplementCents, selectionne }] }` ; `onPick(groupeId, choixId)` ; radio ou case à cocher, rend lui-même le focus | fiche-produit |
+| `ligne-panier` (`LignePanierView`) | `dom(data, actions)` | `{ variantId, options: [{ id, libelle, supplementCents }], cle, nom, slug, libelle, image, teinte, quantite, totalCents (suppléments compris), moinsPossible, plusPossible, modifiable, edition }` (`edition` : `null` ou `{ groupes, manquants }`) ; `surQuantite(id, options, ±1)`, `surSuppression(id, options)`, `surModification(id, options)`, `surOption(id, options, groupeId, choixId)`, `surEnregistrement(id, options)`, `surAnnulation()` (boutons `data-options`) ; le sous-template `edition.html` embarque `selecteur-options` | panier |
 | `resume-commande` (`ResumeCommandeView`) | `dom(data, actions)` | `{ sousTotalCents, totalCents }` ; `surValidation` | panier |
-| `ligne-commande` (`LigneCommandeView`) | `dom(data)` | `{ nom, libelle, quantite, prixUnitaireCents, totalCents }` (lecture seule) | commande, confirmation |
+| `ligne-commande` (`LigneCommandeView`) | `dom(data)` | `{ nom, libelle, options: [{ libelle, supplementCents }], quantite, prixUnitaireCents (suppléments compris), totalCents }` (lecture seule) | commande, confirmation |
 | `encart-validation` (`EncartValidationView`) | `dom(data, actions)` | `{ totalCents, email, enCours }` ; `surConfirmation` (bouton `aria-disabled` pendant l'envoi) | commande |
 | `formulaire-login` (`FormulaireLoginView`) | `dom(data, actions)` | `{ email }` ; `surConnexion(email, mdp)`, `surInscription` | connexion |
 | `formulaire-inscription` (`FormulaireInscriptionView`) | `dom(data, actions)` | `{ email }` ; `surInscription(email, mdp, confirmation)`, `surConnexion` | inscription |
@@ -511,17 +514,18 @@ les boutons. Booléens dans un template : `{{desactivee}}` vaut `"disabled"` ou
 | `lib/utils.js` | `genericRenderer`, `htmlToFragment` | `{{cle}}` **échappé** ; chaîne → `DocumentFragment` |
 | `lib/api-request.js` | `getRequest`, `postRequest(uri, data, headers)`, `postFormRequest(uri, formData, headers)`, `ErreurApi` | `fetch` JSON sur `BASE_URL + "api/"`, erreur `{ erreur }` → `ErreurApi(message, statut)` |
 | `lib/format.js` | `formaterPrix(centimes)` | « 7,90 € » (affichage uniquement) |
-| `lib/stock.js` | `statutStock(stock, seuil)` | seuil fourni par l'API (`seuilBientotEpuise`, table `parametre`) |
+| `lib/stock.js` | `statutStock(stock, seuil)`, `ajusterLignes(lignes, variantes)`, `texteAjustements(ajustements, retirees)` | seuil fourni par l'API (`seuilBientotEpuise`, table `parametre`) ; `ajusterLignes` (pure) plafonne les quantités au stock, les lignes d'une même variante se partageant son stock |
+| `lib/options.js` | `defaultChoix`, `choixDepuisIds`, `toggleChoix`, `choixIds`, `supplementCents`, `hasMissing`, `groupesAvecEtat`, `choixReconnus`, `choixDeLigne`, `ligneInvalide`, `formaterOptions` | règles des options (US OPT-c et OPT-a), **pures** (testées : `front/tests/options.test.mjs`) ; une sélection est `{ [idGroupe]: [idChoix] }` ; partagées par fiche, panier et commande |
 | `lib/navigation.js` | `goTo(path)`, `reload()`, `readQuery(name)`, `safeReturnPath(raw)` | redirection depuis une page (pushState + `popstate`, sans toucher au routeur) ; `retour` limité aux chemins internes |
 | `lib/theme.js` | `basculerTheme()` | classe `.theme-dark` sur `<html>` + `localStorage["theme"]` |
 | `data/produit.js` | `ProduitData.fetchAll / fetchOne(slug) / fetchVariantes(ids)` | préfixe les images par `BASE_URL` |
 | `data/auth.js` | `AuthData.login(email, mdp) / register / me / logout`, `knownEmail` | session PHP ; `knownEmail` = dernier e-mail connu, pour le header |
-| `data/commande.js` | `CommandeData.create(lignes) / fetchOne(numero)` | `POST` puis `GET /api/commande` ; n'envoie que `{ variantId, quantite }` |
+| `data/commande.js` | `CommandeData.create(lignes) / fetchOne(numero)` | `POST` puis `GET /api/commande` ; n'envoie que `{ variantId, quantite, options }` (ids de choix) |
 | `data/admin.js` | `AdminData.login(email, mdp) / me / logout`, `knownEmail` | `admin/login`, `admin/me`, `admin/logout` (session admin séparée) |
 | `data/categories.js` | `CategorieData.fetchAll / create / update / remove(id, reaffecterVers)` | `admin/categories…` ; joint le jeton CSRF (`AdminData.csrf`) en-tête `X-CSRF-Token` |
 | `data/produit-admin.js` | `ProduitAdminData.fetchAll / fetchOne(id) / create / update / remove / uploadImages(id, files) / removeImage / setMainImage / saveThreshold` | `admin/produits…` ; jeton CSRF ; adresses d'images complétées par `BASE_URL` |
 | `data/stats.js` | `StatsData.fetch()` | `admin/stats` (inclut `commandes`) |
-| `data/panier.js` | `PanierData.read / write / add / setQuantity / remove / clear / count` | `localStorage["panier"]` = `[{ variantId, quantite }]` uniquement, validé à la lecture, plafond 99 |
+| `data/panier.js` | `PanierData.read / write / add(variantId, quantite, options) / setQuantity(variantId, quantite, options) / remove(variantId, options?) / clear / count` | `localStorage["panier"]` = `[{ variantId, quantite, options: [idChoix triés] }]`, validé à la lecture, plafond 99 ; **une ligne = variante + options** (`remove` sans options retire toutes les lignes de la variante) |
 
 Seuls `data/panier.js` et `lib/theme.js` (+ le script inline d'`index.html`)
 touchent au `localStorage`.
@@ -531,14 +535,14 @@ touchent au `localStorage`.
 | Route | Contrôleur::méthode | Modèle | Réponse / erreurs |
 | --- | --- | --- | --- |
 | `GET /api/produits` | `ProduitController::index` | `lister()` | `{ produits, total, seuilBientotEpuise }` (prixMin, stock total, categorieSlug) |
-| `GET /api/produit?slug=` | `ProduitController::show` | `findBySlug()` | `{ produit, seuilBientotEpuise }` ; 400 slug invalide (`^[a-z0-9-]{1,120}$`), 404 |
-| `GET /api/panier?ids=3,5` | `ProduitController::panier` | `findVariantesByIds()` | `{ variantes }` (prix actuel) ; 400 ids invalides ou > 50 |
+| `GET /api/produit?slug=` | `ProduitController::show` | `findBySlug()` | `{ produit (dont `options` : groupes + choix), seuilBientotEpuise }` ; 400 slug invalide (`^[a-z0-9-]{1,120}$`), 404 |
+| `GET /api/panier?ids=3,5` | `ProduitController::panier` | `findVariantesByIds()`, `findOptionsByProduits()` | `{ variantes, options, seuilBientotEpuise }` (prix et `stock` actuels ; `options` = `{ [idProduit]: [groupes avec choix et suppléments] }`, pour chiffrer et modifier les lignes) ; 400 ids invalides ou > 50 |
 | `POST /api/login` | `AuthController::login` | `UtilisateurModel::findByEmail()` | corps `{ email, mdp }` → `{ connecte, email, role }` ; 400 champ vide, 401 identifiants |
 | `POST /api/inscription` | `AuthController::register` | `UtilisateurModel::create()` | corps `{ email, mdp, confirmation }` → 201 `{ connecte, email, role: "client" }` (connecte aussitôt) ; 400 validation (`filter_var`), 409 e-mail pris |
 | `GET /api/me` | `AuthController::me` | — (lit la session) | `{ connecte: false }` ou `{ connecte, email, role }` |
 | `POST /api/logout` | `AuthController::logout` | — | `{ connecte: false }` |
-| `POST /api/commande` | `CommandeController::store` | `CommandeModel::creer()` | corps `{ lignes: [{ variantId, quantite }] }` → 201 `{ commande: { numero, statut, totalCents } }` ; 401 non connecté, 400 lignes invalides (vide, > 50, doublon, quantité hors 1-99), 409 variante disparue **ou stock insuffisant**. Transaction : variantes verrouillées `FOR UPDATE` par id croissant, prix relus en base (prix du client ignoré), stock décrémenté et journalisé (STK-a) |
-| `GET /api/commande?numero=` | `CommandeController::show` | `CommandeModel::findByNumero()` | `{ commande: { numero, statut, totalCents, creeLe, email, lignes } }` ; 401, 400 numéro mal formé, 404 inconnue **ou à un autre client** |
+| `POST /api/commande` | `CommandeController::store` | `CommandeModel::creer()` | corps `{ lignes: [{ variantId, quantite, options?: [idChoix] }] }` → 201 `{ commande: { numero, statut, totalCents } }` ; 401 non connecté, 400 lignes invalides (vide, > 50, doublon **variante + options**, quantité hors 1-99, options mal formées ou > 20), 409 variante disparue, **option invalide pour le produit (autre produit, inconnue, 2 choix dans un groupe à choix unique, groupe obligatoire vide)** ou stock insuffisant. Transaction : variantes verrouillées `FOR UPDATE` par id croissant, prix et suppléments relus en base (prix du client ignoré), options figées dans `ligne_commande_option`, `prix_unitaire_cents` = format + suppléments, stock contrôlé, décrémenté et journalisé **par variante** (somme des lignes qui la partagent, STK-a) |
+| `GET /api/commande?numero=` | `CommandeController::show` | `CommandeModel::findByNumero()` | `{ commande: { numero, statut, totalCents, creeLe, email, lignes: [{ …, options: [{ groupe, libelle, supplementCents }] }] } }` ; 401, 400 numéro mal formé, 404 inconnue **ou à un autre client** |
 | `POST /api/admin/login` | `AdminAuthController::login` | `UtilisateurModel::findByEmail()` | corps `{ email, mdp }` → `{ connecte, email }` ; 400 champ vide, 401 identifiants ou compte non admin. Session séparée du client : `$_SESSION['admin']` ; `POST /api/login` refuse désormais les comptes admin (401) |
 | `GET /api/admin/me` | `AdminAuthController::me` | — | `{ connecte: false }` ou `{ connecte, email }` |
 | `POST /api/admin/logout` | `AdminAuthController::logout` | — | retire `$_SESSION['admin']` seulement ; `{ connecte: false }` |
@@ -573,7 +577,8 @@ Itérations PHP : `for` ou `array_map`, jamais `foreach`.
 | `variante` | `produit_id`, `libelle`, `prix_cents`, `stock` | `UNIQUE(produit_id, libelle)`, FK `CASCADE` |
 | `utilisateur` | `email` (minuscules), `mot_de_passe` (hachage `password_hash`), `role` (`client`\|`admin`), `cree_le` | `UNIQUE(email)` |
 | `commande` | `numero` (`CC-AAAA-000123`), `utilisateur_id`, `statut` (`en_cours`\|`prete`\|`retiree`\|`annulee`, défaut `en_cours`), `total_cents`, `cree_le` | `UNIQUE(numero)`, FK → utilisateur `RESTRICT` |
-| `ligne_commande` | `commande_id`, `variante_id` (NULL si supprimée), `produit_nom`, `variante_libelle`, `prix_unitaire_cents`, `quantite` | FK commande `CASCADE`, FK variante `SET NULL` ; nom, format et prix **figés** à la commande |
+| `ligne_commande` | `commande_id`, `variante_id` (NULL si supprimée), `produit_nom`, `variante_libelle`, `prix_unitaire_cents`, `quantite` | FK commande `CASCADE`, FK variante `SET NULL` ; nom, format et prix **figés** à la commande ; `prix_unitaire_cents` comprend les suppléments ; une même variante peut figurer sur plusieurs lignes (options différentes) |
+| `ligne_commande_option` | `ligne_id`, `groupe_libelle`, `choix_libelle`, `supplement_cents` | FK ligne `CASCADE`, **aucune clé vers `option_choix`** : instantané, le catalogue peut changer sans toucher aux commandes (US OPT-a) |
 | `mouvement_stock` | `variante_id` (NULL si supprimée), `commande_id`, `type` (`sortie`\|`retour`), `quantite`, `stock_avant`, `stock_apres`, `cree_le` | `UNIQUE(commande_id, variante_id, type)` (idempotence), FK variante `SET NULL`, FK commande `CASCADE` ; `variante.stock` a en plus `CHECK (stock >= 0)` |
 
 Seeds : 3 catégories (pots classiques, sans lactose, sorbets) × 4 produits,
@@ -582,8 +587,17 @@ variés (certains ≤ 5 pour tester « Bientôt épuisé »). Comptes de démo
 `alice@example.com`/`azerty` (client) et `admin@example.com`/`motdepasse` (admin). InnoDB, `utf8mb4`.
 | `parametre` | `cle` (PK), `valeur` ; seed `seuil_bientot_epuise` = 5 | lue par `ParametreModel` (repli sur 5 si absente) |
 
-**Absentes pour l'instant** :
-`option` (à créer selon §7 et l'ordre §8).
+| `option_groupe` | `produit_id`, `libelle`, `multiple`, `obligatoire`, `position` ; seeds « Service » (1 choix, obligatoire) et « Toppings » (plusieurs, facultatif) par produit | `UNIQUE(produit_id, libelle)`, FK produit `CASCADE` |
+| `option_choix` | `groupe_id`, `libelle`, `supplement_cents`, `position` ; seeds cuillère / coupelle / cône, toppings selon la catégorie | `UNIQUE(groupe_id, libelle)`, FK groupe `CASCADE` |
+
+**Options (OPT-c + OPT-a, terminées)** : choix sur la fiche produit
+(`selecteur-options`) ; options stockées dans les lignes du panier (une ligne =
+variante + options), affichées, chiffrées et **modifiables** dans `/panier`
+(fusion de deux lignes devenues identiques) ; validées côté serveur à la
+commande, figées dans `ligne_commande_option` avec le prix, et affichées dans
+`/commande` et `/commande/:numero`. Un panier d'avant les options (ligne sans le
+groupe obligatoire « Service ») est nettoyé avec un message au chargement du
+panier. Tests : `back/tests/options.php`, `front/tests/options.test.mjs`.
 
 **Stock (STK-a)** : `CommandeModel::mouvementer()` est le seul endroit qui
 écrit `variante.stock` ; `creer()` l'appelle (sortie) et `changerStatut()`
@@ -606,7 +620,7 @@ le stock uniquement au passage à `annulee`. Test : `back/tests/stock.php`.
 | # | Constat | Conséquence pour la suite |
 | --- | --- | --- |
 | 1 | `README.md` ne mentionne pas encore la page `/panier` ni `GET /api/panier` (tableau d'état « Panier : à venir ») | le mettre à jour quand CMD-b sera terminée |
-| 2 | Le skill `creer-module-data` §4 décrit des lignes panier avec `label` et `unitPriceCents` ; le code ne stocke que `{ variantId, quantite }` et relit les prix via l'API | **le code fait foi** ; ajouter `options` avec OPT-a |
+| 2 | Le skill `creer-module-data` §4 décrit des lignes panier avec `label` et `unitPriceCents` ; le code stocke `{ variantId, quantite, options }` et relit prix et suppléments via l'API | **le code fait foi** (options ajoutées avec OPT-a) |
 | 3 | Port de dev : `5174` (AGENTS §1, choisi car 5173 souvent occupé) vs `5173` (README) | utiliser le lien affiché par `npm run dev` |
 | 4 | Nommage mixte : `C.charger`, `V.rafraichir`, `M.produitsFiltres` (français, ancien) et `C.handler_selectVariante`, `M.addToCart` (anglais) | nouveau code en **anglais** (§1), ne pas renommer l'existant sans demande |
 | 5 | `ui/message` utilise des couleurs Tailwind brutes (`text-red-700` + `dark:`) au lieu de tokens | exception connue ; ne pas la recopier |

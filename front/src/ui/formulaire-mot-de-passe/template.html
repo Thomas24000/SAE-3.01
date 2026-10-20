@@ -1,0 +1,19 @@
+<form novalidate class="flex flex-col gap-4 rounded-lg border border-border-default bg-bg-default p-6">
+  <label class="flex flex-col gap-2 text-sm font-medium">
+    Mot de passe actuel
+    <input name="ancien" type="password" autocomplete="current-password" class="h-10 rounded-md border border-border-default bg-bg-default px-3 font-normal transition-colors hover:border-border-strong" />
+  </label>
+
+  <label class="flex flex-col gap-2 text-sm font-medium">
+    Nouveau mot de passe
+    <input name="nouveau" type="password" autocomplete="new-password" aria-describedby="aide-nouveau" class="h-10 rounded-md border border-border-default bg-bg-default px-3 font-normal transition-colors hover:border-border-strong" />
+    <span id="aide-nouveau" class="text-xs font-normal text-fg-muted">8 caractères minimum.</span>
+  </label>
+
+  <label class="flex flex-col gap-2 text-sm font-medium">
+    Confirmer le nouveau mot de passe
+    <input name="confirmation" type="password" autocomplete="new-password" class="h-10 rounded-md border border-border-default bg-bg-default px-3 font-normal transition-colors hover:border-border-strong" />
+  </label>
+
+  <button type="submit" class="mt-1 flex min-h-12 w-full items-center justify-center rounded-md bg-bg-brand px-6 py-3 leading-tight font-semibold text-fg-on-brand hover:opacity-90 sm:w-fit">Changer mon mot de passe</button>
+</form>

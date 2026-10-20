@@ -22,6 +22,7 @@ use App\Controller\AdminCommandeController;
 use App\Controller\AdminProduitController;
 use App\Controller\AuthController;
 use App\Controller\CommandeController;
+use App\Controller\CompteController;
 use App\Controller\ProduitController;
 use App\Controller\StatsController;
 use App\Model\CategorieModel;
@@ -80,6 +81,7 @@ try {
         ProduitController::class   => new ProduitController($produits, $parametres),
         AuthController::class      => new AuthController($utilisateurs),
         CommandeController::class  => new CommandeController($commandes),
+        CompteController::class    => new CompteController($utilisateurs, $commandes),
         StatsController::class     => new StatsController($produits, $commandes, $parametres),
         AdminAuthController::class => new AdminAuthController($utilisateurs),
         AdminCategorieController::class => new AdminCategorieController($categories),

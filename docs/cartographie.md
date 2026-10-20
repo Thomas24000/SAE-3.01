@@ -90,6 +90,7 @@ En dev (`npm run dev`), l'étape 5 passe par le proxy Vite vers
 | `/commande/:numero` | `pages/confirmation` (numéro, statut, date, lignes aux prix figés, total ; 401/404 affichés) | CMD-a | fait (à tester en navigateur) |
 | `/compte` | `pages/compte` (bonjour personnalisé, infos, 3 dernières commandes ; 401 → `/connexion?retour=/compte`) | SUI-b | fait (à tester en navigateur) |
 | `/compte/profil` | `pages/compte-profil` (nom + e-mail) | SUI-b | fait (à tester en navigateur) |
+| `/compte/commandes` | `pages/compte-commandes` (historique : filtres statut + période du/au, 10 par page, lien vers `/commande/:numero` ; 401 → `/connexion?retour=/compte/commandes`) | SUI-c | fait (testée avec jsdom contre le vrai back sur MariaDB jetable, pas en navigateur) |
 | `/compte/mot-de-passe` | `pages/compte-mot-de-passe` (ancien exigé) | SUI-b | fait (à tester en navigateur) |
 | `/admin` | `pages/admin` : écran de connexion admin sans session, tableau de bord (4 indicateurs) avec session ; layout `AdminLayout` | GOF-b | fait (non testée en navigateur ni sur la vraie base) |
 | `/connexion` | `pages/connexion` (formulaire, ou « connecté » + déconnexion ; `?retour=` filtré) | CMD-c | fait |
@@ -126,10 +127,12 @@ Ajouter une route : `import` + `router.addRoute(...)` **avant** `"*"`.
 | `formulaire-login` (`FormulaireLoginView`) | `dom(data, actions)` | `{ email }` ; `surConnexion(email, mdp)`, `surInscription` | connexion |
 | `formulaire-inscription` (`FormulaireInscriptionView`) | `dom(data, actions)` | `{ email }` ; `surInscription(email, mdp, confirmation)`, `surConnexion` | inscription |
 | `formulaire-connexion` (`FormulaireConnexionView`) | `html`, `dom(data, actions)` | `{ login }` ; `surConnexion(login, mdp)`, `surDeconnexion` | admin |
-| `navigation-compte` (`NavigationCompteView`) | `dom()` | aucune ; 3 liens `data-link`, `aria-current` posé par le routeur | pages compte* |
+| `navigation-compte` (`NavigationCompteView`) | `dom()` | aucune ; 4 liens `data-link` (Accueil, Profil, Mes commandes, Mot de passe), `aria-current` posé par le routeur | pages compte* |
 | `formulaire-profil` (`FormulaireProfilView`) | `dom(data, actions)` | `{ nom, email }` ; `surEnregistrement(nom, email)` | compte-profil |
 | `formulaire-mot-de-passe` (`FormulaireMotDePasseView`) | `dom(actions)` | aucune donnée (champs jamais pré-remplis) ; `surChangement(ancien, nouveau, confirmation)` | compte-mot-de-passe |
 | `apercu-commandes` (`ApercuCommandesView`) | `dom(data)` ; `ligne.html`, `vide.html` | `{ resume, commandes: [{ numero, statut, date, totalCents }] }` | compte |
+| `filtres-historique` (`FiltresHistoriqueView`) | `dom(data, actions)` | `{ statut, du, au, statuts: [{ valeur, libelle }], filtre }` ; `surChangement({ statut, du, au, champ })`, `surReinitialisation()` | compte-commandes |
+| `liste-historique` (`ListeHistoriqueView`) | `dom(data)` ; `ligne.html`, `vide.html` ; rend `badge-statut-commande` | `{ commandes: [{ numero, statut, date, totalCents }], texteVide }` (lecture seule) | compte-commandes |
 | `indicateur` (`IndicateurView`) | `dom(data)` | `{ libelle, valeur, legende, icone, attention? }` (aucun callback) ; icônes dans `public/images/admin/` | `AdminLayout` |
 | `barre-admin` (`BarreAdminView`) | `dom(data)` | `{ section, email }` ; masquée en mobile ; avatar `public/images/admin/avatar.svg` | pages admin |
 | `connexion-admin` (`ConnexionAdminView`) | `dom(data, actions)` | `{ email, message }` ; `surConnexion(email, mdp)` | admin |
@@ -177,7 +180,7 @@ les boutons. Booléens dans un template : `{{desactivee}}` vaut `"disabled"` ou
 | `lib/statut-commande.js` | `libelleStatut(statut)`, `actionsStatut(statut)` | libellés (prete = « Disponible ») et boutons proposés ; le serveur reste seul juge des transitions |
 | `data/produit.js` | `ProduitData.fetchAll / fetchOne(slug) / fetchVariantes(ids)` | préfixe les images par `BASE_URL` |
 | `data/auth.js` | `AuthData.login(email, mdp) / register / me / logout`, `knownEmail` | session PHP ; `knownEmail` = dernier e-mail connu, pour le header |
-| `data/commande.js` | `CommandeData.create(lignes) / fetchOne(numero)` | `POST` puis `GET /api/commande` ; n'envoie que `{ variantId, quantite, options }` (ids de choix) |
+| `data/commande.js` | `CommandeData.create(lignes) / fetchOne(numero) / fetchAll(filtres, page)` | `POST` puis `GET /api/commande` ; n'envoie que `{ variantId, quantite, options }` (ids de choix) ; `fetchAll` → `GET /api/commandes` (filtres vides non envoyés) |
 | `data/compte.js` | `CompteData.fetch / updateProfile(nom, email) / updatePassword(ancien, nouveau, confirmation)` | `GET /api/compte`, `POST /api/compte/profil` et `/mot-de-passe` ; met à jour `AuthData.knownEmail` |
 | `data/admin.js` | `AdminData.login(email, mdp) / me / logout`, `knownEmail` | `admin/login`, `admin/me`, `admin/logout` (session admin séparée) |
 | `data/categories.js` | `CategorieData.fetchAll / create / update / remove(id, reaffecterVers)` | `admin/categories…` ; joint le jeton CSRF (`AdminData.csrf`) en-tête `X-CSRF-Token` |
@@ -202,6 +205,7 @@ touchent au `localStorage`.
 | `POST /api/logout` | `AuthController::logout` | — | `{ connecte: false }` |
 | `POST /api/commande` | `CommandeController::store` | `CommandeModel::creer()` | corps `{ lignes: [{ variantId, quantite, options?: [idChoix] }] }` → 201 `{ commande: { numero, statut, totalCents } }` ; 401 non connecté, 400 lignes invalides (vide, > 50, doublon **variante + options**, quantité hors 1-99, options mal formées ou > 20), 409 variante disparue, **option invalide pour le produit (autre produit, inconnue, 2 choix dans un groupe à choix unique, groupe obligatoire vide)** ou stock insuffisant. Transaction : variantes verrouillées `FOR UPDATE` par id croissant, prix et suppléments relus en base (prix du client ignoré), options figées dans `ligne_commande_option`, `prix_unitaire_cents` = format + suppléments, stock contrôlé, décrémenté et journalisé **par variante** (somme des lignes qui la partagent, STK-a) |
 | `GET /api/commande?numero=` | `CommandeController::show` | `CommandeModel::findByNumero()` | `{ commande: { numero, statut, totalCents, creeLe, email, lignes: [{ …, options: [{ groupe, libelle, supplementCents }] }] } }` ; 401, 400 numéro mal formé, 404 inconnue **ou à un autre client** |
+| `GET /api/commandes?statut=&du=&au=&page=` | `CommandeController::index` | `CommandeModel::listerClient()` | tous les paramètres facultatifs (statut dans `CommandeModel::STATUTS`, `du`/`au` = `AAAA-MM-JJ` inclusifs, `page` ≥ 1) → `{ commandes: [{ numero, statut, totalCents, creeLe }], total, page, pages }`, 10 par page, plus récente d'abord, page hors limites ramenée à la dernière ; 401, 400 (statut/date/page invalides, début > fin) |
 | `GET /api/compte` | `CompteController::show` | `UtilisateurModel::findById()`, `CommandeModel::findRecentes()` / `countByUtilisateur()` | `{ profil: { email, nom, creeLe }, commandes: { total, recentes[3] } }` ; 401 (SUI-b) |
 | `POST /api/compte/profil` | `CompteController::updateProfile` | `UtilisateurModel::updateProfile()` | corps `{ nom, email }` → `{ profil }` (nom vide = effacé, session alignée) ; 401, 400 (nom > 100, e-mail invalide), 409 e-mail pris |
 | `POST /api/compte/mot-de-passe` | `CompteController::updatePassword` | `findHashById()`, `updatePassword()` | corps `{ ancien, nouveau, confirmation }` → `{ modifie: true }` ; **exige l'ancien** : 403 s'il est faux ; 400 règles du nouveau ; `session_regenerate_id(true)` |

@@ -27,6 +27,9 @@ final class CommandeController
     /** Quantité maximale d'une même variante (comme le panier du navigateur). */
     private const QUANTITE_MAX = 99;
 
+    /** Nombre de commandes par page dans l'historique du client. */
+    private const PAR_PAGE = 10;
+
     /** Le modèle qui interroge les commandes, fourni à la construction. */
     private CommandeModel $commandes;
 
@@ -83,6 +86,67 @@ final class CommandeController
 
         // L'e-mail du client vient de sa session : la commande lui appartient.
         Response::json(['commande' => $commande + ['email' => (string) $_SESSION['utilisateur']]]);
+    }
+
+    /**
+     * GET /api/commandes?statut=&du=&au=&page= : l'historique du client connecté (US SUI-c).
+     *
+     * Tous les paramètres sont facultatifs : statut (en_cours, prete, retiree ou
+     * annulee), du et au (AAAA-MM-JJ, inclusifs), page (à partir de 1).
+     * Réponse : { commandes: [{ numero, statut, totalCents, creeLe }], total, page, pages }
+     * triées de la plus récente à la plus ancienne.
+     * Erreurs : 401 si personne n'est connecté, 400 si un paramètre est invalide.
+     */
+    public function index(Request $requete): void
+    {
+        $utilisateurId = $this->utilisateurConnecte('Connecte-toi pour consulter tes commandes.');
+
+        $statut = $requete->parametre('statut', '');
+        if ($statut !== '' && !in_array($statut, CommandeModel::STATUTS, true)) {
+            Response::erreur('Le statut demandé est invalide.', 400);
+        }
+
+        $du = $this->dateValide($requete->parametre('du', ''), 'de début');
+        $au = $this->dateValide($requete->parametre('au', ''), 'de fin');
+
+        if ($du !== null && $au !== null && $du > $au) {
+            Response::erreur('La date de début doit précéder la date de fin.', 400);
+        }
+
+        $page = $requete->parametre('page', '1');
+        if (preg_match('/^[0-9]{1,6}$/', $page) !== 1) {
+            Response::erreur('Le numéro de page est invalide.', 400);
+        }
+
+        Response::json($this->commandes->listerClient(
+            $utilisateurId,
+            $statut === '' ? null : $statut,
+            $du,
+            $au,
+            (int) $page,
+            self::PAR_PAGE
+        ));
+    }
+
+    /**
+     * Contrôle une date de filtre.
+     *
+     * @param string $brut La valeur reçue ; vide si le filtre est absent.
+     * @param string $nom Le nom de la date pour le message d'erreur (« de début », « de fin »).
+     * @return string|null La date AAAA-MM-JJ, ou null si le filtre est absent.
+     */
+    private function dateValide(string $brut, string $nom): ?string
+    {
+        if ($brut === '') {
+            return null;
+        }
+
+        if (preg_match('/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/', $brut, $morceaux) !== 1
+            || !checkdate((int) $morceaux[2], (int) $morceaux[3], (int) $morceaux[1])) {
+            Response::erreur('La date ' . $nom . ' est invalide.', 400);
+        }
+
+        return $brut;
     }
 
     /**

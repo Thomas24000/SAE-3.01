@@ -23,7 +23,7 @@ final class CommandeModel
     private const STATUT_ANNULEE = 'annulee';
 
     /** Statuts qu'une commande peut prendre (liste blanche). */
-    private const STATUTS = ['en_cours', 'prete', 'retiree', 'annulee'];
+    public const STATUTS = ['en_cours', 'prete', 'retiree', 'annulee'];
 
     /** Statuts atteignables depuis chaque statut : retrait en trois étapes, annulation avant le retrait. */
     private const TRANSITIONS = [
@@ -571,6 +571,93 @@ final class CommandeModel
         $requete->execute(['utilisateur' => $utilisateurId]);
 
         return (int) $requete->fetchColumn();
+    }
+
+    /**
+     * L'historique des commandes d'un client (US SUI-c), de la plus récente à la
+     * plus ancienne, avec filtres et pagination.
+     *
+     * Les filtres sont facultatifs et se cumulent. Les dates sont inclusives (le
+     * jour « au » compte en entier). Une page hors limites est ramenée à la
+     * dernière page existante (au moins la première).
+     *
+     * @param int $utilisateurId Identifiant du client connecté.
+     * @param string|null $statut Ne garder que ce statut ; null pour tous. Doit être dans STATUTS.
+     * @param string|null $du Premier jour retenu (AAAA-MM-JJ), ou null.
+     * @param string|null $au Dernier jour retenu (AAAA-MM-JJ), ou null.
+     * @param int $page Numéro de page demandé, à partir de 1.
+     * @param int $parPage Nombre de commandes par page.
+     * @return array{commandes:array<int, array{numero:string, statut:string, totalCents:int, creeLe:string}>,
+     *               total:int, page:int, pages:int}
+     */
+    public function listerClient(
+        int $utilisateurId,
+        ?string $statut,
+        ?string $du,
+        ?string $au,
+        int $page,
+        int $parPage
+    ): array {
+        $conditions = ['utilisateur_id = :utilisateur'];
+        $parametres = ['utilisateur' => $utilisateurId];
+
+        if ($statut !== null && in_array($statut, self::STATUTS, true)) {
+            $conditions[]        = 'statut = :statut';
+            $parametres['statut'] = $statut;
+        }
+
+        if ($du !== null) {
+            $conditions[]    = 'cree_le >= :du';
+            $parametres['du'] = $du . ' 00:00:00';
+        }
+
+        // Borne exclusive au lendemain : le jour « au » est pris en entier.
+        if ($au !== null) {
+            $conditions[]    = 'cree_le < DATE_ADD(:au, INTERVAL 1 DAY)';
+            $parametres['au'] = $au;
+        }
+
+        $where = ' WHERE ' . implode(' AND ', $conditions);
+
+        $compte = $this->pdo->prepare('SELECT COUNT(*) FROM commande' . $where);
+        $compte->execute($parametres);
+        $total = (int) $compte->fetchColumn();
+
+        $pages = max(1, (int) ceil($total / $parPage));
+        $page  = min(max(1, $page), $pages);
+
+        $requete = $this->pdo->prepare(
+            'SELECT numero, statut, total_cents, cree_le FROM commande' . $where
+            . ' ORDER BY cree_le DESC, id DESC LIMIT :limite OFFSET :decalage'
+        );
+        $requete->bindValue('limite', $parPage, PDO::PARAM_INT);
+        $requete->bindValue('decalage', ($page - 1) * $parPage, PDO::PARAM_INT);
+        $requete->bindValue('utilisateur', $utilisateurId, PDO::PARAM_INT);
+
+        // Les autres paramètres sont des chaînes ; l'identifiant est déjà lié en entier.
+        $noms = array_keys($parametres);
+        for ($i = 0; $i < count($noms); $i++) {
+            if ($noms[$i] !== 'utilisateur') {
+                $requete->bindValue($noms[$i], $parametres[$noms[$i]]);
+            }
+        }
+
+        $requete->execute();
+
+        return [
+            'commandes' => array_map(
+                static fn (array $ligne): array => [
+                    'numero'     => $ligne['numero'],
+                    'statut'     => $ligne['statut'],
+                    'totalCents' => (int) $ligne['total_cents'],
+                    'creeLe'     => $ligne['cree_le'],
+                ],
+                $requete->fetchAll()
+            ),
+            'total' => $total,
+            'page'  => $page,
+            'pages' => $pages,
+        ];
     }
 
     /**

@@ -1,0 +1,15 @@
+<form novalidate class="mb-6 flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end">
+  <label class="flex flex-col gap-1 text-sm font-medium md:w-52">
+    Statut
+    <select name="statut" class="h-11 rounded-md border border-border-default bg-bg-default px-3 font-normal transition-colors hover:border-border-strong"></select>
+  </label>
+  <label class="flex flex-col gap-1 text-sm font-medium md:w-44">
+    Du
+    <input name="du" type="date" value="{{du}}" max="{{au}}" class="h-11 rounded-md border border-border-default bg-bg-default px-3 font-normal transition-colors hover:border-border-strong" />
+  </label>
+  <label class="flex flex-col gap-1 text-sm font-medium md:w-44">
+    Au
+    <input name="au" type="date" value="{{au}}" min="{{du}}" class="h-11 rounded-md border border-border-default bg-bg-default px-3 font-normal transition-colors hover:border-border-strong" />
+  </label>
+  <button type="button" data-action="reinitialiser" {{reinitialiserDesactive}} class="flex min-h-11 items-center justify-center rounded-md border border-border-default px-4 text-sm font-medium transition-colors hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-40">Réinitialiser</button>
+</form>

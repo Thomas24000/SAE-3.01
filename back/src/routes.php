@@ -32,6 +32,7 @@ return [
     'POST /api/logout'      => [AuthController::class,      'logout'],
     'POST /api/commande'    => [CommandeController::class,  'store'],
     'GET  /api/commande'    => [CommandeController::class,  'show'],
+    'GET  /api/commandes'   => [CommandeController::class,  'index'],
     'GET  /api/compte'              => [CompteController::class,    'show'],
     'POST /api/compte/profil'       => [CompteController::class,    'updateProfile'],
     'POST /api/compte/mot-de-passe' => [CompteController::class,    'updatePassword'],

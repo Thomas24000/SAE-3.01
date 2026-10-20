@@ -2,6 +2,15 @@ import { AuthData } from "../../data/auth.js";
 import { PanierData } from "../../data/panier.js";
 import { ProduitData } from "../../data/produit.js";
 import { goTo } from "../../lib/navigation.js";
+import {
+  choixDeLigne,
+  choixDepuisIds,
+  choixIds,
+  groupesAvecEtat,
+  hasMissing,
+  ligneInvalide,
+  toggleChoix,
+} from "../../lib/options.js";
 import { ajusterLignes, texteAjustements } from "../../lib/stock.js";
 import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { HeaderView } from "../../ui/header/index.js";
@@ -15,14 +24,17 @@ import templateVide from "./vide.html?raw";
 /**
  * Page « Panier » (US CMD-b), à l'adresse /panier.
  *
- * M : les lignes du panier (variante et quantité, stockées dans le navigateur)
- * et les variantes relues auprès de l'API, d'où viennent noms, formats et prix.
+ * M : les lignes du panier (variante, options et quantité, stockées dans le
+ * navigateur), les variantes et les groupes d'options relus auprès de l'API, d'où
+ * viennent noms, formats, options et prix, et la ligne en cours de modification.
  * V : le gabarit, les lignes et le résumé. C : charge, réagit aux clics.
  */
 
 let M = {
-  lignes: [], // [{ variantId, quantite }] : le panier du navigateur
+  lignes: [], // [{ variantId, quantite, options }] : le panier du navigateur
   variantes: [], // les variantes de ces lignes, telles que l'API les renvoie
+  groupes: {}, // les groupes d'options des produits du panier : { [idProduit]: [groupe] }
+  edition: null, // ligne dont on modifie les options : { variantId, options, choix }, ou null
   session: null, // { connecte, email?, role? } renvoyé par le serveur, ou null
   echec: false, // true si l'API n'a pas pu répondre
   message: null, // { type, texte }, ou null
@@ -38,9 +50,68 @@ M.findVariante = function (variantId) {
 };
 
 /**
+ * Les groupes d'options du produit d'une variante.
+ * . variante : la variante renvoyée par l'API
+ * > un tableau de groupes (vide si le produit n'a pas d'option)
+ */
+M.produitGroupes = function (variante) {
+  return M.groupes[variante.produit.id] ?? [];
+};
+
+/**
+ * Les options d'une ligne que le serveur reconnaît pour ce produit : un choix
+ * inconnu ou rattaché à un autre produit (localStorage modifié, option retirée
+ * du catalogue) est ignoré.
+ * . ligne : la ligne du panier
+ * > un tableau de { id, libelle, supplementCents }
+ */
+M.lineChoix = function (ligne) {
+  let variante = M.findVariante(ligne.variantId);
+
+  return choixDeLigne(ligne.options, variante.produit.id, M.produitGroupes(variante));
+};
+
+/**
+ * Une ligne ne pourrait-elle pas être commandée (option disparue, groupe
+ * obligatoire sans choix) ?
+ * . ligne : la ligne du panier
+ * > true si elle doit être retirée du panier
+ */
+M.lineInvalid = function (ligne) {
+  let variante = M.findVariante(ligne.variantId);
+
+  return ligneInvalide(ligne.options, variante.produit.id, M.produitGroupes(variante));
+};
+
+/**
+ * Une ligne est-elle en cours de modification de ses options ?
+ * . ligne : la ligne du panier
+ * > true si c'est la ligne ouverte dans le sélecteur
+ */
+M.isEditing = function (ligne) {
+  return (
+    M.edition !== null &&
+    M.edition.variantId === ligne.variantId &&
+    M.edition.options.join(",") === ligne.options.join(",")
+  );
+};
+
+/**
+ * Quantité d'une variante dans tout le panier, toutes options confondues : les
+ * lignes d'une même variante se partagent son stock.
+ * . variantId : l'identifiant de la variante
+ * > la somme des quantités
+ */
+M.variantQuantity = function (variantId) {
+  return M.lignes
+    .filter((ligne) => ligne.variantId === variantId)
+    .reduce((total, ligne) => total + ligne.quantite, 0);
+};
+
+/**
  * Remet le panier d'accord avec le serveur : retire les lignes dont la variante
- * n'existe plus, puis ramène les quantités au stock (US STK-c) en retirant les
- * variantes épuisées.
+ * ou dont une option n'existe plus, puis ramène les quantités au stock
+ * (US STK-c) en retirant les variantes épuisées.
  * > { retirees, ajustements } : le nombre de lignes disparues du serveur et les
  *   lignes de stock modifiées (voir ajusterLignes)
  */
@@ -50,6 +121,10 @@ M.reconcile = function () {
   for (let i = 0; i < M.lignes.length; i++) {
     if (M.findVariante(M.lignes[i].variantId) === undefined) {
       PanierData.remove(M.lignes[i].variantId);
+      retirees++;
+    } else if (M.lineInvalid(M.lignes[i])) {
+      // Une option n'existe plus ou manque : le serveur refuserait la commande.
+      PanierData.remove(M.lignes[i].variantId, M.lignes[i].options);
       retirees++;
     }
   }
@@ -71,24 +146,37 @@ M.count = function () {
 
 /**
  * Les lignes prêtes à afficher.
- * > un tableau de { variantId, nom, slug, libelle, image, teinte, quantite,
- *   totalCents, moinsPossible, plusPossible }
+ * > un tableau de { variantId, options (choix reconnus), cle (identifiant des
+ *   options de la ligne), nom, slug, libelle, image, teinte, quantite,
+ *   totalCents (supplément des options compris), moinsPossible, plusPossible,
+ *   modifiable, edition (null, ou { groupes, manquants } si la ligne est ouverte) }
  */
 M.articles = function () {
   return M.lignes.map((ligne) => {
     let variante = M.findVariante(ligne.variantId);
+    let choix = M.lineChoix(ligne);
+    let supplement = choix.reduce((total, autre) => total + autre.supplementCents, 0);
 
     return {
       variantId: ligne.variantId,
+      options: choix,
+      cle: ligne.options.join(","),
       nom: variante.produit.nom,
       slug: variante.produit.slug,
       libelle: variante.libelle,
       image: variante.produit.image,
       teinte: variante.produit.teinte,
       quantite: ligne.quantite,
-      totalCents: variante.prixCents * ligne.quantite,
+      totalCents: (variante.prixCents + supplement) * ligne.quantite,
       moinsPossible: ligne.quantite > 1,
-      plusPossible: ligne.quantite < variante.stock,
+      plusPossible: M.variantQuantity(ligne.variantId) < variante.stock,
+      modifiable: M.produitGroupes(variante).length > 0,
+      edition: M.isEditing(ligne)
+        ? {
+            groupes: groupesAvecEtat(M.produitGroupes(variante), M.edition.choix),
+            manquants: hasMissing(M.produitGroupes(variante), M.edition.choix),
+          }
+        : null,
     };
   });
 };
@@ -105,27 +193,78 @@ M.summary = function () {
 };
 
 /**
- * Change la quantité d'une ligne : 1 au minimum, le stock de la variante au maximum.
+ * Change la quantité d'une ligne : 1 au minimum, au maximum ce que le stock de
+ * la variante laisse aux autres lignes de cette variante.
  * . variantId : l'identifiant de la variante
+ * . options : les identifiants d'options de la ligne
  * . delta : -1 ou 1
  */
-M.changeQuantity = function (variantId, delta) {
-  let ligne = M.lignes.find((autre) => autre.variantId === variantId);
+M.changeQuantity = function (variantId, options, delta) {
+  let cle = options.join(",");
+  let ligne = M.lignes.find((autre) => autre.variantId === variantId && autre.options.join(",") === cle);
   if (ligne === undefined) return;
 
-  let stock = M.findVariante(variantId).stock;
+  let autres = M.variantQuantity(variantId) - ligne.quantite;
+  let max = Math.max(1, M.findVariante(variantId).stock - autres);
 
-  PanierData.setQuantity(variantId, Math.min(Math.max(ligne.quantite + delta, 1), stock));
+  PanierData.setQuantity(variantId, Math.min(Math.max(ligne.quantite + delta, 1), max), options);
   M.lignes = PanierData.read();
 };
 
 /**
  * Retire une ligne du panier.
  * . variantId : l'identifiant de la variante
+ * . options : les identifiants d'options de la ligne
  */
-M.remove = function (variantId) {
-  PanierData.remove(variantId);
+M.remove = function (variantId, options) {
+  PanierData.remove(variantId, options);
   M.lignes = PanierData.read();
+};
+
+/**
+ * Ouvre le sélecteur d'options d'une ligne, avec ses options actuelles cochées.
+ * . variantId : l'identifiant de la variante
+ * . options : les identifiants d'options de la ligne
+ */
+M.startEdition = function (variantId, options) {
+  let ligne = M.lignes.find((autre) => autre.variantId === variantId && autre.options.join(",") === options.join(","));
+  if (ligne === undefined) return;
+
+  M.edition = {
+    variantId: variantId,
+    options: ligne.options,
+    choix: choixDepuisIds(M.produitGroupes(M.findVariante(variantId)), ligne.options),
+  };
+};
+
+/**
+ * Coche ou décoche un choix dans la ligne en cours de modification.
+ * . groupeId : l'identifiant du groupe
+ * . choixId : l'identifiant du choix cliqué
+ */
+M.toggleEditionChoix = function (groupeId, choixId) {
+  if (M.edition === null) return;
+
+  M.edition.choix = toggleChoix(M.produitGroupes(M.findVariante(M.edition.variantId)), M.edition.choix, groupeId, choixId);
+};
+
+/**
+ * La ligne en cours de modification peut-elle être enregistrée ? Un groupe
+ * obligatoire doit avoir un choix.
+ * > true si aucun groupe obligatoire n'est vide
+ */
+M.canSaveEdition = function () {
+  return M.edition !== null && !hasMissing(M.produitGroupes(M.findVariante(M.edition.variantId)), M.edition.choix);
+};
+
+/**
+ * Enregistre les nouvelles options de la ligne ouverte (elle fusionne avec une
+ * autre ligne de la même variante qui aurait déjà ces options) et referme le sélecteur.
+ */
+M.saveEdition = function () {
+  PanierData.changeOptions(M.edition.variantId, M.edition.options, choixIds(M.edition.choix));
+  M.lignes = PanierData.read();
+  M.edition = null;
 };
 
 /**
@@ -146,13 +285,16 @@ C.charger = async function () {
   M.message = null;
   M.echec = false;
   M.variantes = [];
+  M.groupes = {};
+  M.edition = null;
   M.lignes = PanierData.read();
 
   if (M.lignes.length === 0) return;
 
   try {
-    let reponse = await ProduitData.fetchVariantes(M.lignes.map((ligne) => ligne.variantId));
+    let reponse = await ProduitData.fetchVariantes([...new Set(M.lignes.map((ligne) => ligne.variantId))]);
     M.variantes = reponse.variantes;
+    M.groupes = reponse.options ?? {};
 
     let reconciliation = M.reconcile();
     let texte = texteAjustements(reconciliation.ajustements, reconciliation.retirees);
@@ -182,23 +324,89 @@ C.viewData = function () {
 /**
  * Clic sur « − » ou « + » : change la quantité de la ligne et reconstruit la page.
  * . variantId : l'identifiant de la variante
+ * . options : les identifiants d'options de la ligne
  * . delta : -1 ou 1
  */
-C.handler_changeQuantity = function (variantId, delta) {
-  M.changeQuantity(variantId, delta);
+C.handler_changeQuantity = function (variantId, options, delta) {
+  M.changeQuantity(variantId, options, delta);
   M.message = null;
-  V.refresh(C.viewData(), `button[data-variante-id="${variantId}"][data-quantite-delta]:not(:disabled)`);
+  V.refresh(
+    C.viewData(),
+    `button[data-variante-id="${variantId}"][data-options="${options.join(",")}"][data-quantite-delta]:not(:disabled)`
+  );
 };
 
 /**
  * Clic sur « Supprimer » : retire la ligne. Le bouton disparaît avec elle : le
  * focus passe au titre de la page.
  * . variantId : l'identifiant de la variante
+ * . options : les identifiants d'options de la ligne
  */
-C.handler_remove = function (variantId) {
-  M.remove(variantId);
+C.handler_remove = function (variantId, options) {
+  M.remove(variantId, options);
+  if (M.edition !== null && M.edition.variantId === variantId && M.edition.options.join(",") === options.join(",")) {
+    M.edition = null;
+  }
   M.message = null;
   V.refresh(C.viewData(), "h1[data-titre]");
+};
+
+/**
+ * Clic sur « Modifier les options » : ouvre le sélecteur de la ligne (une seule
+ * ligne à la fois) et met le focus sur ses options.
+ * . variantId : l'identifiant de la variante
+ * . options : les identifiants d'options de la ligne
+ */
+C.handler_editOptions = function (variantId, options) {
+  M.startEdition(variantId, options);
+  M.message = null;
+  V.refresh(C.viewData(), "[data-edition] input");
+};
+
+/**
+ * Choix d'une option dans la ligne ouverte : mémorise le choix et reconstruit la
+ * page (le sélecteur rend lui-même le focus au choix cliqué).
+ * . variantId : l'identifiant de la variante
+ * . options : les identifiants d'options de la ligne
+ * . groupeId : l'identifiant du groupe
+ * . choixId : l'identifiant du choix coché ou décoché
+ */
+C.handler_pickOption = function (variantId, options, groupeId, choixId) {
+  M.toggleEditionChoix(groupeId, choixId);
+  M.message = null;
+  V.refresh(C.viewData(), `[data-edition] input[data-choix-id="${choixId}"]`);
+};
+
+/**
+ * Clic sur « Enregistrer » : applique les nouvelles options à la ligne. Rien
+ * n'est enregistré si un groupe obligatoire est vide.
+ */
+C.handler_saveOptions = function () {
+  if (!M.canSaveEdition()) {
+    M.message = { type: "erreur", texte: "Choisis une option dans chaque groupe obligatoire." };
+    V.refresh(C.viewData(), "[data-edition] input");
+    return;
+  }
+
+  let variantId = M.edition.variantId;
+  M.saveEdition();
+  M.message = { type: "succes", texte: "Les options ont été modifiées." };
+  V.refresh(C.viewData(), `button[data-variante-id="${variantId}"][data-action="modifier"]`);
+};
+
+/**
+ * Clic sur « Annuler » : referme le sélecteur sans rien changer.
+ */
+C.handler_cancelEdition = function () {
+  let ouverte = M.edition;
+  M.edition = null;
+  M.message = null;
+  V.refresh(
+    C.viewData(),
+    ouverte === null
+      ? "h1[data-titre]"
+      : `button[data-variante-id="${ouverte.variantId}"][data-options="${ouverte.options.join(",")}"][data-action="modifier"]`
+  );
 };
 
 /**
@@ -273,6 +481,10 @@ V.createPageFragment = function (data) {
       LignePanierView.dom(article, {
         surQuantite: C.handler_changeQuantity,
         surSuppression: C.handler_remove,
+        surModification: C.handler_editOptions,
+        surOption: C.handler_pickOption,
+        surEnregistrement: C.handler_saveOptions,
+        surAnnulation: C.handler_cancelEdition,
       })
     );
     contenu.querySelector('slot[name="lignes"]').replaceWith(...lignes);

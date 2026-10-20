@@ -1,6 +1,7 @@
 import { PanierData } from "../../data/panier.js";
 import { ProduitData } from "../../data/produit.js";
 import { htmlToFragment } from "../../lib/utils.js";
+import { choixIds, defaultChoix, groupesAvecEtat, hasMissing, supplementCents, toggleChoix } from "../../lib/options.js";
 import { statutStock } from "../../lib/stock.js";
 import { FicheProduitView } from "../../ui/fiche-produit/index.js";
 import { HeaderView } from "../../ui/header/index.js";
@@ -11,7 +12,8 @@ import template from "./template.html?raw";
 /**
  * Page « Détail produit » (US DEC-c), à l'adresse /produit/:slug.
  *
- * M : le produit reçu de l'API, la variante, l'image et la quantité choisies.
+ * M : le produit reçu de l'API, la variante, l'image, la quantité et les
+ * options choisies (US OPT-c).
  * V : le template et la fiche. C : charge le produit, réagit aux choix de
  * l'utilisateur.
  */
@@ -22,9 +24,19 @@ let M = {
   varianteId: null, // identifiant de la variante choisie
   imageIndex: 0, // rang de l'image affichée en grand
   quantite: 1, // quantité choisie, entre 1 et le stock de la variante
+  choix: {}, // choix d'options retenus : { [idGroupe]: [idChoix, ...] }
   introuvable: false, // true si l'API a répondu 404
   message: null, // { type, texte }, ou null
   ajoutEnCours: false, // true entre le clic sur « Ajouter » et la réponse du serveur
+};
+
+/**
+ * Coche ou décoche un choix d'option (règles dans lib/options.js).
+ * . groupeId : l'identifiant du groupe
+ * . choixId : l'identifiant du choix cliqué
+ */
+M.toggleChoix = function (groupeId, choixId) {
+  M.choix = toggleChoix(M.produit.options, M.choix, groupeId, choixId);
 };
 
 /**
@@ -56,13 +68,14 @@ M.stockStatus = function (variante) {
 };
 
 /**
- * Quantité de la variante choisie déjà présente dans le panier.
+ * Quantité de la variante choisie déjà présente dans le panier, toutes options
+ * confondues (les lignes d'une même variante se partagent son stock).
  * > la quantité au panier, 0 si la variante n'y est pas
  */
 M.quantityInCart = function () {
-  let ligne = PanierData.read().find((autre) => autre.variantId === M.varianteId);
-
-  return ligne === undefined ? 0 : ligne.quantite;
+  return PanierData.read()
+    .filter((ligne) => ligne.variantId === M.varianteId)
+    .reduce((total, ligne) => total + ligne.quantite, 0);
 };
 
 /**
@@ -154,7 +167,7 @@ M.addToCart = async function () {
     };
   }
 
-  PanierData.add(M.varianteId, M.quantite);
+  PanierData.add(M.varianteId, M.quantite, choixIds(M.choix));
   return { ajoute: true, message: { type: "succes", texte: `${M.quantite} article(s) ajouté(s) au panier.` } };
 };
 
@@ -168,25 +181,31 @@ M.cartCount = function () {
 
 /**
  * Les données dont la fiche a besoin pour s'afficher.
- * > { produit (variantes enrichies de leur statutStock), varianteId, imageIndex, quantite, statutStock, totalCents,
- *     moinsPossible, plusPossible, achatPossible }
+ * > { produit (variantes enrichies de leur statutStock, options de leur état `selectionne`), varianteId,
+ *     imageIndex, quantite, statutStock, unitCents (prix unitaire avec suppléments), totalCents,
+ *     moinsPossible, plusPossible, achatPossible, optionsManquantes }
  */
 M.ficheData = function () {
   let variante = M.currentVariante();
+  let unitCents = variante.prixCents + supplementCents(M.produit.options, M.choix);
+  let optionsManquantes = hasMissing(M.produit.options, M.choix);
 
   return {
     produit: {
       ...M.produit,
       variantes: M.produit.variantes.map((item) => ({ ...item, statutStock: M.stockStatus(item) })),
+      options: groupesAvecEtat(M.produit.options, M.choix),
     },
     varianteId: M.varianteId,
     imageIndex: M.imageIndex,
     quantite: M.quantite,
     statutStock: M.stockStatus(variante),
-    totalCents: variante.prixCents * M.quantite,
+    unitCents: unitCents,
+    totalCents: unitCents * M.quantite,
     moinsPossible: M.quantite > 1,
     plusPossible: M.quantite < M.maxAddable(),
-    achatPossible: variante.stock > 0,
+    achatPossible: variante.stock > 0 && !optionsManquantes,
+    optionsManquantes: optionsManquantes,
   };
 };
 
@@ -201,15 +220,18 @@ C.charger = async function (slug) {
   M.varianteId = null;
   M.imageIndex = 0;
   M.quantite = 1;
+  M.choix = {};
   M.introuvable = false;
   M.message = null;
   M.ajoutEnCours = false;
 
   try {
     let reponse = await ProduitData.fetchOne(slug);
-    M.produit = reponse.produit;
+    // Un back plus ancien ne renvoie pas « options » : la fiche reste utilisable sans.
+    M.produit = { ...reponse.produit, options: reponse.produit.options ?? [] };
     M.seuil = reponse.seuilBientotEpuise;
     M.varianteId = M.defaultVarianteId(reponse.produit);
+    M.choix = defaultChoix(M.produit.options);
   } catch (erreur) {
     if (erreur.statut === 404) {
       M.introuvable = true;
@@ -227,6 +249,18 @@ C.charger = async function (slug) {
 C.handler_selectVariante = function (id) {
   M.varianteId = id;
   M.quantite = M.clampQuantite(M.quantite);
+  M.message = null;
+  V.rafraichir();
+};
+
+/**
+ * Choix d'une option : mémorise le choix et reconstruit la page, dont le prix
+ * tient compte du supplément.
+ * . groupeId : l'identifiant du groupe d'options
+ * . choixId : l'identifiant du choix coché ou décoché
+ */
+C.handler_selectOption = function (groupeId, choixId) {
+  M.toggleChoix(groupeId, choixId);
   M.message = null;
   V.rafraichir();
 };
@@ -325,6 +359,7 @@ V.createPageFragment = function () {
         surImage: C.handler_selectImage,
         surQuantite: C.handler_changeQuantite,
         surAjout: C.handler_addToCart,
+        surOption: C.handler_selectOption,
       })
     );
   }

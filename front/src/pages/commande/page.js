@@ -3,6 +3,7 @@ import { CommandeData } from "../../data/commande.js";
 import { PanierData } from "../../data/panier.js";
 import { ProduitData } from "../../data/produit.js";
 import { goTo } from "../../lib/navigation.js";
+import { choixDeLigne, ligneInvalide } from "../../lib/options.js";
 import { ajusterLignes, texteAjustements } from "../../lib/stock.js";
 import { htmlToFragment } from "../../lib/utils.js";
 import { EncartValidationView } from "../../ui/encart-validation/index.js";
@@ -15,14 +16,16 @@ import templateVide from "./vide.html?raw";
 /**
  * Page « Récapitulatif de commande » (US CMD-a), à l'adresse /commande.
  *
- * M : les lignes du panier, les variantes relues auprès de l'API (noms et prix
- * actuels), la session et l'état d'envoi. V : le gabarit, les lignes et
+ * M : les lignes du panier (options comprises), les variantes et groupes
+ * d'options relus auprès de l'API (noms, prix et suppléments actuels), la
+ * session et l'état d'envoi. V : le gabarit, les lignes et
  * l'encart de confirmation. C : contrôle la connexion, charge, valide la commande.
  */
 
 let M = {
-  lignes: [], // [{ variantId, quantite }] : le panier du navigateur
+  lignes: [], // [{ variantId, quantite, options }] : le panier du navigateur
   variantes: [], // les variantes de ces lignes, telles que l'API les renvoie
+  groupes: {}, // les groupes d'options des produits du panier : { [idProduit]: [groupe] }
   session: null, // { connecte, email?, role? } renvoyé par le serveur, ou null
   echec: false, // true si l'API n'a pas pu répondre
   envoiEnCours: false, // true entre le clic sur « Confirmer » et la réponse du serveur
@@ -39,8 +42,31 @@ M.findVariante = function (variantId) {
 };
 
 /**
+ * Les options d'une ligne que le serveur reconnaît pour son produit.
+ * . ligne : la ligne du panier
+ * > un tableau de { id, libelle, supplementCents }
+ */
+M.lineChoix = function (ligne) {
+  let variante = M.findVariante(ligne.variantId);
+
+  return choixDeLigne(ligne.options, variante.produit.id, M.groupes[variante.produit.id] ?? []);
+};
+
+/**
+ * Une ligne ne pourrait-elle pas être commandée (option disparue, groupe
+ * obligatoire sans choix) ?
+ * . ligne : la ligne du panier
+ * > true si elle doit être retirée du panier
+ */
+M.lineInvalid = function (ligne) {
+  let variante = M.findVariante(ligne.variantId);
+
+  return ligneInvalide(ligne.options, variante.produit.id, M.groupes[variante.produit.id] ?? []);
+};
+
+/**
  * Remet le panier d'accord avec le serveur : retire les lignes dont la variante
- * n'existe plus, puis ramène les quantités au stock (US STK-c) en retirant les
+ * ou une option n'existe plus, puis ramène les quantités au stock (US STK-c) en retirant les
  * variantes épuisées.
  * > { retirees, ajustements } : le nombre de lignes disparues du serveur et les
  *   lignes de stock modifiées (voir ajusterLignes)
@@ -51,6 +77,10 @@ M.reconcile = function () {
   for (let i = 0; i < M.lignes.length; i++) {
     if (M.findVariante(M.lignes[i].variantId) === undefined) {
       PanierData.remove(M.lignes[i].variantId);
+      retirees++;
+    } else if (M.lineInvalid(M.lignes[i])) {
+      // Une option n'existe plus ou manque : le serveur refuserait la commande.
+      PanierData.remove(M.lignes[i].variantId, M.lignes[i].options);
       retirees++;
     }
   }
@@ -72,18 +102,22 @@ M.isConnected = function () {
 
 /**
  * Les lignes prêtes à afficher.
- * > un tableau de { nom, libelle, quantite, prixUnitaireCents, totalCents }
+ * > un tableau de { nom, libelle, options, quantite, prixUnitaireCents (suppléments
+ *   des options compris), totalCents }
  */
 M.articles = function () {
   return M.lignes.map((ligne) => {
     let variante = M.findVariante(ligne.variantId);
+    let choix = M.lineChoix(ligne);
+    let unitaire = variante.prixCents + choix.reduce((total, autre) => total + autre.supplementCents, 0);
 
     return {
       nom: variante.produit.nom,
       libelle: variante.libelle,
+      options: choix,
       quantite: ligne.quantite,
-      prixUnitaireCents: variante.prixCents,
-      totalCents: variante.prixCents * ligne.quantite,
+      prixUnitaireCents: unitaire,
+      totalCents: unitaire * ligne.quantite,
     };
   });
 };
@@ -106,7 +140,9 @@ let C = {};
 C.syncStock = async function () {
   if (M.lignes.length === 0) return null;
 
-  M.variantes = (await ProduitData.fetchVariantes(M.lignes.map((ligne) => ligne.variantId))).variantes;
+  let reponse = await ProduitData.fetchVariantes([...new Set(M.lignes.map((ligne) => ligne.variantId))]);
+  M.variantes = reponse.variantes;
+  M.groupes = reponse.options ?? {};
 
   let reconciliation = M.reconcile();
   return texteAjustements(reconciliation.ajustements, reconciliation.retirees);
@@ -122,6 +158,7 @@ C.charger = async function () {
   M.echec = false;
   M.envoiEnCours = false;
   M.variantes = [];
+  M.groupes = {};
   M.lignes = PanierData.read();
 
   try {

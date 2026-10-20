@@ -50,12 +50,14 @@ M.formatDate = function (dateSql) {
 
 /**
  * Les lignes prêtes à afficher.
- * > un tableau de { nom, libelle, quantite, prixUnitaireCents, totalCents }
+ * > un tableau de { nom, libelle, options (figées à la commande), quantite,
+ *   prixUnitaireCents (suppléments compris), totalCents }
  */
 M.articles = function () {
   return M.commande.lignes.map((ligne) => ({
     nom: ligne.produit,
     libelle: ligne.libelle,
+    options: ligne.options ?? [],
     quantite: ligne.quantite,
     prixUnitaireCents: ligne.prixUnitaireCents,
     totalCents: ligne.totalCents,

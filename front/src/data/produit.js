@@ -28,7 +28,9 @@ ProduitData.fetchAll = async function () {
  * La réponse contient { produit, seuilBientotEpuise } avec produit de la forme
  * { id, nom, slug, description, descriptionLongue, ingredients, teinte, image,
  * images: [chemin], categorie: { libelle, slug },
- * variantes: [{ id, libelle, prixCents, stock }] }. Les prix sont en centimes.
+ * variantes: [{ id, libelle, prixCents, stock }],
+ * options: [{ id, libelle, multiple, obligatoire,
+ * choix: [{ id, libelle, supplementCents }] }] }. Les prix sont en centimes.
  *
  * Lève une ErreurApi (statut 404 si le produit n'existe pas).
  */
@@ -44,10 +46,12 @@ ProduitData.fetchOne = async function (slug) {
 /**
  * Les variantes d'un panier : GET /api/panier?ids=3,5
  *
- * La réponse contient { variantes }. Chaque variante est de la forme
- * { variantId, libelle, prixCents, stock, produit: { nom, slug, image, teinte } }.
- * Les prix sont en centimes. Une variante inconnue du serveur est absente de la
- * liste (la page doit la retirer du panier).
+ * La réponse contient { variantes, options, seuilBientotEpuise }. Chaque variante est de la forme
+ * { variantId, libelle, prixCents, stock, produit: { id, nom, slug, image, teinte } } ;
+ * options est un objet { [idProduit]: [{ id, libelle, multiple, obligatoire,
+ * choix: [{ id, libelle, supplementCents }] }] } (un produit sans option en est
+ * absent). Les prix sont en centimes. Une variante inconnue du serveur est
+ * absente de la liste (la page doit la retirer du panier).
  *
  * Lève une ErreurApi (statut 400 si les identifiants sont invalides).
  *

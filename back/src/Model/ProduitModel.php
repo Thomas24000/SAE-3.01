@@ -140,8 +140,8 @@ final class ProduitModel
      * inconnu est simplement absent du résultat.
      *
      * @param array<int, int> $ids Identifiants de variantes (déjà validés comme entiers positifs).
-     * @return array<int, array{variantId:int, libelle:string, prixCents:int,
-     *                          produit:array{nom:string, slug:string, image:string, teinte:int}}>
+     * @return array<int, array{variantId:int, libelle:string, prixCents:int, stock:int,
+     *                          produit:array{id:int, nom:string, slug:string, image:string, teinte:int}}>
      */
     public function findVariantesByIds(array $ids): array
     {
@@ -157,6 +157,8 @@ final class ProduitModel
             'SELECT variante.id,
                     variante.libelle,
                     variante.prix_cents,
+                    variante.stock,
+                    produit.id AS produit_id,
                     produit.nom,
                     produit.slug,
                     produit.image,
@@ -173,7 +175,9 @@ final class ProduitModel
                 'variantId' => (int) $ligne['id'],
                 'libelle'   => $ligne['libelle'],
                 'prixCents' => (int) $ligne['prix_cents'],
+                'stock'     => (int) $ligne['stock'],
                 'produit'   => [
+                    'id'     => (int) $ligne['produit_id'],
                     'nom'    => $ligne['nom'],
                     'slug'   => $ligne['slug'],
                     'image'  => $ligne['image'],
@@ -182,6 +186,69 @@ final class ProduitModel
             ],
             $requete->fetchAll()
         );
+    }
+
+    /**
+     * Les groupes d'options des produits demandés (service, toppings...), chacun
+     * avec ses choix et leur supplément de prix, dans l'ordre d'affichage.
+     *
+     * @param array<int, int> $produitIds Identifiants de produits (entiers positifs).
+     * @return array<int, array<int, array{id:int, libelle:string, multiple:bool, obligatoire:bool,
+     *                                     choix:array<int, array{id:int, libelle:string, supplementCents:int}>}>>
+     *         Les groupes de chaque produit, indexés par identifiant de produit ;
+     *         un produit sans option est absent.
+     */
+    public function findOptionsByProduits(array $produitIds): array
+    {
+        if ($produitIds === []) {
+            return [];
+        }
+
+        // Un « ? » par identifiant : les valeurs restent des paramètres liés.
+        $marqueurs = implode(',', array_fill(0, count($produitIds), '?'));
+
+        $requete = $this->pdo->prepare(
+            'SELECT option_groupe.id          AS groupe_id,
+                    option_groupe.produit_id,
+                    option_groupe.libelle     AS groupe_libelle,
+                    option_groupe.multiple,
+                    option_groupe.obligatoire,
+                    option_choix.id           AS choix_id,
+                    option_choix.libelle      AS choix_libelle,
+                    option_choix.supplement_cents
+               FROM option_groupe
+         INNER JOIN option_choix ON option_choix.groupe_id = option_groupe.id
+              WHERE option_groupe.produit_id IN (' . $marqueurs . ')
+           ORDER BY option_groupe.position, option_groupe.id, option_choix.position, option_choix.id'
+        );
+        $requete->execute(array_values($produitIds));
+
+        // Les lignes arrivent à plat (une par choix) : on les regroupe par
+        // produit puis par groupe, en conservant l'ordre de la requête.
+        $parProduit = array_reduce(
+            $requete->fetchAll(),
+            static function (array $produits, array $ligne): array {
+                $produitId = (int) $ligne['produit_id'];
+                $groupeId  = (int) $ligne['groupe_id'];
+                $produits[$produitId][$groupeId] ??= [
+                    'id'          => $groupeId,
+                    'libelle'     => $ligne['groupe_libelle'],
+                    'multiple'    => (bool) $ligne['multiple'],
+                    'obligatoire' => (bool) $ligne['obligatoire'],
+                    'choix'       => [],
+                ];
+                $produits[$produitId][$groupeId]['choix'][] = [
+                    'id'              => (int) $ligne['choix_id'],
+                    'libelle'         => $ligne['choix_libelle'],
+                    'supplementCents' => (int) $ligne['supplement_cents'],
+                ];
+
+                return $produits;
+            },
+            []
+        );
+
+        return array_map(static fn (array $groupes): array => array_values($groupes), $parProduit);
     }
 
     /**
@@ -194,7 +261,9 @@ final class ProduitModel
      *               descriptionLongue:string, ingredients:string, teinte:int,
      *               image:string, images:array<int, string>,
      *               categorie:array{libelle:string, slug:string},
-     *               variantes:array<int, array{id:int, libelle:string, prixCents:int, stock:int}>}|null
+     *               variantes:array<int, array{id:int, libelle:string, prixCents:int, stock:int}>,
+     *               options:array<int, array{id:int, libelle:string, multiple:bool, obligatoire:bool,
+     *                                        choix:array<int, array{id:int, libelle:string, supplementCents:int}>}>}|null
      *         null si aucun produit ne porte ce slug.
      */
     public function findBySlug(string $slug): ?array
@@ -263,6 +332,7 @@ final class ProduitModel
                 ],
                 $variantes
             ),
+            'options'     => $this->findOptionsByProduits([(int) $produit['id']])[(int) $produit['id']] ?? [],
         ];
     }
 }

@@ -56,4 +56,20 @@ CommandeData.fetchAll = function (filtres, page) {
   return getRequest(`commandes?${query.toString()}`);
 };
 
+/**
+ * Ce qu'on peut recommander d'une ancienne commande : GET /api/commande/reprise
+ *
+ * Réponse : { numero, lignes: [{ variantId, nom, libelle, quantiteDemandee,
+ * quantite, options, statut, motif }] }. statut vaut "ok", "ajustee" (quantité
+ * réduite au stock) ou "indisponible" (quantite vaut 0, motif dit pourquoi).
+ * Rien n'est modifié côté serveur : c'est à la page d'ajouter les lignes au panier.
+ *
+ * Lève une ErreurApi (401 non connecté, 400 numéro invalide, 404 commande inconnue).
+ *
+ * @param {string} numero - le numéro de commande (ex. CC-2026-000123).
+ */
+CommandeData.fetchReprise = function (numero) {
+  return getRequest(`commande/reprise?numero=${encodeURIComponent(numero)}`);
+};
+
 export { CommandeData };

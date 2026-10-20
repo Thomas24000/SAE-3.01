@@ -1,5 +1,5 @@
-<li>
-  <a href="/commande/{{numero}}" data-link class="flex min-h-16 items-center justify-between gap-4 py-3 transition-colors hover:bg-bg-subtle">
+<li class="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+  <a href="/commande/{{numero}}" data-link class="flex min-h-16 min-w-0 flex-1 items-center justify-between gap-4 transition-colors hover:bg-bg-subtle">
     <span class="flex min-w-0 flex-col items-start gap-1">
       <span class="text-sm font-semibold md:text-base">{{numero}}</span>
       <span class="text-xs text-fg-muted">{{date}}</span>
@@ -7,4 +7,5 @@
     </span>
     <span class="shrink-0 text-base leading-snug font-bold">{{total}}</span>
   </a>
+  <button type="button" data-action="reprise" data-numero="{{numero}}" aria-label="Commander à nouveau la commande {{numero}}" {{desactive}} class="flex min-h-10 w-fit shrink-0 items-center rounded-md border border-border-default px-4 text-sm font-medium transition-colors hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-40">Commander à nouveau</button>
 </li>

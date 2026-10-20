@@ -19,6 +19,7 @@ SET NAMES utf8mb4;
 DROP TABLE IF EXISTS parametre;
 DROP TABLE IF EXISTS option_choix;
 DROP TABLE IF EXISTS option_groupe;
+DROP TABLE IF EXISTS journal_commande;
 DROP TABLE IF EXISTS mouvement_stock;
 DROP TABLE IF EXISTS ligne_commande_option;
 DROP TABLE IF EXISTS ligne_commande;
@@ -186,11 +187,13 @@ CREATE TABLE parametre (
 -- email : identifiant de connexion, unique (stocké en minuscules par l'API).
 -- mot_de_passe : hachage produit par password_hash() (jamais le mot de passe
 -- en clair) ; 255 caractères laissent la place aux futurs algorithmes.
+-- nom : nom d'affichage facultatif, modifiable dans l'espace personnel (SUI-b).
 -- role : décidé ici, côté serveur ; le navigateur ne peut pas le choisir.
 -- ---------------------------------------------------------------------------
 CREATE TABLE utilisateur (
     id           INT UNSIGNED            NOT NULL AUTO_INCREMENT,
     email        VARCHAR(254)            NOT NULL,
+    nom          VARCHAR(100)            NULL,
     mot_de_passe VARCHAR(255)            NOT NULL,
     role         ENUM('client', 'admin') NOT NULL DEFAULT 'client',
     cree_le      DATETIME                NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -322,6 +325,36 @@ CREATE TABLE mouvement_stock (
   COLLATE = utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------------
+-- Journal des modifications de commandes par les administrateurs (US PIL-b)
+--
+-- Une ligne par changement de statut : qui (admin_id), quelle commande,
+-- de quel statut à quel statut, et quand. Écrit dans la même transaction que le
+-- changement : pas de modification sans trace. Les lignes ne sont jamais
+-- modifiées. Un compte administrateur référencé ne peut pas être supprimé.
+-- ---------------------------------------------------------------------------
+CREATE TABLE journal_commande (
+    id              INT UNSIGNED                                    NOT NULL AUTO_INCREMENT,
+    commande_id     INT UNSIGNED                                    NOT NULL,
+    admin_id        INT UNSIGNED                                    NOT NULL,
+    ancien_statut   ENUM('en_cours', 'prete', 'retiree', 'annulee') NOT NULL,
+    nouveau_statut  ENUM('en_cours', 'prete', 'retiree', 'annulee') NOT NULL,
+    cree_le         DATETIME                                        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (id),
+    KEY idx_journal_commande (commande_id),
+    KEY idx_journal_admin (admin_id),
+
+    CONSTRAINT fk_journal_commande
+        FOREIGN KEY (commande_id) REFERENCES commande (id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_journal_admin
+        FOREIGN KEY (admin_id) REFERENCES utilisateur (id)
+        ON DELETE RESTRICT
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
 -- Jeu de données
 -- ---------------------------------------------------------------------------
 INSERT INTO categorie (id, libelle, slug, description) VALUES
@@ -430,6 +463,6 @@ INSERT INTO parametre (cle, valeur) VALUES
 
 -- Comptes de démonstration : alice@example.com / azerty (client),
 -- admin@example.com / motdepasse (admin). Les mots de passe sont stockés hachés.
-INSERT INTO utilisateur (email, mot_de_passe, role) VALUES
-    ('alice@example.com', '$2y$12$usrCg0MWBP4EzYZMwaL.xuLJL2dw9Rz36dZg3tNLXTivNt8NVv3PW', 'client'),
-    ('admin@example.com', '$2y$12$8APxNRkGWxMMBSamJ1eewuXeMWJ7Eq/sZBm.466uy0pt4.MCQWyzi', 'admin');
+INSERT INTO utilisateur (email, nom, mot_de_passe, role) VALUES
+    ('alice@example.com', 'Alice Martin', '$2y$12$usrCg0MWBP4EzYZMwaL.xuLJL2dw9Rz36dZg3tNLXTivNt8NVv3PW', 'client'),
+    ('admin@example.com', NULL, '$2y$12$8APxNRkGWxMMBSamJ1eewuXeMWJ7Eq/sZBm.466uy0pt4.MCQWyzi', 'admin');

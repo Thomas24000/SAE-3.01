@@ -10,6 +10,7 @@ const ICONES = {
   tableau: "nav-tableau-de-bord.svg",
   produits: "nav-produits.svg",
   categories: "nav-categories.svg",
+  commandes: "commandes.svg",
 };
 
 // Navigation du back-office : barre latérale (icônes et libellés) en desktop,
@@ -17,7 +18,7 @@ const ICONES = {
 // Une section pas encore construite reste visible mais n'est pas un lien.
 let NavigationAdminView = {
   /**
-   * @param {{liens: Array<{libelle: string, href: string, icone: "tableau"|"produits"|"categories",
+   * @param {{liens: Array<{libelle: string, href: string, icone: "tableau"|"produits"|"categories"|"commandes",
    *          disponible: boolean}>}} data - les sections à afficher.
    * @param {{surDeconnexion: function(): void}} actions - appelée au clic sur « Déconnexion ».
    * @returns {DocumentFragment}

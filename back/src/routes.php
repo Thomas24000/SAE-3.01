@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 use App\Controller\AdminAuthController;
 use App\Controller\AdminCategorieController;
+use App\Controller\AdminCommandeController;
 use App\Controller\AdminProduitController;
 use App\Controller\AuthController;
 use App\Controller\CommandeController;
+use App\Controller\CompteController;
 use App\Controller\ProduitController;
 use App\Controller\StatsController;
 
@@ -30,6 +32,10 @@ return [
     'POST /api/logout'      => [AuthController::class,      'logout'],
     'POST /api/commande'    => [CommandeController::class,  'store'],
     'GET  /api/commande'    => [CommandeController::class,  'show'],
+    'GET  /api/commandes'   => [CommandeController::class,  'index'],
+    'GET  /api/compte'              => [CompteController::class,    'show'],
+    'POST /api/compte/profil'       => [CompteController::class,    'updateProfile'],
+    'POST /api/compte/mot-de-passe' => [CompteController::class,    'updatePassword'],
     'POST /api/admin/login'  => [AdminAuthController::class, 'login'],
     'GET  /api/admin/me'     => [AdminAuthController::class, 'me'],
     'POST /api/admin/logout' => [AdminAuthController::class, 'logout'],
@@ -46,5 +52,8 @@ return [
     'POST /api/admin/produits/images/supprimer' => [AdminProduitController::class, 'deleteImage'],
     'POST /api/admin/produits/images/principale' => [AdminProduitController::class, 'setMainImage'],
     'POST /api/admin/parametres/seuil'      => [AdminProduitController::class, 'updateThreshold'],
+    'GET  /api/admin/commandes'             => [AdminCommandeController::class, 'index'],
+    'GET  /api/admin/commande'              => [AdminCommandeController::class, 'show'],
+    'POST /api/admin/commandes/statut'      => [AdminCommandeController::class, 'updateStatus'],
     'GET  /api/admin/stats' => [StatsController::class,     'index'],
 ];

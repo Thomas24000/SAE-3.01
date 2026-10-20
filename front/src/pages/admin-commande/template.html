@@ -1,0 +1,12 @@
+<div class="flex flex-1 flex-col">
+  <slot name="barre"></slot>
+
+  <div class="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 md:p-6 lg:p-8">
+    <a href="/admin/commandes" data-link class="flex min-h-10 w-fit items-center text-sm underline underline-offset-2 hover:no-underline">← Retour aux commandes</a>
+    <slot name="entete"></slot>
+    <slot name="message"></slot>
+    <slot name="contenu"></slot>
+  </div>
+
+  <slot name="modale"></slot>
+</div>

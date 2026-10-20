@@ -14,6 +14,17 @@ function libelleCompte(email) {
 }
 
 /**
+ * Destination du lien du compte : l'espace personnel pour un visiteur connecté,
+ * la connexion sinon.
+ *
+ * @param {string|null} email - l'e-mail du visiteur connecté, ou null.
+ * @returns {string} un chemin de route.
+ */
+function destinationCompte(email) {
+  return email === null ? "/connexion" : "/compte";
+}
+
+/**
  * Texte lu par les lecteurs d'écran pour le lien du panier.
  *
  * @param {number} nombre - le nombre d'articles du panier.
@@ -34,6 +45,7 @@ let HeaderView = {
    */
   html: function (data) {
     return genericRenderer(template, {
+      compteHref: destinationCompte(data.email),
       compteLibelle: libelleCompte(data.email),
       email: data.email ?? "",
       masqueConnecte: data.email === null ? "hidden" : "",
@@ -89,6 +101,8 @@ let HeaderView = {
     if (lien === null || texte === null || deconnexion === null) return;
 
     lien.setAttribute("aria-label", libelleCompte(email));
+    // Chemin complet (avec le chemin du projet), comme le pose le routeur.
+    lien.setAttribute("href", import.meta.env.BASE_URL.replace(/\/$/, "") + destinationCompte(email));
     texte.textContent = email ?? "";
     texte.hidden = email === null;
     deconnexion.hidden = email === null;

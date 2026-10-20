@@ -33,4 +33,26 @@ CommandeData.fetchOne = function (numero) {
   return getRequest(`commande?numero=${encodeURIComponent(numero)}`);
 };
 
+/**
+ * L'historique des commandes du client connecté : GET /api/commandes
+ *
+ * Réponse : { commandes: [{ numero, statut, totalCents, creeLe }], total, page,
+ * pages }, de la plus récente à la plus ancienne. Un filtre vide n'est pas envoyé.
+ *
+ * Lève une ErreurApi (401 non connecté, 400 filtre invalide).
+ *
+ * @param {{statut: string, du: string, au: string}} filtres - statut ("" pour tous),
+ *   dates AAAA-MM-JJ ("" si absentes).
+ * @param {number} page - le numéro de page, à partir de 1.
+ */
+CommandeData.fetchAll = function (filtres, page) {
+  let query = new URLSearchParams();
+  if (filtres.statut !== "") query.set("statut", filtres.statut);
+  if (filtres.du !== "") query.set("du", filtres.du);
+  if (filtres.au !== "") query.set("au", filtres.au);
+  query.set("page", String(page));
+
+  return getRequest(`commandes?${query.toString()}`);
+};
+
 export { CommandeData };

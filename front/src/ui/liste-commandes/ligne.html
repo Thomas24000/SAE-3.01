@@ -1,0 +1,15 @@
+<li class="flex items-start gap-4 p-4 md:items-center">
+  <input type="checkbox" data-id="{{id}}" aria-label="Sélectionner la commande {{numero}}" class="mt-1 size-5 shrink-0 accent-bg-brand md:mt-0" {{coche}} />
+  <div class="flex min-w-0 flex-1 flex-col gap-2 md:flex-row md:items-center md:gap-4">
+    <a href="/admin/commandes/{{numero}}" data-link class="text-sm font-semibold underline-offset-2 hover:underline md:w-40">{{numero}}</a>
+    <div class="flex min-w-0 flex-col gap-0.5 md:flex-1">
+      <p class="truncate text-sm">{{client}}</p>
+      <p class="text-xs text-fg-muted">{{date}} · {{articles}}</p>
+    </div>
+    <div class="md:w-28"><slot name="badge"></slot></div>
+    <p class="text-sm font-bold md:w-24 md:text-right">{{total}}</p>
+    <div class="flex flex-wrap gap-2 md:w-56">
+      <slot name="actions"></slot>
+    </div>
+  </div>
+</li>

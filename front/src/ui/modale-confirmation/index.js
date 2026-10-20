@@ -10,8 +10,8 @@ const IMAGES = import.meta.env.BASE_URL + "images/admin/";
 let ModaleConfirmationView = {
   /**
    * @param {{titre: string, texte: string, bouton: string, enCours: boolean,
-   *          message: ({type: string, texte: string}|null)}} data - bouton : le texte du bouton
-   *   de confirmation ; enCours : vrai pendant l'envoi (le bouton est alors inactif).
+   *          message: ({type: string, texte: string}|null), refus?: string}} data - bouton : le texte du bouton
+   *   de confirmation ; refus : le texte du bouton qui ferme la modale (« Annuler » par défaut) ; enCours : vrai pendant l'envoi (le bouton est alors inactif).
    * @param {{surConfirmation: function(): void, surAnnulation: function(): void}} actions -
    *   surAnnulation est aussi appelée à la fermeture par Échap.
    * @returns {DocumentFragment}
@@ -23,6 +23,7 @@ let ModaleConfirmationView = {
         titre: data.titre,
         texte: data.texte,
         bouton: data.bouton,
+        refus: data.refus ?? "Annuler",
         enCours: String(data.enCours),
       })
     );

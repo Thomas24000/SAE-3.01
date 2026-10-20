@@ -1,0 +1,10 @@
+<li>
+  <a href="/commande/{{numero}}" data-link class="flex min-h-16 items-center justify-between gap-4 py-3 transition-colors hover:bg-bg-subtle">
+    <span class="flex min-w-0 flex-col items-start gap-1">
+      <span class="text-sm font-semibold md:text-base">{{numero}}</span>
+      <span class="text-xs text-fg-muted">{{date}}</span>
+      <slot name="statut"></slot>
+    </span>
+    <span class="shrink-0 text-base leading-snug font-bold">{{total}}</span>
+  </a>
+</li>

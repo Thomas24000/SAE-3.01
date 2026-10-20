@@ -1,17 +1,21 @@
-<div data-ligne data-id="{{id}}" class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_6rem_auto]">
-  <label class="col-span-3 flex flex-col gap-2 text-sm sm:col-span-1">
-    Format
-    <input name="libelle" type="text" maxlength="60" autocomplete="off" value="{{libelle}}" class="h-12 min-w-0 rounded-md border border-border-default bg-bg-default px-3 text-base transition-colors hover:border-border-strong" />
-  </label>
-  <label class="flex flex-col gap-2 text-sm">
-    Prix (€)
-    <input name="prix" type="text" inputmode="decimal" autocomplete="off" value="{{prix}}" class="h-12 min-w-0 rounded-md border border-border-default bg-bg-default px-3 text-base transition-colors hover:border-border-strong" />
-  </label>
-  <label class="flex flex-col gap-2 text-sm">
-    Stock
-    <input name="stock" type="text" inputmode="numeric" autocomplete="off" value="{{stock}}" class="h-12 min-w-0 rounded-md border border-border-default bg-bg-default px-3 text-base transition-colors hover:border-border-strong" />
-  </label>
-  <button type="button" data-action="retirer-format" data-index="{{index}}" title="Supprimer ce format" aria-label="Supprimer le format {{numero}}" {{desactive}} class="flex size-12 items-center justify-center rounded-md border border-border-default transition-colors hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-40">
-    <img src="{{images}}corbeille.svg" alt="" width="18" height="18" class="size-4.5 dark:invert" />
-  </button>
+<div data-ligne class="flex flex-col gap-3 rounded-md border border-border-default p-3">
+  <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_auto]">
+    <label class="col-span-2 flex flex-col gap-2 text-sm sm:col-span-1">
+      Format
+      <input name="libelle" type="text" maxlength="60" autocomplete="off" value="{{libelle}}" class="h-12 min-w-0 rounded-md border border-border-default bg-bg-default px-3 text-base transition-colors hover:border-border-strong" />
+    </label>
+    <label class="flex flex-col gap-2 text-sm">
+      Prix (€)
+      <input name="prix" type="text" inputmode="decimal" autocomplete="off" value="{{prix}}" class="h-12 min-w-0 rounded-md border border-border-default bg-bg-default px-3 text-base transition-colors hover:border-border-strong" />
+    </label>
+    <button type="button" data-action="retirer-format" data-index="{{index}}" title="Supprimer ce format" aria-label="Supprimer le format {{numero}}" {{desactive}} class="flex size-12 items-center justify-center rounded-md border border-border-default transition-colors hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-40">
+      <img src="{{images}}corbeille.svg" alt="" width="18" height="18" class="size-4.5 dark:invert" />
+    </button>
+  </div>
+  <fieldset class="flex flex-col gap-2">
+    <legend class="mb-2 text-sm">{{legende}}</legend>
+    <div class="grid gap-3 sm:grid-cols-3">
+      <slot name="stocks"></slot>
+    </div>
+  </fieldset>
 </div>

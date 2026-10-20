@@ -1,6 +1,7 @@
 import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { formaterPrix } from "../../lib/format.js";
 import { BadgeStockView } from "../badge-stock/index.js";
+import { SelecteurOptionsView } from "../selecteur-options/index.js";
 import template from "./template.html?raw";
 import templateVariante from "./variante.html?raw";
 import templateVignette from "./vignette.html?raw";
@@ -96,18 +97,20 @@ let FicheProduitView = {
    *          statutStock: "disponible"|"bientot"|"epuise"}>},
    *          varianteId: number, imageIndex: number, quantite: number,
    *          statutStock: "disponible"|"bientot"|"epuise", totalCents: number,
-   *          moinsPossible: boolean, plusPossible: boolean, achatPossible: boolean}} data
-   *        varianteId désigne la variante choisie, dont le prix est affiché ;
-   *        imageIndex l'image affichée en grand.
+   *          moinsPossible: boolean, plusPossible: boolean, achatPossible: boolean,
+   *          unitCents: number, optionsManquantes: boolean}} data
+   *        varianteId désigne la variante choisie ; unitCents est son prix
+   *        avec les suppléments des options, affiché en grand ; imageIndex
+   *        l'image affichée en grand. produit.options (facultatif) liste les
+   *        groupes d'options, chaque choix portant son état `selectionne`.
    * @param {{surVariante: function(number): void, surImage: function(number): void,
-   *          surQuantite: function(number): void, surAjout: function(): void}} actions
-   *        surQuantite reçoit -1 ou 1.
+   *          surQuantite: function(number): void, surAjout: function(): void,
+   *          surOption: function(number, number): void}} actions
+   *        surQuantite reçoit -1 ou 1 ; surOption reçoit l'id du groupe puis du choix.
    * @returns {DocumentFragment}
    */
   dom: function (data, actions) {
     let produit = data.produit;
-    let choisie = produit.variantes.find((variante) => variante.id === data.varianteId);
-
     let fragment = htmlToFragment(
       genericRenderer(template, {
         nom: produit.nom,
@@ -117,14 +120,16 @@ let FicheProduitView = {
         categorie: produit.categorie.libelle,
         teinte: produit.teinte,
         image: produit.images[data.imageIndex],
-        prix: formaterPrix(choisie.prixCents),
+        prix: formaterPrix(data.unitCents),
         quantite: data.quantite,
         moinsDesactive: !data.moinsPossible,
         plusDesactive: !data.plusPossible,
         achatDesactive: data.achatPossible ? "" : "disabled",
         libelleAchat: data.achatPossible
           ? `Ajouter au panier · ${formaterPrix(data.totalCents)}`
-          : "Produit indisponible",
+          : data.optionsManquantes
+            ? "Choisissez vos options"
+            : "Produit indisponible",
       })
     );
 
@@ -144,6 +149,13 @@ let FicheProduitView = {
       FicheProduitView.domVariante(variante, variante.id === data.varianteId)
     );
     fragment.querySelector('slot[name="variantes"]').replaceWith(...boutons);
+
+    let slotOptions = fragment.querySelector('slot[name="options"]');
+    if (produit.options?.length > 0) {
+      slotOptions.replaceWith(SelecteurOptionsView.dom(produit.options, actions.surOption));
+    } else {
+      slotOptions.remove();
+    }
 
     // Délégation : un seul écouteur sur la fiche, qui survit si les boutons
     // sont recréés. Les actions reconstruisent la page : le focus est rendu

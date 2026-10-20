@@ -48,7 +48,8 @@ let M = {
   description: "",
   descriptionLongue: "",
   ingredients: "",
-  variantes: [], // [{ id, libelle, prix, stock }] : textes saisis
+  variantes: [], // formats saisis : [{ libelle, prix, stocks: [{ id, choixId, service, stock }] }] (textes)
+  services: [], // [{ id, libelle }] : les services du produit (US OPT-b), vide s'il n'en a pas
   categories: [], // [{ id, libelle }]
   images: [], // [{ id, src, miniature, principale }]
   seuil: 5, // seuil « Bientôt épuisé » enregistré
@@ -62,11 +63,53 @@ let M = {
 };
 
 /**
+ * Les stocks d'un format : un par service du produit, ou un seul sans service.
+ * . stocksExistants : les variantes déjà enregistrées pour ce format ([] pour un nouveau format)
+ * > [{ id, choixId, service, stock }] ; un service sans variante a un stock vide (non proposé)
+ *   pour un format existant, "0" pour un nouveau format
+ */
+M.formatStocks = function (stocksExistants) {
+  let nouveau = stocksExistants.length === 0;
+
+  if (M.services.length === 0) {
+    let existant = stocksExistants[0];
+    return [{ id: existant?.id ?? null, choixId: null, service: "", stock: existant ? String(existant.stock) : "0" }];
+  }
+
+  return M.services.map((service) => {
+    let existant = stocksExistants.find((variante) => variante.choixId === service.id);
+
+    return {
+      id: existant?.id ?? null,
+      choixId: service.id,
+      service: service.libelle,
+      stock: existant ? String(existant.stock) : nouveau ? "0" : "",
+    };
+  });
+};
+
+/**
  * Une ligne de format vide, prête à remplir.
- * > { id: null, libelle: "", prix: "", stock: "0" }
+ * > { libelle: "", prix: "", stocks } (voir formatStocks)
  */
 M.emptyFormat = function () {
-  return { id: null, libelle: "", prix: "", stock: "0" };
+  return { libelle: "", prix: "", stocks: M.formatStocks([]) };
+};
+
+/**
+ * Regroupe les variantes reçues (une par combinaison) en formats à saisir.
+ * . variantes : [{ id, libelle, choixId, prixCents, stock }]
+ * > [{ libelle, prix, stocks }] : un format par libellé, dans l'ordre reçu ; son prix est celui de la
+ *   première de ses variantes
+ */
+M.groupFormats = function (variantes) {
+  let libelles = [...new Set(variantes.map((variante) => variante.libelle))];
+
+  return libelles.map((libelle) => {
+    let deLeur = variantes.filter((variante) => variante.libelle === libelle);
+
+    return { libelle: libelle, prix: M.priceToText(deLeur[0].prixCents), stocks: M.formatStocks(deLeur) };
+  });
 };
 
 /**
@@ -118,7 +161,9 @@ M.setState = function (etat) {
  * > un entier
  */
 M.stockTotal = function () {
-  return M.variantes.reduce((somme, variante) => somme + (M.textToStock(variante.stock) ?? 0), 0);
+  return M.variantes
+    .flatMap((variante) => variante.stocks)
+    .reduce((somme, stock) => somme + (M.textToStock(stock.stock) ?? 0), 0);
 };
 
 /**
@@ -155,8 +200,20 @@ M.validate = function () {
     if (M.textToPrice(variante.prix) === null) {
       return `Le prix du format « ${libelle} » doit être un montant en euros supérieur à 0 (par exemple 3,50).`;
     }
-    if (M.textToStock(variante.stock) === null) {
-      return `Le stock du format « ${libelle} » doit être un nombre entier positif ou nul.`;
+
+    for (let j = 0; j < variante.stocks.length; j++) {
+      let stock = variante.stocks[j];
+      // Un stock vide retire la combinaison, sauf sans service où le stock est obligatoire.
+      if (stock.stock.trim() === "" && stock.choixId !== null) continue;
+
+      if (M.textToStock(stock.stock) === null) {
+        let cible = stock.service === "" ? `du format « ${libelle} »` : `« ${stock.service} » du format « ${libelle} »`;
+        return `Le stock ${cible} doit être un nombre entier positif ou nul.`;
+      }
+    }
+
+    if (variante.stocks.every((stock) => stock.choixId !== null && stock.stock.trim() === "")) {
+      return `Le format « ${libelle} » doit être proposé avec au moins un service.`;
     }
   }
   return null;
@@ -173,15 +230,21 @@ M.payload = function () {
     description: M.description,
     descriptionLongue: M.descriptionLongue,
     ingredients: M.ingredients,
-    variantes: M.variantes.map((variante) => {
-      let ligne = {
-        libelle: variante.libelle,
-        prixCents: M.textToPrice(variante.prix),
-        stock: M.textToStock(variante.stock),
-      };
-      if (variante.id !== null) ligne.id = variante.id;
-      return ligne;
-    }),
+    // Une variante par combinaison proposée ; un stock vide en est absent (et supprime la variante existante).
+    variantes: M.variantes.flatMap((variante) =>
+      variante.stocks
+        .filter((stock) => stock.stock.trim() !== "")
+        .map((stock) => {
+          let ligne = {
+            libelle: variante.libelle,
+            choixId: stock.choixId,
+            prixCents: M.textToPrice(variante.prix),
+            stock: M.textToStock(stock.stock),
+          };
+          if (stock.id !== null) ligne.id = stock.id;
+          return ligne;
+        })
+    ),
   };
   if (M.id !== null) corps.id = M.id;
   return corps;
@@ -225,6 +288,7 @@ C.charger = async function (idTexte) {
   M.id = null;
   M.nomEnregistre = "";
   M.slug = "";
+  M.services = [];
   M.setState({
     nom: "",
     categorieId: "",
@@ -273,24 +337,21 @@ C.charger = async function (idTexte) {
 
 /**
  * Place un produit reçu du serveur dans le modèle.
- * . produit : { id, nom, slug, categorieId, description, descriptionLongue, ingredients, variantes, images }
+ * . produit : { id, nom, slug, categorieId, description, descriptionLongue, ingredients, variantes (une par combinaison
+ *   format + service), services, images }
  */
 C.applyProduct = function (produit) {
   M.id = produit.id;
   M.nomEnregistre = produit.nom;
   M.slug = produit.slug;
+  M.services = produit.services;
   M.setState({
     nom: produit.nom,
     categorieId: String(produit.categorieId),
     description: produit.description,
     descriptionLongue: produit.descriptionLongue,
     ingredients: produit.ingredients,
-    variantes: produit.variantes.map((variante) => ({
-      id: variante.id,
-      libelle: variante.libelle,
-      prix: M.priceToText(variante.prixCents),
-      stock: String(variante.stock),
-    })),
+    variantes: M.groupFormats(produit.variantes),
   });
   M.images = produit.images;
 };

@@ -78,10 +78,11 @@ final class ProduitController
      * leur prix et leur stock actuels. Le panier du navigateur ne sert qu'à
      * l'affichage : prix et stock viennent toujours d'ici.
      *
-     * Réponse : { variantes: [...], options: { idProduit: [groupes] }, seuilBientotEpuise: n }.
+     * Réponse : { variantes: [...], options: { idProduit: [groupes] }, combinaisons: { idProduit: [variantes] }, seuilBientotEpuise: n }.
      * Une variante inconnue est absente ; « options » donne tous les groupes
      * d'options (avec leurs choix et suppléments) des produits du panier, pour
-     * chiffrer les lignes et en modifier les options.
+     * chiffrer les lignes et en modifier les options ; « combinaisons » donne toutes les
+     * variantes de ces produits (format + service, avec leur stock) pour changer de service.
      * Erreurs : 400 si « ids » est absent, mal formé ou trop long.
      */
     public function panier(Request $requete): void
@@ -101,15 +102,21 @@ final class ProduitController
 
         $variantes = $this->produits->findVariantesByIds($ids);
 
-        // Les groupes d'options des produits du panier, pour modifier les options d'une ligne.
-        $options = $this->produits->findOptionsByProduits(array_values(array_unique(array_map(
+        $produitIds = array_values(array_unique(array_map(
             static fn (array $variante): int => $variante['produit']['id'],
             $variantes
-        ))));
+        )));
+
+        // Les groupes d'options des produits du panier, pour modifier les options d'une ligne.
+        $options = $this->produits->findOptionsByProduits($produitIds);
+
+        // Toutes leurs variantes : changer le service d'une ligne change de variante.
+        $combinaisons = $this->produits->findCombinaisonsByProduits($produitIds);
 
         Response::json([
             'variantes'          => $variantes,
             'options'            => $options,
+            'combinaisons'       => $combinaisons,
             'seuilBientotEpuise' => $this->parametres->seuilBientotEpuise(),
         ]);
     }

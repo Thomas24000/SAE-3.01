@@ -104,7 +104,7 @@ final class CommandeModel
                 static function (int $id, int $demande) use ($variantes): void {
                     if ($variantes[$id]['stock'] < $demande) {
                         throw new DomainException(
-                            'Stock insuffisant pour « ' . $variantes[$id]['nom'] . ' » (' . $variantes[$id]['libelle']
+                            'Stock insuffisant pour « ' . $variantes[$id]['nom'] . ' » (' . $variantes[$id]['combinaison']
                             . ') : il en reste ' . $variantes[$id]['stock'] . '. Retourne au panier pour ajuster la quantité.'
                         );
                     }
@@ -750,8 +750,10 @@ final class CommandeModel
      * que deux commandes ne s'attendent jamais l'une l'autre).
      *
      * @param array<int, int> $ids Identifiants de variantes.
-     * @return array<int, array{id:int, libelle:string, prix_cents:int, stock:int, produit_id:int, nom:string}>
-     *         Indexé par identifiant de variante.
+     * @return array<int, array{id:int, libelle:string, choix_id:int|null, combinaison:string, prix_cents:int,
+     *                          stock:int, produit_id:int, nom:string}>
+     *         Indexé par identifiant de variante. combinaison : le format suivi du choix qui porte le
+     *         stock (« Pot 465 ml, Cône gaufrette »), pour les messages.
      */
     private function lireVariantes(array $ids): array
     {
@@ -759,8 +761,9 @@ final class CommandeModel
         $marqueurs = implode(',', array_fill(0, count($ids), '?'));
 
         $requete = $this->pdo->prepare(
-            'SELECT variante.id, variante.libelle, variante.prix_cents, variante.stock,
-                    produit.id AS produit_id, produit.nom
+            'SELECT variante.id, variante.libelle, variante.choix_id, variante.prix_cents, variante.stock,
+                    produit.id AS produit_id, produit.nom,
+                    (SELECT option_choix.libelle FROM option_choix WHERE option_choix.id = variante.choix_id) AS choix_libelle
                FROM variante
          INNER JOIN produit ON produit.id = variante.produit_id
               WHERE variante.id IN (' . $marqueurs . ')
@@ -777,6 +780,10 @@ final class CommandeModel
                 static fn (array $ligne): array => [
                     'id'         => (int) $ligne['id'],
                     'libelle'    => $ligne['libelle'],
+                    'choix_id'   => $ligne['choix_id'] === null ? null : (int) $ligne['choix_id'],
+                    'combinaison' => $ligne['choix_libelle'] === null
+                        ? $ligne['libelle']
+                        : $ligne['libelle'] . ', ' . $ligne['choix_libelle'],
                     'prix_cents' => (int) $ligne['prix_cents'],
                     'stock'      => (int) $ligne['stock'],
                     'produit_id' => (int) $ligne['produit_id'],
@@ -872,7 +879,8 @@ final class CommandeModel
      * Contrôle une ligne de commande d'après la base et calcule son prix.
      *
      * @param array{variantId:int, quantite:int, options?:array<int, int>} $ligne La ligne reçue.
-     * @param array<int, array{id:int, libelle:string, prix_cents:int, stock:int, produit_id:int, nom:string}> $variantes
+     * @param array<int, array{id:int, libelle:string, choix_id:int|null, combinaison:string, prix_cents:int,
+     *                         stock:int, produit_id:int, nom:string}> $variantes
      *        Les variantes lues, indexées par identifiant.
      * @param array<int, array{id:int, libelle:string, supplement_cents:int, groupe_id:int,
      *                         groupe_libelle:string, multiple:bool, produit_id:int}> $choix
@@ -894,7 +902,7 @@ final class CommandeModel
         }
 
         $invalide = new DomainException(
-            'Les options de « ' . $variante['nom'] . ' » (' . $variante['libelle']
+            'Les options de « ' . $variante['nom'] . ' » (' . $variante['combinaison']
             . ') ne sont plus valides. Retourne au panier pour les mettre à jour.'
         );
 
@@ -924,6 +932,14 @@ final class CommandeModel
         );
 
         if ($trop !== [] || $manquants !== []) {
+            throw $invalide;
+        }
+
+        // OPT-b : la variante est une combinaison format + choix porteur de stock.
+        // Le choix passé dans les options doit être celui de la variante, sinon le
+        // stock décrémenté ne serait pas celui de ce que le client a choisi.
+        if ($variante['choix_id'] !== null
+            && !in_array($variante['choix_id'], array_map(static fn (array $c): int => $c['id'], $retenus), true)) {
             throw $invalide;
         }
 

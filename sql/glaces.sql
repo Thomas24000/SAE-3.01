@@ -19,6 +19,7 @@ SET NAMES utf8mb4;
 DROP TABLE IF EXISTS parametre;
 DROP TABLE IF EXISTS option_choix;
 DROP TABLE IF EXISTS option_groupe;
+DROP TABLE IF EXISTS journal_commande;
 DROP TABLE IF EXISTS mouvement_stock;
 DROP TABLE IF EXISTS ligne_commande_option;
 DROP TABLE IF EXISTS ligne_commande;
@@ -317,6 +318,36 @@ CREATE TABLE mouvement_stock (
     CONSTRAINT fk_mouvement_commande
         FOREIGN KEY (commande_id) REFERENCES commande (id)
         ON DELETE CASCADE
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
+-- Journal des modifications de commandes par les administrateurs (US PIL-b)
+--
+-- Une ligne par changement de statut : qui (admin_id), quelle commande,
+-- de quel statut à quel statut, et quand. Écrit dans la même transaction que le
+-- changement : pas de modification sans trace. Les lignes ne sont jamais
+-- modifiées. Un compte administrateur référencé ne peut pas être supprimé.
+-- ---------------------------------------------------------------------------
+CREATE TABLE journal_commande (
+    id              INT UNSIGNED                                    NOT NULL AUTO_INCREMENT,
+    commande_id     INT UNSIGNED                                    NOT NULL,
+    admin_id        INT UNSIGNED                                    NOT NULL,
+    ancien_statut   ENUM('en_cours', 'prete', 'retiree', 'annulee') NOT NULL,
+    nouveau_statut  ENUM('en_cours', 'prete', 'retiree', 'annulee') NOT NULL,
+    cree_le         DATETIME                                        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (id),
+    KEY idx_journal_commande (commande_id),
+    KEY idx_journal_admin (admin_id),
+
+    CONSTRAINT fk_journal_commande
+        FOREIGN KEY (commande_id) REFERENCES commande (id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_journal_admin
+        FOREIGN KEY (admin_id) REFERENCES utilisateur (id)
+        ON DELETE RESTRICT
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;

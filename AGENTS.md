@@ -399,9 +399,10 @@ back/
     ├── .htaccess            Require all denied
     ├── routes.php           table 'METHODE /api/chemin' => [Controleur::class, 'methode']
     ├── Core/                Database (PDO singleton), Request (+ en-têtes), Response (json/erreur + exit), Router, SessionAdmin (garde admin + jeton CSRF), Texte (slug, nettoyage), Televersement (images : contrôle, GD, miniatures)
-    ├── Controller/          AdminAuthController, AdminCategorieController, AdminProduitController, AuthController, CommandeController, ProduitController, StatsController
+    ├── Controller/          AdminAuthController, AdminCategorieController, AdminCommandeController, AdminProduitController, AuthController, CommandeController, ProduitController, StatsController
     └── Model/               CategorieModel, CommandeModel, ProduitAdminModel, ParametreModel, ProduitModel, UtilisateurModel
 back/tests/stock.php         tests CLI du stock STK-a (base jetable, `Require all denied`)
+back/tests/commandes-admin.php tests CLI de la gestion des commandes PIL-b (base jetable, mêmes variables `STK_*`)
 back/tests/options.php       tests CLI des options dans les commandes OPT-a (base jetable : `STK_DSN`, `STK_USER`, `STK_PASS`)
 front/tests/options.test.mjs tests Node de `lib/options.js` : `node front/tests/options.test.mjs`
 front/
@@ -453,7 +454,8 @@ En dev (`npm run dev`), l'étape 5 passe par le proxy Vite vers
 | `/admin/categories/nouvelle`, `/admin/categories/:id/modifier` | `pages/admin-categorie` (même formulaire création / modification) | GOF-c | fait (non testée) |
 | `/admin/produits` | `pages/admin-produits` (recherche, filtres catégorie/stock, pagination par 6, modale de suppression) | GOF-a | fait (testée avec jsdom + faux serveur, pas sur la vraie base) |
 | `/admin/produits/nouveau`, `/admin/produits/:id/modifier` | `pages/admin-produit` (informations, images, formats et prix, seuil, suppression) | GOF-a | fait (idem) |
-| `*` | `pages/404` (statique, renvoie une chaîne) | — | fait |
+| `/admin/commandes` | `pages/admin-commandes` (liste, tri date/statut/montant, filtre statut, cases à cocher + actions en lot, modale de confirmation d'annulation) | PIL-b | fait (testée avec jsdom contre le vrai back sur MariaDB jetable, pas en navigateur) |
+| `/admin/commandes/:numero` | `pages/admin-commande` (détail complet, boutons de statut, journal, annulation confirmée) | PIL-b | fait (idem) || `*` | `pages/404` (statique, renvoie une chaîne) | — | fait |
 | `/categorie/:slug` | — | DEC-a | **à faire** (le filtre actuel est local, sans URL) |
 
 Ajouter une route : `import` + `router.addRoute(...)` **avant** `"*"`.
@@ -482,14 +484,18 @@ Ajouter une route : `import` + `router.addRoute(...)` **avant** `"*"`.
 | `indicateur` (`IndicateurView`) | `dom(data)` | `{ libelle, valeur, legende, icone, attention? }` (aucun callback) ; icônes dans `public/images/admin/` | `AdminLayout` |
 | `barre-admin` (`BarreAdminView`) | `dom(data)` | `{ section, email }` ; masquée en mobile ; avatar `public/images/admin/avatar.svg` | pages admin |
 | `connexion-admin` (`ConnexionAdminView`) | `dom(data, actions)` | `{ email, message }` ; `surConnexion(email, mdp)` | admin |
-| `navigation-admin` (`NavigationAdminView`) | `dom(data, actions)` ; sous-templates `lien.html`, `lien-indisponible.html` | `{ liens: [{ libelle, href, icone, disponible }] }` ; `surDeconnexion` ; `aria-current` posé par le routeur ; barre latérale desktop / icônes tablette / menu repliable mobile ; icônes `public/images/admin/nav-*.svg` | `AdminLayout` |
+| `badge-statut-commande` (`BadgeStatutCommandeView`) | `html`, `dom(statut)` | `"en_cours"\|"prete"\|"retiree"\|"annulee"` | liste-commandes, detail-commande-admin |
+| `filtres-commandes` (`FiltresCommandesView`) | `dom(data, actions)` | `{ tri, sens, statut }` ; `surChangement({ tri, sens, statut, champ })` | admin-commandes |
+| `liste-commandes` (`ListeCommandesView`) | `dom(data, actions)` ; sous-templates `ligne`, `action`, `vide` | `{ commandes: [{ id, numero, client, date, articles, statut, totalCents, coche, actions }], toutCoche }` ; `surSelection(id)`, `surToutSelectionner()`, `surChangement(id, statut)` | admin-commandes |
+| `actions-lot-commandes` (`ActionsLotCommandesView`) | `dom(data, actions)` ; sous-template `bouton` | `{ nombre, actions: [{ statut, libelle }] }` ; `surAction(statut)` | admin-commandes |
+| `detail-commande-admin` (`DetailCommandeAdminView`) | `dom(data, actions)` ; sous-templates `ligne`, `option`, `entree`, `action`, `vide`, `aucune-action` | `{ numero, statut, date, client, totalCents, actions, aucuneAction, lignes, journal }` ; `surAction(statut)` | admin-commande || `navigation-admin` (`NavigationAdminView`) | `dom(data, actions)` ; sous-templates `lien.html`, `lien-indisponible.html` | `{ liens: [{ libelle, href, icone, disponible }] }` ; `surDeconnexion` ; `aria-current` posé par le routeur ; barre latérale desktop / icônes tablette / menu repliable mobile ; icônes `public/images/admin/nav-*.svg` | `AdminLayout` |
 | `formulaire-connexion` / `statistiques` (anciens composants de la page admin de démo) | — | **plus utilisés** depuis GOF-b ; à supprimer sur demande | aucun |
 | `en-tete-page` (`EnTetePageView`) | `dom(data)` ; `action.html` | `{ titre, sousTitre, action: { libelle, href } \| null }` | pages admin |
 | `bandeau-info` (`BandeauInfoView`) | `dom(data)` | `{ texte, attention? }` (bleu, ou jaune si `attention`) | admin-categories, modale |
 | `liste-categories` (`ListeCategoriesView`) | `dom(categories, actions)` ; `ligne.html`, `vide.html` | `[{ id, libelle, description, nombreProduits }]` ; `surSuppression(id)` | admin-categories |
 | `formulaire-categorie` (`FormulaireCategorieView`) | `dom(data, actions)` | `{ libelle, description, bouton, enCours, message }` ; `surEnvoi(libelle, description)` | admin-categorie |
 | `modale-suppression` (`ModaleSuppressionView`) | `dom(data, actions)` ; `reaffectation.html` ; `<dialog>` natif (la page appelle `showModal()`) | `{ nom, nombreProduits, cibles, cible, enCours, message }` ; `surConfirmation(cible)`, `surChoixCible`, `surAnnulation` | admin-categories |
-| `modale-confirmation` (`ModaleConfirmationView`) | `dom(data, actions)` ; `<dialog>` natif | `{ titre, texte, bouton, enCours, message }` ; `surConfirmation()`, `surAnnulation()` | admin-produits, admin-produit |
+| `modale-confirmation` (`ModaleConfirmationView`) | `dom(data, actions)` ; `<dialog>` natif | `{ titre, texte, bouton, refus?, enCours, message }` (`refus` : texte du bouton qui ferme, « Annuler » par défaut) ; `surConfirmation()`, `surAnnulation()` | admin-produits, admin-produit, admin-commandes, admin-commande |
 | `pagination` (`PaginationView`) | `dom(data, actions)` ; `page.html` | `{ page, pages }` ; `surPage(n)` | admin-produits |
 | `filtres-produits` (`FiltresProduitsView`) | `dom(data, actions)` | `{ recherche, categorieId, stock, categories }` ; `surChangement({ recherche, categorieId, stock })` | admin-produits |
 | `liste-produits` (`ListeProduitsView`) | `dom(produits, actions)` ; `ligne.html`, `vide.html` | `[{ id, nom, categorie, miniature, prixMin, stock, nombreFormats, nombreImages, statut }]` ; `surSuppression(id)` | admin-produits |
@@ -518,12 +524,12 @@ les boutons. Booléens dans un template : `{{desactivee}}` vaut `"disabled"` ou
 | `lib/options.js` | `defaultChoix`, `choixDepuisIds`, `toggleChoix`, `choixIds`, `supplementCents`, `hasMissing`, `groupesAvecEtat`, `choixReconnus`, `choixDeLigne`, `ligneInvalide`, `formaterOptions` | règles des options (US OPT-c et OPT-a), **pures** (testées : `front/tests/options.test.mjs`) ; une sélection est `{ [idGroupe]: [idChoix] }` ; partagées par fiche, panier et commande |
 | `lib/navigation.js` | `goTo(path)`, `reload()`, `readQuery(name)`, `safeReturnPath(raw)` | redirection depuis une page (pushState + `popstate`, sans toucher au routeur) ; `retour` limité aux chemins internes |
 | `lib/theme.js` | `basculerTheme()` | classe `.theme-dark` sur `<html>` + `localStorage["theme"]` |
-| `data/produit.js` | `ProduitData.fetchAll / fetchOne(slug) / fetchVariantes(ids)` | préfixe les images par `BASE_URL` |
+| `lib/statut-commande.js` | `libelleStatut(statut)`, `actionsStatut(statut)` | libellés (prete = « Disponible ») et boutons proposés ; le serveur reste seul juge des transitions || `data/produit.js` | `ProduitData.fetchAll / fetchOne(slug) / fetchVariantes(ids)` | préfixe les images par `BASE_URL` |
 | `data/auth.js` | `AuthData.login(email, mdp) / register / me / logout`, `knownEmail` | session PHP ; `knownEmail` = dernier e-mail connu, pour le header |
 | `data/commande.js` | `CommandeData.create(lignes) / fetchOne(numero)` | `POST` puis `GET /api/commande` ; n'envoie que `{ variantId, quantite, options }` (ids de choix) |
 | `data/admin.js` | `AdminData.login(email, mdp) / me / logout`, `knownEmail` | `admin/login`, `admin/me`, `admin/logout` (session admin séparée) |
 | `data/categories.js` | `CategorieData.fetchAll / create / update / remove(id, reaffecterVers)` | `admin/categories…` ; joint le jeton CSRF (`AdminData.csrf`) en-tête `X-CSRF-Token` |
-| `data/produit-admin.js` | `ProduitAdminData.fetchAll / fetchOne(id) / create / update / remove / uploadImages(id, files) / removeImage / setMainImage / saveThreshold` | `admin/produits…` ; jeton CSRF ; adresses d'images complétées par `BASE_URL` |
+| `data/commande-admin.js` | `CommandeAdminData.fetchAll(tri, sens, statut) / fetchOne(numero) / updateStatus(ids, statut)` | `admin/commandes…` ; jeton CSRF en-tête `X-CSRF-Token` || `data/produit-admin.js` | `ProduitAdminData.fetchAll / fetchOne(id) / create / update / remove / uploadImages(id, files) / removeImage / setMainImage / saveThreshold` | `admin/produits…` ; jeton CSRF ; adresses d'images complétées par `BASE_URL` |
 | `data/stats.js` | `StatsData.fetch()` | `admin/stats` (inclut `commandes`) |
 | `data/panier.js` | `PanierData.read / write / add(variantId, quantite, options) / setQuantity(variantId, quantite, options) / remove(variantId, options?) / clear / count` | `localStorage["panier"]` = `[{ variantId, quantite, options: [idChoix triés] }]`, validé à la lecture, plafond 99 ; **une ligne = variante + options** (`remove` sans options retire toutes les lignes de la variante) |
 
@@ -550,7 +556,9 @@ touchent au `localStorage`.
 | `POST /api/admin/categories` | `AdminCategorieController::create` | `creer()` | corps `{ libelle, description }` → 201 `{ categorie }` ; 400 (nom 2-60, description ≤ 255), 401, 403 (CSRF), 409 (nom/slug déjà pris) |
 | `POST /api/admin/categories/modifier` | `AdminCategorieController::update` | `modifier()` | corps `{ id, libelle, description }` → `{ categorie }` ; 400, 401, 403, 404, 409 |
 | `POST /api/admin/categories/supprimer` | `AdminCategorieController::delete` | `supprimer()` | corps `{ id, reaffecterVers? }` → `{ supprimee, reaffectes }`. **Règle** : catégorie vide → suppression directe ; avec produits → `reaffecterVers` obligatoire (autre catégorie existante), sinon 409 ; transaction (verrou, UPDATE produit, DELETE) ; 400 cible invalide, 404 |
-| `GET /api/admin/produits` | `AdminProduitController::index` | `ProduitAdminModel::lister()` | `{ produits: [{ id, nom, slug, categorieId, categorie, image, miniature, prixMin, stock, nombreFormats, nombreImages }], categories, seuilBientotEpuise }` ; 401 |
+| `GET /api/admin/commandes` | `AdminCommandeController::index` | `CommandeModel::listerAdmin()` | `?tri=date\|statut\|montant&sens=asc\|desc&statut=` (liste blanche, repli date/desc) → `{ commandes: [{ id, numero, statut, totalCents, creeLe, client, articles }], tri, sens, statut }` ; 401 |
+| `GET /api/admin/commande?numero=` | `AdminCommandeController::show` | `findAdmin()` | `{ commande: { …, client, lignes (avec options), journal: [{ admin, ancien, nouveau, creeLe }] } }` ; 400, 401, 404 |
+| `POST /api/admin/commandes/statut` | `AdminCommandeController::updateStatus` | `changerStatut()` | corps `{ ids: [1 à 100], statut }` (une action seule = un id). **Une transaction par commande** : `{ modifiees: [numero], refusees: [message] }` ; 409 si aucune n'a changé ; 400, 401, 403 (CSRF), 404 || `GET /api/admin/produits` | `AdminProduitController::index` | `ProduitAdminModel::lister()` | `{ produits: [{ id, nom, slug, categorieId, categorie, image, miniature, prixMin, stock, nombreFormats, nombreImages }], categories, seuilBientotEpuise }` ; 401 |
 | `GET /api/admin/produit?id=` | `AdminProduitController::show` | `trouver()` | `{ produit: { …, variantes, images }, categories, seuilBientotEpuise }` ; 400, 401, 404 |
 | `POST /api/admin/produits` | `create` | `creer()` | corps `{ nom, categorieId, description, descriptionLongue, ingredients, variantes: [{ libelle, prixCents, stock }] }` → 201 `{ produit: { id, nom, slug } }` ; 400, 401, 403 (CSRF), 409 (nom ou format en double). Slug généré à la création et **jamais modifié** ; teinte = crc32(nom) % 360 ; image par défaut `images/produits/placeholder.svg` |
 | `POST /api/admin/produits/modifier` | `update` | `modifier()` | corps comme ci-dessus + `id` ; format avec `id` mis à jour, sans `id` créé, absent supprimé (transaction, de 1 à 10 formats) |
@@ -580,7 +588,7 @@ Itérations PHP : `for` ou `array_map`, jamais `foreach`.
 | `ligne_commande` | `commande_id`, `variante_id` (NULL si supprimée), `produit_nom`, `variante_libelle`, `prix_unitaire_cents`, `quantite` | FK commande `CASCADE`, FK variante `SET NULL` ; nom, format et prix **figés** à la commande ; `prix_unitaire_cents` comprend les suppléments ; une même variante peut figurer sur plusieurs lignes (options différentes) |
 | `ligne_commande_option` | `ligne_id`, `groupe_libelle`, `choix_libelle`, `supplement_cents` | FK ligne `CASCADE`, **aucune clé vers `option_choix`** : instantané, le catalogue peut changer sans toucher aux commandes (US OPT-a) |
 | `mouvement_stock` | `variante_id` (NULL si supprimée), `commande_id`, `type` (`sortie`\|`retour`), `quantite`, `stock_avant`, `stock_apres`, `cree_le` | `UNIQUE(commande_id, variante_id, type)` (idempotence), FK variante `SET NULL`, FK commande `CASCADE` ; `variante.stock` a en plus `CHECK (stock >= 0)` |
-
+| `journal_commande` | `commande_id`, `admin_id`, `ancien_statut`, `nouveau_statut`, `cree_le` | FK commande `CASCADE`, FK admin (`utilisateur`) `RESTRICT` ; une ligne par changement de statut fait par un admin, écrite dans la même transaction (US PIL-b) |
 Seeds : 3 catégories (pots classiques, sans lactose, sorbets) × 4 produits,
 2 variantes chacun (« Pot 100 ml » 2,90 €, « Pot 465 ml » 7,90 €), stocks
 variés (certains ≤ 5 pour tester « Bientôt épuisé »). Comptes de démo
@@ -601,8 +609,15 @@ panier. Tests : `back/tests/options.php`, `front/tests/options.test.mjs`.
 
 **Stock (STK-a)** : `CommandeModel::mouvementer()` est le seul endroit qui
 écrit `variante.stock` ; `creer()` l'appelle (sortie) et `changerStatut()`
-(seule porte pour changer un statut, aucune route pour l'instant : PIL-b) rend
-le stock uniquement au passage à `annulee`. Test : `back/tests/stock.php`.
+(seule porte pour changer un statut) rend le stock uniquement au passage à
+`annulee`. Test : `back/tests/stock.php`.
+
+**Commandes admin (PIL-b)** : parcours `en_cours` → `prete` (« disponible ») →
+`retiree`, annulation possible tant que la commande n'est pas retirée ; pas de
+saut d'étape ni de retour en arrière (table `TRANSITIONS` de `CommandeModel`).
+`changerStatut($id, $statut, $adminId)` écrit aussi `journal_commande`. Demander
+le statut déjà en place est sans effet (ni stock ni journal). Test :
+`back/tests/commandes-admin.php`.
 
 ### 12.9 Quel skill ouvrir pour quelle tâche
 
@@ -633,6 +648,7 @@ le stock uniquement au passage à `annulee`. Test : `back/tests/stock.php`.
 | 13 | Stock saisi en back-office (GOF-a) : **non journalisé** dans `mouvement_stock` (réservé aux commandes) et écrasé tel quel : une commande passée entre le chargement du formulaire et l'enregistrement est perdue pour ce format | acceptable en MVP ; journal d'ajustements à prévoir si besoin |
 | 14 | Options de type topping/cône (§7) : **absentes** ; GOF-a les assimile aux formats (variantes), les options viennent avec OPT-c | à faire en OPT-c |
 | 15 | Images : pas de réordonnancement par glisser-déposer (étoile = principale seulement) ; limites PHP (`upload_max_filesize` 2 Mo en local) à vérifier sur mmi.unilim.fr ; la description produit est limitée à 400 caractères (colonne SQL), la maquette annonce 500 | à tester sur le serveur |
+| 16 | PIL-b : le statut technique `prete` est affiché « Disponible » ; la liste des commandes n'a **pas de pagination** (toute la table est lue) ; le journal ne couvre que les changements de statut (pas le stock saisi en GOF-a, voir 13) ; le tableau de bord (`/admin`) ne renvoie pas encore vers les commandes | paginer si le volume grandit ; relier les « Accès rapides » du tableau de bord |
 | 10 | Aucun `foreach` dans le code applicatif (`for…of` dans le routeur, `forEach` seulement dans `check-mvc.js`, outil hors application) | garder la règle §1 |
 
 ### 12.11 Check-list avant toute construction
@@ -646,3 +662,7 @@ le stock uniquement au passage à `annulee`. Test : `back/tests/stock.php`.
 - [ ] Vérifier 320/375, 768, 1440 px en clair et sombre.
 - [ ] Compte rendu §11 **et mise à jour de cette section 12** (route, composant, table, écart résolu).
 - [ ] Aucun commit/push sans demande.
+
+
+### git 
+- La méthode de travail est : pour chque nouvelle fonctionnalité = une nouvelle branch + commits. Par la suite on la push sur main puis merge.

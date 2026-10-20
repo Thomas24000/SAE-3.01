@@ -1,0 +1,45 @@
+<div class="flex flex-col gap-6">
+  <dl class="grid gap-4 rounded-lg border border-border-default bg-bg-default p-6 sm:grid-cols-2">
+    <div class="flex flex-col gap-1">
+      <dt class="text-xs text-fg-muted">Numéro de commande</dt>
+      <dd class="text-lg leading-snug font-bold">{{numero}}</dd>
+    </div>
+    <div class="flex flex-col gap-1">
+      <dt class="text-xs text-fg-muted">Statut</dt>
+      <dd><slot name="badge"></slot></dd>
+    </div>
+    <div class="flex flex-col gap-1">
+      <dt class="text-xs text-fg-muted">Date</dt>
+      <dd class="text-sm">{{date}}</dd>
+    </div>
+    <div class="flex flex-col gap-1">
+      <dt class="text-xs text-fg-muted">Client</dt>
+      <dd class="text-sm break-all">{{client}}</dd>
+    </div>
+  </dl>
+
+  <section aria-labelledby="actions-titre" class="flex flex-col gap-3">
+    <h2 id="actions-titre" class="text-lg leading-snug font-bold">Traitement</h2>
+    <div class="flex flex-wrap gap-3">
+      <slot name="actions"></slot>
+    </div>
+  </section>
+
+  <section aria-labelledby="lignes-titre" class="flex flex-col gap-2">
+    <h2 id="lignes-titre" class="text-lg leading-snug font-bold">Articles</h2>
+    <ul class="flex flex-col divide-y divide-border-default border-y border-border-default">
+      <slot name="lignes"></slot>
+    </ul>
+    <p class="flex items-center justify-between gap-2 pt-2 text-lg leading-snug font-bold">
+      <span>Total</span>
+      <span>{{total}}</span>
+    </p>
+  </section>
+
+  <section aria-labelledby="journal-titre" class="flex flex-col gap-2">
+    <h2 id="journal-titre" class="text-lg leading-snug font-bold">Journal des modifications</h2>
+    <ul class="flex flex-col divide-y divide-border-default border-y border-border-default">
+      <slot name="journal"></slot>
+    </ul>
+  </section>
+</div>

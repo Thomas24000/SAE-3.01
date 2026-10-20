@@ -25,6 +25,14 @@ final class CommandeModel
     /** Statuts qu'une commande peut prendre (liste blanche). */
     private const STATUTS = ['en_cours', 'prete', 'retiree', 'annulee'];
 
+    /** Statuts atteignables depuis chaque statut : retrait en trois étapes, annulation avant le retrait. */
+    private const TRANSITIONS = [
+        'en_cours' => ['prete', 'annulee'],
+        'prete'    => ['retiree', 'annulee'],
+        'retiree'  => [],
+        'annulee'  => [],
+    ];
+
     /** Connexion à la base, fournie à la construction. */
     private PDO $pdo;
 
@@ -183,19 +191,26 @@ final class CommandeModel
      * Change le statut d'une commande : c'est la SEULE porte d'entrée pour le
      * faire, donc le seul endroit où le stock est recrédité (US STK-a).
      *
-     * Le stock des lignes est rendu (et journalisé) uniquement au passage à
+     * Les transitions suivent le parcours du retrait : en_cours, prete, retiree ;
+     * l'annulation reste possible tant que la commande n'est pas retirée. Le
+     * stock des lignes est rendu (et journalisé) uniquement au passage à
      * « annulee » ; tout autre changement laisse le stock intact. Tout se passe
-     * dans une transaction : si un recrédit échoue, le statut n'est pas changé.
-     * La commande est verrouillée, donc deux annulations simultanées ne rendent
-     * le stock qu'une fois.
+     * dans une transaction : si un recrédit ou l'écriture du journal échoue, le
+     * statut n'est pas changé. La commande est verrouillée, donc deux annulations
+     * simultanées ne rendent le stock qu'une fois. Demander le statut déjà en
+     * place ne fait rien.
      *
      * @param int $commandeId Identifiant de la commande.
      * @param string $statut Nouveau statut (en_cours, prete, retiree ou annulee).
+     * @param int|null $adminId Administrateur à l'origine du changement : s'il est
+     *                          donné, le changement est inscrit au journal (US PIL-b).
+     * @return array{numero:string, ancien:string, change:bool}
+     *         numero : numéro de la commande ; ancien : statut avant l'appel ;
+     *         change : faux si la commande avait déjà ce statut.
      * @throws DomainException Si le statut est inconnu, la commande introuvable ou
-     *                         la transition interdite (une commande annulée ou
-     *                         déjà retirée ne peut plus être annulée).
+     *                         la transition interdite.
      */
-    public function changerStatut(int $commandeId, string $statut): void
+    public function changerStatut(int $commandeId, string $statut, ?int $adminId = null): array
     {
         if (!in_array($statut, self::STATUTS, true)) {
             throw new DomainException('Statut de commande inconnu.');
@@ -204,23 +219,27 @@ final class CommandeModel
         $this->pdo->beginTransaction();
 
         try {
-            $requete = $this->pdo->prepare('SELECT statut FROM commande WHERE id = :id FOR UPDATE');
+            $requete = $this->pdo->prepare('SELECT numero, statut FROM commande WHERE id = :id FOR UPDATE');
             $requete->execute(['id' => $commandeId]);
-            $actuel = $requete->fetchColumn();
+            $commande = $requete->fetch();
 
-            if ($actuel === false) {
+            if ($commande === false) {
                 throw new DomainException('Commande introuvable.');
             }
 
-            if ($actuel === self::STATUT_ANNULEE && $statut !== self::STATUT_ANNULEE) {
-                throw new DomainException('Une commande annulée ne peut plus changer de statut.');
+            $actuel = $commande['statut'];
+
+            if ($actuel === $statut) {
+                $this->pdo->commit();
+
+                return ['numero' => $commande['numero'], 'ancien' => $actuel, 'change' => false];
             }
 
-            if ($statut === self::STATUT_ANNULEE && $actuel !== self::STATUT_ANNULEE) {
-                if ($actuel === 'retiree') {
-                    throw new DomainException('Une commande déjà retirée ne peut pas être annulée.');
-                }
+            if (!in_array($statut, self::TRANSITIONS[$actuel], true)) {
+                throw new DomainException($this->motifRefus($commande['numero'], $actuel, $statut));
+            }
 
+            if ($statut === self::STATUT_ANNULEE) {
                 $this->recrediter($commandeId);
             }
 
@@ -228,11 +247,153 @@ final class CommandeModel
                 ->prepare('UPDATE commande SET statut = :statut WHERE id = :id')
                 ->execute(['statut' => $statut, 'id' => $commandeId]);
 
+            if ($adminId !== null) {
+                $this->pdo
+                    ->prepare(
+                        'INSERT INTO journal_commande (commande_id, admin_id, ancien_statut, nouveau_statut)
+                         VALUES (:commande, :admin, :ancien, :nouveau)'
+                    )
+                    ->execute([
+                        'commande' => $commandeId,
+                        'admin'    => $adminId,
+                        'ancien'   => $actuel,
+                        'nouveau'  => $statut,
+                    ]);
+            }
+
             $this->pdo->commit();
         } catch (Throwable $e) {
             $this->pdo->rollBack();
             throw $e;
         }
+
+        return ['numero' => $commande['numero'], 'ancien' => $actuel, 'change' => true];
+    }
+
+    /**
+     * Toutes les commandes des clients, triées, pour le back-office (US PIL-b).
+     *
+     * Le tri passe par une liste blanche : jamais de nom de colonne issu de la
+     * requête dans le SQL. À égalité, la plus récente d'abord.
+     *
+     * @param string $tri « date », « statut » ou « montant » (sinon « date »).
+     * @param string $sens « asc » ou « desc » (sinon « desc »).
+     * @param string|null $statut Ne garder que ce statut ; null pour tous (statut inconnu : tous).
+     * @return array<int, array{id:int, numero:string, statut:string, totalCents:int, creeLe:string,
+     *                          client:string, articles:int}>
+     */
+    public function listerAdmin(string $tri, string $sens, ?string $statut): array
+    {
+        $colonne = [
+            'date'    => 'commande.cree_le',
+            'statut'  => 'commande.statut',
+            'montant' => 'commande.total_cents',
+        ][$tri] ?? 'commande.cree_le';
+        $direction = $sens === 'asc' ? 'ASC' : 'DESC';
+
+        $filtre     = $statut !== null && in_array($statut, self::STATUTS, true);
+        $parametres = $filtre ? ['statut' => $statut] : [];
+
+        $requete = $this->pdo->prepare(
+            'SELECT commande.id, commande.numero, commande.statut, commande.total_cents, commande.cree_le,
+                    utilisateur.email,
+                    COALESCE(SUM(ligne_commande.quantite), 0) AS articles
+               FROM commande
+         INNER JOIN utilisateur ON utilisateur.id = commande.utilisateur_id
+          LEFT JOIN ligne_commande ON ligne_commande.commande_id = commande.id'
+            . ($filtre ? ' WHERE commande.statut = :statut' : '')
+            . ' GROUP BY commande.id, utilisateur.email
+              ORDER BY ' . $colonne . ' ' . $direction . ', commande.id ' . $direction
+        );
+        $requete->execute($parametres);
+
+        return array_map(
+            static fn (array $ligne): array => [
+                'id'         => (int) $ligne['id'],
+                'numero'     => $ligne['numero'],
+                'statut'     => $ligne['statut'],
+                'totalCents' => (int) $ligne['total_cents'],
+                'creeLe'     => $ligne['cree_le'],
+                'client'     => $ligne['email'],
+                'articles'   => (int) $ligne['articles'],
+            ],
+            $requete->fetchAll()
+        );
+    }
+
+    /**
+     * Le détail complet d'une commande pour le back-office : client, lignes avec
+     * options, et historique des changements faits par les administrateurs.
+     *
+     * @param string $numero Numéro de la commande (ex. CC-2026-000123).
+     * @return array{id:int, numero:string, statut:string, totalCents:int, creeLe:string, client:string,
+     *               lignes:array<int, array<string, mixed>>,
+     *               journal:array<int, array{admin:string, ancien:string, nouveau:string, creeLe:string}>}|null
+     *         null si le numéro est inconnu.
+     */
+    public function findAdmin(string $numero): ?array
+    {
+        $requete = $this->pdo->prepare(
+            'SELECT commande.id, commande.numero, commande.statut, commande.total_cents, commande.cree_le,
+                    utilisateur.email
+               FROM commande
+         INNER JOIN utilisateur ON utilisateur.id = commande.utilisateur_id
+              WHERE commande.numero = :numero'
+        );
+        $requete->execute(['numero' => $numero]);
+        $commande = $requete->fetch();
+
+        if ($commande === false) {
+            return null;
+        }
+
+        $journal = $this->pdo->prepare(
+            'SELECT utilisateur.email, journal_commande.ancien_statut, journal_commande.nouveau_statut,
+                    journal_commande.cree_le
+               FROM journal_commande
+         INNER JOIN utilisateur ON utilisateur.id = journal_commande.admin_id
+              WHERE journal_commande.commande_id = :commande
+           ORDER BY journal_commande.id DESC'
+        );
+        $journal->execute(['commande' => $commande['id']]);
+
+        return [
+            'id'         => (int) $commande['id'],
+            'numero'     => $commande['numero'],
+            'statut'     => $commande['statut'],
+            'totalCents' => (int) $commande['total_cents'],
+            'creeLe'     => $commande['cree_le'],
+            'client'     => $commande['email'],
+            'lignes'     => $this->lireLignes((int) $commande['id']),
+            'journal'    => array_map(
+                static fn (array $entree): array => [
+                    'admin'   => $entree['email'],
+                    'ancien'  => $entree['ancien_statut'],
+                    'nouveau' => $entree['nouveau_statut'],
+                    'creeLe'  => $entree['cree_le'],
+                ],
+                $journal->fetchAll()
+            ),
+        ];
+    }
+
+    /**
+     * Parmi ces identifiants, ceux qui correspondent à une commande existante.
+     *
+     * @param array<int, int> $ids Identifiants demandés.
+     * @return array<int, int> Les identifiants qui existent réellement.
+     */
+    public function idsExistants(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        $marqueurs = implode(',', array_fill(0, count($ids), '?'));
+        $requete   = $this->pdo->prepare('SELECT id FROM commande WHERE id IN (' . $marqueurs . ') ORDER BY id');
+        $requete->execute(array_values($ids));
+
+        return array_map('intval', $requete->fetchAll(PDO::FETCH_COLUMN));
     }
 
     /**
@@ -285,13 +446,31 @@ final class CommandeModel
             return null;
         }
 
+        return [
+            'numero'     => $commande['numero'],
+            'statut'     => $commande['statut'],
+            'totalCents' => (int) $commande['total_cents'],
+            'creeLe'     => $commande['cree_le'],
+            'lignes'     => $this->lireLignes((int) $commande['id']),
+        ];
+    }
+
+    /**
+     * Les lignes d'une commande, avec leurs options figées.
+     *
+     * @param int $commandeId Identifiant de la commande.
+     * @return array<int, array{produit:string, libelle:string, prixUnitaireCents:int, quantite:int,
+     *                          totalCents:int, options:array<int, array{groupe:string, libelle:string, supplementCents:int}>}>
+     */
+    private function lireLignes(int $commandeId): array
+    {
         $lignes = $this->pdo->prepare(
             'SELECT id, produit_nom, variante_libelle, prix_unitaire_cents, quantite
                FROM ligne_commande
               WHERE commande_id = :commande
            ORDER BY id'
         );
-        $lignes->execute(['commande' => $commande['id']]);
+        $lignes->execute(['commande' => $commandeId]);
 
         $options = $this->pdo->prepare(
             'SELECT ligne_commande_option.ligne_id,
@@ -303,36 +482,51 @@ final class CommandeModel
               WHERE ligne_commande.commande_id = :commande
            ORDER BY ligne_commande_option.id'
         );
-        $options->execute(['commande' => $commande['id']]);
+        $options->execute(['commande' => $commandeId]);
         $toutesOptions = $options->fetchAll();
 
-        return [
-            'numero'     => $commande['numero'],
-            'statut'     => $commande['statut'],
-            'totalCents' => (int) $commande['total_cents'],
-            'creeLe'     => $commande['cree_le'],
-            'lignes'     => array_map(
-                static fn (array $ligne): array => [
-                    'produit'           => $ligne['produit_nom'],
-                    'libelle'           => $ligne['variante_libelle'],
-                    'prixUnitaireCents' => (int) $ligne['prix_unitaire_cents'],
-                    'quantite'          => (int) $ligne['quantite'],
-                    'totalCents'        => (int) $ligne['prix_unitaire_cents'] * (int) $ligne['quantite'],
-                    'options'           => array_values(array_map(
-                        static fn (array $option): array => [
-                            'groupe'          => $option['groupe_libelle'],
-                            'libelle'         => $option['choix_libelle'],
-                            'supplementCents' => (int) $option['supplement_cents'],
-                        ],
-                        array_filter(
-                            $toutesOptions,
-                            static fn (array $option): bool => (int) $option['ligne_id'] === (int) $ligne['id']
-                        )
-                    )),
-                ],
-                $lignes->fetchAll()
-            ),
-        ];
+        return array_map(
+            static fn (array $ligne): array => [
+                'produit'           => $ligne['produit_nom'],
+                'libelle'           => $ligne['variante_libelle'],
+                'prixUnitaireCents' => (int) $ligne['prix_unitaire_cents'],
+                'quantite'          => (int) $ligne['quantite'],
+                'totalCents'        => (int) $ligne['prix_unitaire_cents'] * (int) $ligne['quantite'],
+                'options'           => array_values(array_map(
+                    static fn (array $option): array => [
+                        'groupe'          => $option['groupe_libelle'],
+                        'libelle'         => $option['choix_libelle'],
+                        'supplementCents' => (int) $option['supplement_cents'],
+                    ],
+                    array_filter(
+                        $toutesOptions,
+                        static fn (array $option): bool => (int) $option['ligne_id'] === (int) $ligne['id']
+                    )
+                )),
+            ],
+            $lignes->fetchAll()
+        );
+    }
+
+    /**
+     * Explique en français pourquoi une transition de statut est refusée.
+     *
+     * @param string $numero Numéro de la commande.
+     * @param string $actuel Statut actuel.
+     * @param string $demande Statut demandé.
+     * @return string Le message à montrer à l'administrateur.
+     */
+    private function motifRefus(string $numero, string $actuel, string $demande): string
+    {
+        if ($actuel === self::STATUT_ANNULEE) {
+            return 'La commande ' . $numero . ' est annulée : elle ne peut plus changer de statut.';
+        }
+
+        if ($actuel === 'retiree') {
+            return 'La commande ' . $numero . ' est déjà retirée : elle ne peut plus changer de statut ni être annulée.';
+        }
+
+        return 'La commande ' . $numero . ' ne peut pas passer directement de « ' . $actuel . ' » à « ' . $demande . ' ».';
     }
 
     /**

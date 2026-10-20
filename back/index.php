@@ -18,6 +18,7 @@ use App\Core\Response;
 use App\Core\Router;
 use App\Controller\AdminAuthController;
 use App\Controller\AdminCategorieController;
+use App\Controller\AdminCommandeController;
 use App\Controller\AdminProduitController;
 use App\Controller\AuthController;
 use App\Controller\CommandeController;
@@ -82,6 +83,7 @@ try {
         StatsController::class     => new StatsController($produits, $commandes, $parametres),
         AdminAuthController::class => new AdminAuthController($utilisateurs),
         AdminCategorieController::class => new AdminCategorieController($categories),
+        AdminCommandeController::class => new AdminCommandeController($commandes),
         AdminProduitController::class => new AdminProduitController($produitsAdmin, $categories, $parametres),
     ];
 

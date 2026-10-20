@@ -1,0 +1,27 @@
+<form novalidate class="flex flex-col gap-3 md:flex-row md:items-end" aria-label="Trier et filtrer les commandes">
+  <label class="flex flex-col gap-1 text-xs text-fg-muted md:w-50">
+    Trier par
+    <select name="tri" class="h-11 rounded-md border border-border-default bg-bg-default px-3 text-sm text-fg-default transition-colors hover:border-border-strong">
+      <option value="date">Date</option>
+      <option value="statut">Statut</option>
+      <option value="montant">Montant</option>
+    </select>
+  </label>
+  <label class="flex flex-col gap-1 text-xs text-fg-muted md:w-50">
+    Ordre
+    <select name="sens" class="h-11 rounded-md border border-border-default bg-bg-default px-3 text-sm text-fg-default transition-colors hover:border-border-strong">
+      <option value="desc">Décroissant</option>
+      <option value="asc">Croissant</option>
+    </select>
+  </label>
+  <label class="flex flex-col gap-1 text-xs text-fg-muted md:w-50">
+    Statut
+    <select name="statut" class="h-11 rounded-md border border-border-default bg-bg-default px-3 text-sm text-fg-default transition-colors hover:border-border-strong">
+      <option value="">Tous les statuts</option>
+      <option value="en_cours">En cours</option>
+      <option value="prete">Disponible</option>
+      <option value="retiree">Retirée</option>
+      <option value="annulee">Annulée</option>
+    </select>
+  </label>
+</form>

@@ -6,10 +6,13 @@ import {
   choixDeLigne,
   choixDepuisIds,
   choixIds,
+  groupePorteurId,
+  groupesAvecDisponibilite,
   groupesAvecEtat,
   hasMissing,
   ligneInvalide,
   toggleChoix,
+  varianteDe,
 } from "../../lib/options.js";
 import { ajusterLignes, texteAjustements } from "../../lib/stock.js";
 import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
@@ -34,6 +37,7 @@ let M = {
   lignes: [], // [{ variantId, quantite, options }] : le panier du navigateur
   variantes: [], // les variantes de ces lignes, telles que l'API les renvoie
   groupes: {}, // les groupes d'options des produits du panier : { [idProduit]: [groupe] }
+  combinaisons: {}, // toutes les variantes (format + service) de ces produits : { [idProduit]: [variante] }
   edition: null, // ligne dont on modifie les options : { variantId, options, choix }, ou null
   session: null, // { connecte, email?, role? } renvoyé par le serveur, ou null
   echec: false, // true si l'API n'a pas pu répondre
@@ -59,6 +63,15 @@ M.produitGroupes = function (variante) {
 };
 
 /**
+ * Les variantes (combinaisons format + service) du produit d'une variante.
+ * . variante : la variante renvoyée par l'API
+ * > un tableau de { variantId, libelle, choixId, prixCents, stock }
+ */
+M.produitCombinaisons = function (variante) {
+  return M.combinaisons[variante.produit.id] ?? [];
+};
+
+/**
  * Les options d'une ligne que le serveur reconnaît pour ce produit : un choix
  * inconnu ou rattaché à un autre produit (localStorage modifié, option retirée
  * du catalogue) est ignoré.
@@ -80,7 +93,7 @@ M.lineChoix = function (ligne) {
 M.lineInvalid = function (ligne) {
   let variante = M.findVariante(ligne.variantId);
 
-  return ligneInvalide(ligne.options, variante.produit.id, M.produitGroupes(variante));
+  return ligneInvalide(ligne.options, variante.produit.id, M.produitGroupes(variante), variante.choixId);
 };
 
 /**
@@ -173,7 +186,15 @@ M.articles = function () {
       modifiable: M.produitGroupes(variante).length > 0,
       edition: M.isEditing(ligne)
         ? {
-            groupes: groupesAvecEtat(M.produitGroupes(variante), M.edition.choix),
+            groupes: groupesAvecEtat(
+              groupesAvecDisponibilite(
+                M.produitGroupes(variante),
+                groupePorteurId(M.produitGroupes(variante), M.produitCombinaisons(variante)),
+                M.produitCombinaisons(variante),
+                variante.libelle
+              ),
+              M.edition.choix
+            ),
             manquants: hasMissing(M.produitGroupes(variante), M.edition.choix),
           }
         : null,
@@ -258,11 +279,48 @@ M.canSaveEdition = function () {
 };
 
 /**
- * Enregistre les nouvelles options de la ligne ouverte (elle fusionne avec une
- * autre ligne de la même variante qui aurait déjà ces options) et referme le sélecteur.
+ * La variante que la ligne ouverte aura une fois enregistrée : le même format,
+ * avec le service coché (US OPT-b).
+ * > la variante cible { variantId, stock, ... }, ou undefined si cette combinaison n'existe pas
+ */
+M.editionTarget = function () {
+  let variante = M.findVariante(M.edition.variantId);
+  let combinaisons = M.produitCombinaisons(variante);
+  let porteurId = groupePorteurId(M.produitGroupes(variante), combinaisons);
+  let choixId = porteurId === null ? null : (M.edition.choix[porteurId]?.[0] ?? null);
+
+  return varianteDe(combinaisons, variante.libelle, choixId);
+};
+
+/**
+ * Place manquante dans la combinaison cible : la ligne ouverte y serait déplacée
+ * avec sa quantité, en plus de ce que le panier en contient déjà.
+ * > le nombre d'unités encore disponibles dans la cible si elle ne peut pas
+ *   accueillir la ligne, ou null si elle le peut
+ */
+M.editionShortage = function () {
+  let cible = M.editionTarget();
+  if (cible === undefined) return 0;
+  if (cible.variantId === M.edition.variantId) return null;
+
+  let ligne = M.lignes.find((autre) => M.isEditing(autre));
+  let restant = Math.max(0, cible.stock - M.variantQuantity(cible.variantId));
+
+  return ligne.quantite > restant ? restant : null;
+};
+
+/**
+ * Enregistre les nouvelles options de la ligne ouverte, en changeant sa variante
+ * si le service a changé (elle fusionne avec une autre ligne qui aurait déjà
+ * cette variante et ces options) et referme le sélecteur.
  */
 M.saveEdition = function () {
-  PanierData.changeOptions(M.edition.variantId, M.edition.options, choixIds(M.edition.choix));
+  PanierData.changeOptions(
+    M.edition.variantId,
+    M.edition.options,
+    choixIds(M.edition.choix),
+    M.editionTarget().variantId
+  );
   M.lignes = PanierData.read();
   M.edition = null;
 };
@@ -286,6 +344,7 @@ C.charger = async function () {
   M.echec = false;
   M.variantes = [];
   M.groupes = {};
+  M.combinaisons = {};
   M.edition = null;
   M.lignes = PanierData.read();
 
@@ -295,6 +354,7 @@ C.charger = async function () {
     let reponse = await ProduitData.fetchVariantes([...new Set(M.lignes.map((ligne) => ligne.variantId))]);
     M.variantes = reponse.variantes;
     M.groupes = reponse.options ?? {};
+    M.combinaisons = reponse.combinaisons ?? {};
 
     let reconciliation = M.reconcile();
     let texte = texteAjustements(reconciliation.ajustements, reconciliation.retirees);
@@ -384,6 +444,19 @@ C.handler_pickOption = function (variantId, options, groupeId, choixId) {
 C.handler_saveOptions = function () {
   if (!M.canSaveEdition()) {
     M.message = { type: "erreur", texte: "Choisis une option dans chaque groupe obligatoire." };
+    V.refresh(C.viewData(), "[data-edition] input");
+    return;
+  }
+
+  let manque = M.editionShortage();
+  if (manque !== null) {
+    M.message = {
+      type: "erreur",
+      texte:
+        manque === 0
+          ? "Cette combinaison est épuisée : choisis un autre service."
+          : `Il ne reste que ${manque} article(s) pour cette combinaison : réduis la quantité avant de changer de service.`,
+    };
     V.refresh(C.viewData(), "[data-edition] input");
     return;
   }

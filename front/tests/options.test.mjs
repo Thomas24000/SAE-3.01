@@ -10,11 +10,15 @@ import {
   choixReconnus,
   defaultChoix,
   formaterOptions,
+  groupePorteurId,
+  groupesAvecDisponibilite,
   groupesAvecEtat,
   hasMissing,
   ligneInvalide,
   supplementCents,
   toggleChoix,
+  varianteAChoisir,
+  varianteDe,
 } from "../src/lib/options.js";
 
 let echecs = 0;
@@ -121,6 +125,12 @@ test("ligne invalide : option inconnue ou groupe obligatoire vide", () => {
   assert.equal(ligneInvalide([], 1, []), false);
 });
 
+test("ligne invalide : le service doit être celui de la variante (OPT-b)", () => {
+  assert.equal(ligneInvalide([10, 20], 1, groupes, 10), false);
+  assert.equal(ligneInvalide([11], 1, groupes, 10), true);
+  assert.equal(ligneInvalide([10], 1, groupes, null), false);
+});
+
 test("texte des options : supplément seulement s'il y en a un", () => {
   let texte = formaterOptions([
     { libelle: "Cuillère", supplementCents: 0 },
@@ -128,6 +138,49 @@ test("texte des options : supplément seulement s'il y en a un", () => {
   ]);
   assert.match(texte, /^Cuillère, Cône \(\+ 0,60/);
   assert.equal(formaterOptions([]), "");
+});
+
+// US OPT-b : variantes = format + choix du groupe porteur de stock (le Service, groupe 1).
+let combinaisons = [
+  { id: 1, libelle: "Pot 100 ml", choixId: 10, stock: 5 },
+  { id: 2, libelle: "Pot 100 ml", choixId: 11, stock: 0 },
+  { id: 3, libelle: "Pot 465 ml", choixId: 10, stock: 0 },
+  { id: 4, libelle: "Pot 465 ml", choixId: 11, stock: 8 },
+];
+
+test("groupe porteur de stock : celui dont un choix est référencé par une variante", () => {
+  assert.equal(groupePorteurId(groupes, combinaisons), 1);
+  assert.equal(groupePorteurId(groupes, [{ choixId: null }]), null);
+});
+
+test("combinaison exacte : format + choix, undefined si absente", () => {
+  assert.equal(varianteDe(combinaisons, "Pot 465 ml", 11).id, 4);
+  assert.equal(varianteDe(combinaisons, "Pot 465 ml", 99), undefined);
+});
+
+test("changer de format garde le service s'il est en stock, sinon prend un autre en stock", () => {
+  assert.equal(varianteAChoisir(combinaisons, "Pot 100 ml", 10).id, 1);
+  assert.equal(varianteAChoisir(combinaisons, "Pot 465 ml", 10).id, 4);
+});
+
+test("format entièrement épuisé : la combinaison exacte est conservée", () => {
+  let epuise = combinaisons.map((variante) => ({ ...variante, stock: 0 }));
+  assert.equal(varianteAChoisir(epuise, "Pot 465 ml", 11).id, 4);
+  assert.equal(varianteAChoisir(epuise, "Pot 1 l", 11), undefined);
+});
+
+test("disponibilité des services : épuisé, indisponible, ou libre selon le format", () => {
+  let vue = groupesAvecDisponibilite(groupes, 1, combinaisons, "Pot 100 ml")[0].choix;
+  assert.deepEqual(vue.map((choix) => choix.raison), ["", "Épuisé"]);
+  assert.deepEqual(vue.map((choix) => choix.indisponible), [false, true]);
+
+  let sans = groupesAvecDisponibilite(groupes, 1, [combinaisons[0]], "Pot 100 ml")[0].choix;
+  assert.equal(sans[1].raison, "Indisponible");
+});
+
+test("disponibilité : les groupes non porteurs ne sont pas touchés", () => {
+  let vue = groupesAvecDisponibilite(groupes, 1, combinaisons, "Pot 100 ml");
+  assert.equal(vue[1], groupes[1]);
 });
 
 console.log(echecs === 0 ? "\nTous les tests passent." : `\n${echecs} test(s) en échec.`);

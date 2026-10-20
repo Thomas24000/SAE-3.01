@@ -162,18 +162,23 @@ export function choixDeLigne(ids, produitId, groupes) {
 
 /**
  * Une ligne de panier ne pourrait-elle pas être commandée ? Elle est invalide si
- * l'une de ses options n'est pas reconnue pour son produit, ou si un groupe
- * obligatoire du produit n'a aucun choix (cas des paniers créés avant les options).
+ * l'une de ses options n'est pas reconnue pour son produit, si un groupe
+ * obligatoire du produit n'a aucun choix (cas des paniers créés avant les
+ * options) ou si le choix du groupe porteur de stock n'est pas celui de sa
+ * variante (cas des paniers créés avant les variantes par service, US OPT-b).
  *
  * @param {number[]} ids - les identifiants de choix de la ligne.
  * @param {number} produitId - le produit de la variante de la ligne.
  * @param {Array<{id: number, obligatoire: boolean, choix: Array<{id: number}>}>} groupes
  *        les groupes d'options de ce produit (vide si le produit n'en a pas).
+ * @param {number|null} [choixId] - le choix du groupe porteur de stock de la variante de la ligne.
  * @returns {boolean} true si la ligne doit être retirée du panier.
  */
-export function ligneInvalide(ids, produitId, groupes) {
+export function ligneInvalide(ids, produitId, groupes, choixId = null) {
   return (
-    choixDeLigne(ids, produitId, groupes).length !== ids.length || hasMissing(groupes, choixDepuisIds(groupes, ids))
+    choixDeLigne(ids, produitId, groupes).length !== ids.length ||
+    hasMissing(groupes, choixDepuisIds(groupes, ids)) ||
+    (choixId !== null && !ids.includes(choixId))
   );
 }
 
@@ -189,4 +194,78 @@ export function formaterOptions(options) {
       option.supplementCents > 0 ? `${option.libelle} (+ ${formaterPrix(option.supplementCents)})` : option.libelle
     )
     .join(", ");
+}
+
+/**
+ * Identifiant du groupe d'options qui porte le stock (US OPT-b) : celui dont un
+ * choix est référencé par une variante (`choixId`). Les variantes d'un produit
+ * sans ce groupe ont toutes `choixId` à null.
+ *
+ * @param {Array<{id: number, choix: Array<{id: number}>}>} groupes
+ * @param {Array<{choixId: number|null}>} variantes
+ * @returns {number|null} l'identifiant du groupe, ou null s'il n'y en a pas.
+ */
+export function groupePorteurId(groupes, variantes) {
+  let groupe = groupes.find((autre) => autre.choix.some((choix) => variantes.some((v) => v.choixId === choix.id)));
+
+  return groupe === undefined ? null : groupe.id;
+}
+
+/**
+ * La variante d'une combinaison exacte : un format et un choix du groupe porteur.
+ *
+ * @param {Array<{libelle: string, choixId: number|null}>} variantes
+ * @param {string} format - le libellé du format.
+ * @param {number|null} choixId - le choix du groupe porteur, null si le produit n'en a pas.
+ * @returns {Object|undefined} la variante, ou undefined si cette combinaison n'existe pas.
+ */
+export function varianteDe(variantes, format, choixId) {
+  return variantes.find((variante) => variante.libelle === format && variante.choixId === choixId);
+}
+
+/**
+ * La variante à sélectionner quand on choisit un format : la combinaison avec le
+ * choix actuel si elle est en stock, sinon la première du format qui l'est, sinon
+ * la combinaison exacte (épuisée) ou, à défaut, la première du format.
+ *
+ * @param {Array<{libelle: string, choixId: number|null, stock: number}>} variantes
+ * @param {string} format
+ * @param {number|null} choixId - le choix actuel du groupe porteur.
+ * @returns {Object|undefined} la variante, undefined si le format n'existe pas.
+ */
+export function varianteAChoisir(variantes, format, choixId) {
+  let exacte = varianteDe(variantes, format, choixId);
+  if (exacte !== undefined && exacte.stock > 0) return exacte;
+
+  let enStock = variantes.find((variante) => variante.libelle === format && variante.stock > 0);
+
+  return enStock ?? exacte ?? variantes.find((variante) => variante.libelle === format);
+}
+
+/**
+ * Les groupes, avec pour chaque choix du groupe porteur de stock son
+ * indisponibilité pour le format donné : « Épuisé » si la combinaison n'a plus
+ * de stock, « Indisponible » si elle n'existe pas. Les autres groupes sont
+ * renvoyés tels quels.
+ *
+ * @param {Array<{id: number, choix: Array<{id: number}>}>} groupes
+ * @param {number|null} porteurId - l'identifiant du groupe porteur de stock.
+ * @param {Array<{libelle: string, choixId: number|null, stock: number}>} variantes
+ * @param {string} format - le format choisi.
+ * @returns {Array<Object>} les groupes, leurs choix portant `indisponible` (booléen) et `raison`.
+ */
+export function groupesAvecDisponibilite(groupes, porteurId, variantes, format) {
+  return groupes.map((groupe) => {
+    if (groupe.id !== porteurId) return groupe;
+
+    return {
+      ...groupe,
+      choix: groupe.choix.map((choix) => {
+        let variante = varianteDe(variantes, format, choix.id);
+        let raison = variante === undefined ? "Indisponible" : variante.stock === 0 ? "Épuisé" : "";
+
+        return { ...choix, indisponible: raison !== "", raison: raison };
+      }),
+    };
+  });
 }

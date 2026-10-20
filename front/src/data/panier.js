@@ -132,27 +132,30 @@ PanierData.setQuantity = function (variantId, quantite, options = []) {
 };
 
 /**
- * Remplace les options d'une ligne. Si une autre ligne de la même variante a
- * déjà ces options, les deux lignes fusionnent (quantités additionnées) ; sinon
- * la ligne garde sa place dans le panier avec ses nouvelles options.
+ * Remplace les options d'une ligne, et sa variante si le choix du service change
+ * (US OPT-b : la variante est une combinaison format + service). Si une autre
+ * ligne a déjà cette variante avec ces options, les deux lignes fusionnent
+ * (quantités additionnées) ; sinon la ligne garde sa place dans le panier.
  *
- * @param {number} variantId - l'identifiant de la variante.
+ * @param {number} variantId - l'identifiant de la variante actuelle de la ligne.
  * @param {number[]} anciennes - les options actuelles de la ligne.
  * @param {number[]} nouvelles - les options à lui donner.
+ * @param {number} [nouvelleVariantId] - la variante à lui donner (la même par défaut).
  * @returns {Array<{variantId: number, quantite: number, options: number[]}>} le panier mis à jour.
  */
-PanierData.changeOptions = function (variantId, anciennes, nouvelles) {
+PanierData.changeOptions = function (variantId, anciennes, nouvelles, nouvelleVariantId = variantId) {
   let avant = normaliserOptions(anciennes);
   let apres = normaliserOptions(nouvelles);
   let lignes = PanierData.read();
   let ligne = lignes.find((autre) => memeLigne(autre, variantId, avant));
   if (ligne === undefined) return lignes;
 
-  let cible = lignes.find((autre) => autre !== ligne && memeLigne(autre, variantId, apres));
+  let cible = lignes.find((autre) => autre !== ligne && memeLigne(autre, nouvelleVariantId, apres));
   if (cible !== undefined) {
     cible.quantite = Math.min(cible.quantite + ligne.quantite, QUANTITE_MAX);
     lignes = lignes.filter((autre) => autre !== ligne);
   } else {
+    ligne.variantId = nouvelleVariantId;
     ligne.options = apres;
   }
 

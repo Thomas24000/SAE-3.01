@@ -161,7 +161,7 @@ Pages actuelles : `produits` (catalogue), `produit` (fiche), `admin`, `404`.
 | `POST /api/logout` | déconnexion |
 | `GET /api/admin/stats` | statistiques du catalogue, réservées au rôle `admin` (403 sinon) |
 
-Les prix sont des entiers en centimes. Le stock est porté par la variante.
+Les prix sont des entiers en centimes. Le stock est porté par la variante, c'est-à-dire par la combinaison d'un format et d'un service (cuillère, coupelle, cône) : chaque combinaison a son propre stock.
 
 ## 7. Comptes de démonstration
 

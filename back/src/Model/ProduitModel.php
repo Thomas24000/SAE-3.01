@@ -254,6 +254,49 @@ final class ProduitModel
     }
 
     /**
+     * Toutes les variantes (combinaisons format + choix de service) des produits
+     * demandés, avec leur stock : de quoi proposer, dans le panier, les
+     * combinaisons voisines d'une ligne et savoir lesquelles sont épuisées.
+     *
+     * @param array<int, int> $produitIds Identifiants de produits (entiers positifs).
+     * @return array<int, array<int, array{variantId:int, libelle:string, choixId:int|null, prixCents:int, stock:int}>>
+     *         Les variantes de chaque produit, indexées par identifiant de produit.
+     */
+    public function findCombinaisonsByProduits(array $produitIds): array
+    {
+        if ($produitIds === []) {
+            return [];
+        }
+
+        // Un « ? » par identifiant : les valeurs restent des paramètres liés.
+        $marqueurs = implode(',', array_fill(0, count($produitIds), '?'));
+
+        $requete = $this->pdo->prepare(
+            'SELECT id, produit_id, libelle, choix_id, prix_cents, stock
+               FROM variante
+              WHERE produit_id IN (' . $marqueurs . ')
+           ORDER BY produit_id, prix_cents, libelle, id'
+        );
+        $requete->execute(array_values($produitIds));
+
+        return array_reduce(
+            $requete->fetchAll(),
+            static function (array $produits, array $ligne): array {
+                $produits[(int) $ligne['produit_id']][] = [
+                    'variantId' => (int) $ligne['id'],
+                    'libelle'   => $ligne['libelle'],
+                    'choixId'   => $ligne['choix_id'] === null ? null : (int) $ligne['choix_id'],
+                    'prixCents' => (int) $ligne['prix_cents'],
+                    'stock'     => (int) $ligne['stock'],
+                ];
+
+                return $produits;
+            },
+            []
+        );
+    }
+
+    /**
      * Un produit retrouvé par son slug, avec sa catégorie, ses images et toutes
      * ses variantes, de la moins chère à la plus chère. Une variante est une
      * combinaison : un format (libelle) et, si le produit en a un, le choix du

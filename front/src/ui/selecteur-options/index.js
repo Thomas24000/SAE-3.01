@@ -7,8 +7,10 @@ import templateChoix from "./choix.html?raw";
 // Les classes sont écrites en entier, et non assemblées : Tailwind ne génère
 // que les classes qu'il trouve telles quelles dans le code.
 const ETATS = {
-  defaut: "border-border-default hover:border-border-strong",
-  selectionne: "border-2 border-border-strong font-semibold",
+  defaut: "cursor-pointer border-border-default hover:border-border-strong",
+  selectionne: "cursor-pointer border-2 border-border-strong font-semibold",
+  indisponible: "cursor-not-allowed border-border-default text-fg-muted",
+  selectionneIndisponible: "cursor-not-allowed border-2 border-border-default text-fg-muted font-semibold",
 };
 
 // Les options d'un produit (service, toppings...) : un groupe de boutons radio
@@ -17,11 +19,17 @@ let SelecteurOptionsView = {
   /**
    * Un choix d'option, avec son supplément de prix.
    *
-   * @param {{id: number, libelle: string, supplementCents: number, selectionne: boolean}} choix
+   * @param {{id: number, libelle: string, supplementCents: number, selectionne: boolean,
+   *          indisponible?: boolean, raison?: string}} choix
+   *        indisponible : le choix n'est pas sélectionnable ; raison (« Épuisé »,
+   *        « Indisponible ») le dit en toutes lettres à la place du supplément.
    * @param {{id: number, multiple: boolean}} groupe - le groupe auquel appartient le choix.
    * @returns {DocumentFragment}
    */
   domChoix: function (choix, groupe) {
+    let indisponible = choix.indisponible === true;
+    let etat = indisponible ? (choix.selectionne ? "selectionneIndisponible" : "indisponible") : choix.selectionne ? "selectionne" : "defaut";
+
     return htmlToFragment(
       genericRenderer(templateChoix, {
         id: choix.id,
@@ -29,8 +37,13 @@ let SelecteurOptionsView = {
         libelle: choix.libelle,
         type: groupe.multiple ? "checkbox" : "radio",
         coche: choix.selectionne ? "checked" : "",
-        supplement: choix.supplementCents > 0 ? `+ ${formaterPrix(choix.supplementCents)}` : "Inclus",
-        classes: choix.selectionne ? ETATS.selectionne : ETATS.defaut,
+        desactive: indisponible ? "disabled" : "",
+        supplement: indisponible
+          ? choix.raison
+          : choix.supplementCents > 0
+            ? `+ ${formaterPrix(choix.supplementCents)}`
+            : "Inclus",
+        classes: ETATS[etat],
       })
     );
   },

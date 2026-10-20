@@ -2,22 +2,26 @@ import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { MessageView } from "../message/index.js";
 import template from "./template.html?raw";
 import templateFormat from "./format.html?raw";
+import templateStock from "./stock.html?raw";
 import templateSuppression from "./suppression.html?raw";
 
 const IMAGES = import.meta.env.BASE_URL + "images/admin/";
 
 // Formulaire de création ou de modification d'un produit : informations,
-// formats (prix et stock) et boutons d'action. Les panneaux « Images » et
+// formats (un prix, et un stock par service : US OPT-b) et boutons d'action. Les panneaux « Images » et
 // « Stock et alerte » sont fournis par la page et insérés à leur place.
 // Il ne valide rien et ne décide de rien : il transmet ce qui est saisi.
 let FormulaireProduitView = {
   /**
    * @param {{nom: string, categorieId: string, description: string, descriptionLongue: string,
    *          ingredients: string, categories: Array<{id: number, libelle: string}>,
-   *          variantes: Array<{id: (number|null), libelle: string, prix: string, stock: string}>,
+   *          variantes: Array<{libelle: string, prix: string, stocks: Array<{id: (number|null),
+   *          choixId: (number|null), service: string, stock: string}>}>,
    *          edition: boolean, bouton: string, enCours: boolean,
    *          message: ({type: string, texte: string}|null)}} data - categorieId : l'id choisi en
    *   texte ("" si aucun) ; prix et stock : les textes saisis ; edition : faux en création.
+   *   Chaque format porte un stock par service (service "" et choixId null pour un produit
+   *   sans service) ; un stock vide veut dire « combinaison non proposée ».
    * @param {{images: DocumentFragment, seuil: (DocumentFragment|null)}} panneaux - les panneaux
    *   préparés par la page ; seuil vaut null en création.
    * @param {{surEnvoi: function(Object): void, surAjoutFormat: function(Object): void,
@@ -54,20 +58,35 @@ let FormulaireProduitView = {
     fragment.querySelector('slot[name="images"]').replaceWith(panneaux.images);
 
     fragment.querySelector('slot[name="formats"]').replaceWith(
-      ...data.variantes.map((variante, index) =>
-        htmlToFragment(
+      ...data.variantes.map((variante, index) => {
+        let format = htmlToFragment(
           genericRenderer(templateFormat, {
-            id: variante.id ?? "",
             libelle: variante.libelle,
             prix: variante.prix,
-            stock: variante.stock,
             index,
             numero: index + 1,
             images: IMAGES,
             desactive: data.variantes.length === 1 ? "disabled" : "",
+            legende: variante.stocks[0].service === "" ? "Stock" : "Stock par service (vide : combinaison non proposée)",
           })
-        )
-      )
+        );
+
+        format.querySelector('slot[name="stocks"]').replaceWith(
+          ...variante.stocks.map((stock) =>
+            htmlToFragment(
+              genericRenderer(templateStock, {
+                libelle: stock.service === "" ? "Stock" : stock.service,
+                stock: stock.stock,
+                id: stock.id ?? "",
+                choixId: stock.choixId ?? "",
+                service: stock.service,
+              })
+            )
+          )
+        );
+
+        return format;
+      })
     );
 
     let slotSeuil = fragment.querySelector('slot[name="seuil"]');
@@ -108,8 +127,8 @@ let FormulaireProduitView = {
    *
    * @param {HTMLFormElement} formulaire - le formulaire du produit.
    * @returns {{nom: string, categorieId: string, description: string, descriptionLongue: string,
-   *           ingredients: string, variantes: Array<{id: (number|null), libelle: string,
-   *           prix: string, stock: string}>}}
+   *           ingredients: string, variantes: Array<{libelle: string, prix: string,
+   *           stocks: Array<{id: (number|null), choixId: (number|null), service: string, stock: string}>}>}}
    */
   lireEtat: function (formulaire) {
     let champ = (nom) => formulaire.querySelector(`[name="${nom}"]`).value;
@@ -121,10 +140,14 @@ let FormulaireProduitView = {
       descriptionLongue: champ("descriptionLongue"),
       ingredients: champ("ingredients"),
       variantes: Array.from(formulaire.querySelectorAll("[data-ligne]")).map((ligne) => ({
-        id: ligne.dataset.id === "" ? null : Number(ligne.dataset.id),
         libelle: ligne.querySelector('[name="libelle"]').value,
         prix: ligne.querySelector('[name="prix"]').value,
-        stock: ligne.querySelector('[name="stock"]').value,
+        stocks: Array.from(ligne.querySelectorAll('[name="stock"]')).map((champ) => ({
+          id: champ.dataset.id === "" ? null : Number(champ.dataset.id),
+          choixId: champ.dataset.choixId === "" ? null : Number(champ.dataset.choixId),
+          service: champ.dataset.service,
+          stock: champ.value,
+        })),
       })),
     };
   },

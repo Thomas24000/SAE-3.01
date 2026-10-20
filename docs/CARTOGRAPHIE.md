@@ -70,6 +70,7 @@ sur la fiche puis **figées** dans la commande, avec le prix unitaire.
 | `parametre` | seuil « Bientôt épuisé » |
 
 Points clés :
+- **Variante = combinaison (OPT-b).** `variante.libelle` est le format, `variante.choix_id` le choix du groupe d'options qui porte le stock (`option_groupe.porte_stock = 1`, le « Service »), `NULL` pour un produit sans service. Une combinaison absente de la table n'existe pas : la fiche et l'éditeur d'options du panier l'affichent « Indisponible », « Épuisé » si son stock est nul. La commande exige que le service des options soit celui de la variante. L'admin saisit un prix par format et un stock par service (champ vide = combinaison retirée).
 - La commande est une transaction : variantes verrouillées, prix relus en base, stock décrémenté et journalisé. `CommandeModel::mouvementer()` est le seul à écrire `variante.stock`, et `changerStatut()` le seul à changer un statut (recrédit à l'annulation).
 - Comptes de démo dans les seeds (`alice@example.com`, `admin@example.com`) : retirer les mots de passe avant tout dépôt public.
 
@@ -83,4 +84,6 @@ Points clés :
 | `ui/message` utilise des couleurs Tailwind brutes | exception connue, ne pas la recopier |
 | Composants `formulaire-connexion` / `statistiques` hérités de la page admin de démo, plus utilisés | à supprimer sur demande |
 | Stock saisi en back-office non journalisé | acceptable en MVP |
+| Produits créés dans l'admin : aucun groupe d'options ni service (la création d'options reste hors périmètre) | un seul stock par format |
+| Stock affiché dans le catalogue = somme des combinaisons du produit | acceptable |
 | Pages admin et commande pas toutes testées en navigateur ni sur la vraie base | à tester |

@@ -140,7 +140,7 @@ final class ProduitModel
      * inconnu est simplement absent du résultat.
      *
      * @param array<int, int> $ids Identifiants de variantes (déjà validés comme entiers positifs).
-     * @return array<int, array{variantId:int, libelle:string, prixCents:int, stock:int,
+     * @return array<int, array{variantId:int, libelle:string, choixId:int|null, prixCents:int, stock:int,
      *                          produit:array{id:int, nom:string, slug:string, image:string, teinte:int}}>
      */
     public function findVariantesByIds(array $ids): array
@@ -156,6 +156,7 @@ final class ProduitModel
         $requete = $this->pdo->prepare(
             'SELECT variante.id,
                     variante.libelle,
+                    variante.choix_id,
                     variante.prix_cents,
                     variante.stock,
                     produit.id AS produit_id,
@@ -174,6 +175,7 @@ final class ProduitModel
             static fn (array $ligne): array => [
                 'variantId' => (int) $ligne['id'],
                 'libelle'   => $ligne['libelle'],
+                'choixId'   => $ligne['choix_id'] === null ? null : (int) $ligne['choix_id'],
                 'prixCents' => (int) $ligne['prix_cents'],
                 'stock'     => (int) $ligne['stock'],
                 'produit'   => [
@@ -253,15 +255,18 @@ final class ProduitModel
 
     /**
      * Un produit retrouvé par son slug, avec sa catégorie, ses images et toutes
-     * ses variantes (format, prix en centimes, stock), de la moins chère à la
-     * plus chère.
+     * ses variantes, de la moins chère à la plus chère. Une variante est une
+     * combinaison : un format (libelle) et, si le produit en a un, le choix du
+     * groupe d'options porteur de stock (choixId, ex. le Service), chacune avec
+     * son prix en centimes et son stock. Une combinaison absente de la liste
+     * n'existe pas.
      *
      * @param string $slug Identifiant d'URL du produit (ex. « cookie-dough »).
      * @return array{id:int, nom:string, slug:string, description:string,
      *               descriptionLongue:string, ingredients:string, teinte:int,
      *               image:string, images:array<int, string>,
      *               categorie:array{libelle:string, slug:string},
-     *               variantes:array<int, array{id:int, libelle:string, prixCents:int, stock:int}>,
+     *               variantes:array<int, array{id:int, libelle:string, choixId:int|null, prixCents:int, stock:int}>,
      *               options:array<int, array{id:int, libelle:string, multiple:bool, obligatoire:bool,
      *                                        choix:array<int, array{id:int, libelle:string, supplementCents:int}>}>}|null
      *         null si aucun produit ne porte ce slug.
@@ -291,10 +296,11 @@ final class ProduitModel
         }
 
         $requeteVariantes = $this->pdo->prepare(
-            'SELECT id, libelle, prix_cents, stock
+            'SELECT variante.id, variante.libelle, variante.choix_id, variante.prix_cents, variante.stock
                FROM variante
-              WHERE produit_id = :produit_id
-           ORDER BY prix_cents, id'
+          LEFT JOIN option_choix ON option_choix.id = variante.choix_id
+              WHERE variante.produit_id = :produit_id
+           ORDER BY variante.prix_cents, variante.libelle, option_choix.position, variante.id'
         );
         $requeteVariantes->execute(['produit_id' => (int) $produit['id']]);
         $variantes = $requeteVariantes->fetchAll();
@@ -327,6 +333,7 @@ final class ProduitModel
                 static fn (array $ligne): array => [
                     'id'        => (int) $ligne['id'],
                     'libelle'   => $ligne['libelle'],
+                    'choixId'   => $ligne['choix_id'] === null ? null : (int) $ligne['choix_id'],
                     'prixCents' => (int) $ligne['prix_cents'],
                     'stock'     => (int) $ligne['stock'],
                 ],

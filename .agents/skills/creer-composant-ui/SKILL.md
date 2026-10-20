@@ -16,7 +16,7 @@ Modèles de référence : `ui/carte-produit/`, `ui/badge-stock/`,
 1. Lire `AGENTS.md` (sections 3, 4, 5) et un composant voisin.
 2. Vérifier qu'aucun composant existant ne convient (`ls front/src/ui/`).
 3. Annoncer à l'utilisateur : nom du composant, forme des données reçues,
-   callbacks exposés, états gérés. Attendre son accord (AGENTS §8 : une
+   callbacks exposés, états gérés. Attendre son accord (AGENTS §1 : une
    fonctionnalité à la fois, pas de code non demandé).
 
 ## 2. Structure de fichiers
@@ -119,5 +119,5 @@ l'état en paramètre.
 2. `cd front && npm run build`
 3. Vérification visuelle à 320/375, 768 et 1440 px (`npm run dev`, puis
    `http://localhost:5174/~bellevert1/SAE301-Starter/`).
-4. Compte rendu au format AGENTS §11 (fichiers, lignes, points d'attention,
+4. Compte rendu au format AGENTS §10 (fichiers, détail, points d'attention,
    impacts). Ne jamais commit/push.

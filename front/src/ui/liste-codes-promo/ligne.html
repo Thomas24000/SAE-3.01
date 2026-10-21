@@ -1,0 +1,17 @@
+<li class="grid grid-cols-2 gap-x-4 gap-y-2 p-4 md:grid-cols-[minmax(0,1.5fr)_5rem_6rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.3fr)_6rem] md:items-center">
+  <div class="col-span-2 flex flex-wrap items-center gap-2 md:col-span-1">
+    <p class="text-sm font-bold tracking-wide break-all">{{code}}</p>
+    <span class="inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-medium {{classesEtat}}">{{etat}}</span>
+  </div>
+  <p class="flex flex-col text-sm"><span class="text-xs text-fg-muted md:hidden">Remise</span>{{remise}}</p>
+  <p class="flex flex-col text-sm"><span class="text-xs text-fg-muted md:hidden">Utilisations</span>{{utilisations}}</p>
+  <p class="flex flex-col text-sm"><span class="text-xs text-fg-muted md:hidden">Réductions accordées</span>{{reductions}}</p>
+  <p class="flex flex-col text-sm"><span class="text-xs text-fg-muted md:hidden">Chiffre d'affaires</span>{{chiffre}}</p>
+  <p class="col-span-2 flex flex-col text-sm md:col-span-1"><span class="text-xs text-fg-muted md:hidden">Dernière utilisation</span>{{derniere}}</p>
+  <div class="col-span-2 flex gap-1 md:col-span-1">
+    <a href="{{href}}" data-link title="Modifier" aria-label="Modifier le code {{code}}" class="flex size-10 items-center justify-center rounded-md transition-colors hover:bg-bg-subtle">
+      <img src="{{images}}crayon.svg" alt="" width="18" height="18" class="size-4.5 dark:invert" />
+    </a>
+    <slot name="supprimer"></slot>
+  </div>
+</li>

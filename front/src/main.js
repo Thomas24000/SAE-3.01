@@ -18,6 +18,8 @@ import { AdminCategoriePage } from "./pages/admin-categorie/page.js";
 import { AdminCommandesPage } from "./pages/admin-commandes/page.js";
 import { AdminCommandePage } from "./pages/admin-commande/page.js";
 import { AdminStatistiquesPage } from "./pages/admin-statistiques/page.js";
+import { AdminCodesPromoPage } from "./pages/admin-codes-promo/page.js";
+import { AdminCodePromoPage } from "./pages/admin-code-promo/page.js";
 import { AdminProduitsPage } from "./pages/admin-produits/page.js";
 import { AdminProduitPage } from "./pages/admin-produit/page.js";
 import { The404Page } from "./pages/404/page.js";
@@ -50,6 +52,9 @@ router.addRoute("/admin/categories/:id/modifier", AdminCategoriePage);
 router.addRoute("/admin/commandes", AdminCommandesPage);
 router.addRoute("/admin/commandes/:numero", AdminCommandePage);
 router.addRoute("/admin/statistiques", AdminStatistiquesPage);
+router.addRoute("/admin/codes-promo", AdminCodesPromoPage);
+router.addRoute("/admin/codes-promo/nouveau", AdminCodePromoPage);
+router.addRoute("/admin/codes-promo/:id/modifier", AdminCodePromoPage);
 
 // En dernier : toute adresse qui ne correspond à aucune route.
 router.addRoute("*", The404Page);

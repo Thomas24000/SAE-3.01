@@ -8,29 +8,43 @@ paiement en ligne).
 
 | Fonctionnalité | État |
 |---|---|
-| Catalogue des produits, filtre par catégorie, « Voir plus » | fait |
-| Fiche produit (`/produit/:slug`), variantes, quantité, stock | fait |
-| Connexion par session, page Administration réservée au rôle `admin` | fait (comptes de démonstration) |
+| Catalogue, filtre par catégorie (sans changement d'URL), « Voir plus » | fait (DEC-b) ; `/categorie/:slug` à faire (DEC-a) |
+| Fiche produit (`/produit/:slug`), galerie, variantes, options, quantité | fait (DEC-c) ; métadonnées SEO et retour à la catégorie d'origine à faire |
+| Panier en `localStorage`, compteur dans l'en-tête | fait (CMD-b) |
+| Inscription, connexion, déconnexion (mots de passe hachés, session régénérée) | fait (CMD-c) |
+| Validation de commande, numéro unique, confirmation | fait (CMD-a) |
+| Stock par variante : affichage, contraintes, décrément et recrédit journalisés | fait (STK-a, STK-b, STK-c) |
+| Options et variantes avec stock par combinaison | fait (OPT-a, OPT-b, OPT-c) |
+| Espace personnel, historique des commandes, « Commander à nouveau » | fait (SUI-a, SUI-b, SUI-c) |
+| Back-office `/admin` : catégories, produits, images, seuil de stock | fait (GOF-a, GOF-b, GOF-c) |
+| Back-office : commandes (statuts, annulation, actions en lot, journal) et statistiques avec export CSV | fait (PIL-a, PIL-b) |
+| Promotion automatique, codes promo et leur gestion | fait (PRO-a, PRO-b, PRO-c) |
 | Thème clair / sombre en `localStorage` | fait |
-| Panier, commande, options, back-office complet | à venir |
+
+Le détail de l'architecture et des règles métier est dans `docs/CARTOGRAPHIE.md`,
+l'ordre des US dans `docs/US.md`.
 
 ## 1. Arborescence
 
 ```
 .htaccess            /api/... vers le back, tout le reste vers front/dist/
-sql/glaces.sql       tables et jeu de données, à importer dans votre base
+sql/glaces.sql       schéma, jeu de données et comptes de démonstration, rejouable
+uploads/             images téléversées depuis le back-office (non versionnées)
+docs/                CARTOGRAPHIE.md (architecture), US.md (ordre des US)
 back/                API PHP, ne renvoie que du JSON
 ├── index.php        point d'entrée : assemble les dépendances, délègue
 ├── config/          identifiants de la base, chemin du projet
-└── src/             Core/ (Request, Response, Router, Database),
-                     Controller/, Model/, routes.php
+├── src/             Core/ (Request, Response, Router, Database, sessions admin,
+│                    téléversement), Controller/, Model/, routes.php
+└── tests/           scripts CLI, à lancer sur une base jetable
 front/               sources du front (Vite + Tailwind)
 ├── index.html       page unique de l'application
+├── tests/           tests Node de la logique pure (stock, options, promotion, CSV)
 ├── vite.config.js   chemin du projet, proxy de développement
 ├── src/
 │   ├── main.js      déclaration des routes et des layouts
 │   ├── global.css   Tailwind, tokens de design, thème sombre
-│   ├── layouts/     structures de page (en-tête + slot de la page)
+│   ├── layouts/     structures de page : boutique (root) et back-office (admin)
 │   ├── pages/       une page par route : page.js + template.html
 │   ├── ui/          composants réutilisables : index.js + template.html
 │   ├── data/        appels à l'API, un module par ressource
@@ -43,7 +57,7 @@ front/               sources du front (Vite + Tailwind)
 
 | Étape | Action |
 |---|---|
-| 1 | Importer `sql/glaces.sql` dans votre base depuis phpMyAdmin (il crée `categorie`, `produit`, `produit_image` et `variante` ; une table existante de même nom serait remplacée) |
+| 1 | Importer `sql/glaces.sql` dans votre base depuis phpMyAdmin (il crée toutes les tables : catalogue, variantes, options, utilisateurs, commandes, stock, codes promo ; une table existante de même nom serait remplacée) |
 | 2 | Dans `back/config/config.php`, renseigner les identifiants de la base et le chemin du projet (`/~votre_login/SAE301-Starter/`) |
 | 3 | Dans `front/vite.config.js`, donner à `BASE` **exactement** le même chemin |
 | 4 | Dans `front/`, lancer `npm install` |
@@ -60,7 +74,7 @@ npm run dev
 ```
 
 Le front est servi par Vite à `http://localhost:5173/~votre_login/SAE301-Starter/`
-(Vite prend le port suivant si celui-ci est occupé), avec rechargement à chaque
+(Vite prend le port suivant, par exemple 5174, si celui-ci est occupé), avec rechargement à chaque
 modification. Les requêtes `/~votre_login/SAE301-Starter/api/...` sont
 relayées par Vite vers l'API déployée sur `mmi.unilim.fr` : le back doit donc
 être en place sur le serveur (voir Déployer).
@@ -100,7 +114,9 @@ Déclaré dans `main.js`, sur le modèle de `react-router` :
 router.addLayout("/", RootLayout);
 router.addRoute("/", ProduitsPage);
 router.addRoute("/produit/:slug", ProduitPage);   // params.slug dans la page
-router.addRoute("/admin", AdminPage);
+router.addRoute("/panier", PanierPage);
+router.addRoute("/commande/:numero", ConfirmationPage);
+router.addRoute("/admin", AdminPage);          // /admin/... : layout du back-office
 router.addRoute("*", The404Page);                 // toujours en dernier
 ```
 
@@ -149,29 +165,40 @@ Après chaque changement, toute la page est reconstruite et remplace l'ancienne
 (`V.rafraichir()`) : l'affichage se déduit de l'état, on ne le retouche pas
 morceau par morceau.
 
-Pages actuelles : `produits` (catalogue), `produit` (fiche), `admin`, `404`.
+Pages actuelles : `produits` (catalogue), `produit` (fiche), `panier`,
+`commande`, `confirmation`, `connexion`, `inscription`, `compte` (accueil,
+profil, commandes, mot de passe), `admin` (accueil, produits, catégories,
+commandes, statistiques, codes promo) et `404`.
 
 ## 6. L'API
 
-| Route | Effet |
-|---|---|
-| `GET /api/produits` | le catalogue : `{ produits, total }`, avec prix « à partir de » et stock total |
-| `GET /api/produit?slug=cookie-dough` | la fiche d'un produit, avec ses images et ses variantes (400 si le slug est invalide, 404 s'il est inconnu) |
-| `POST /api/login` | connexion, corps JSON `{"login": …, "mdp": …}` |
-| `POST /api/logout` | déconnexion |
-| `GET /api/admin/stats` | statistiques du catalogue, réservées au rôle `admin` (403 sinon) |
+Toutes les routes sont déclarées dans `back/src/routes.php`. Les erreurs
+renvoient un JSON `{ erreur }` avec un statut HTTP explicite.
 
-Les prix sont des entiers en centimes. Le stock est porté par la variante, c'est-à-dire par la combinaison d'un format et d'un service (cuillère, coupelle, cône) : chaque combinaison a son propre stock.
+| Groupe | Routes |
+|---|---|
+| Catalogue | `GET /api/produits`, `GET /api/produit?slug=…`, `GET /api/panier` (prix et stock actuels des variantes du panier) |
+| Compte client | `POST /api/inscription`, `POST /api/login`, `GET /api/me`, `POST /api/logout`, `GET /api/compte`, `POST /api/compte/profil`, `POST /api/compte/mot-de-passe` |
+| Commande | `POST /api/commande`, `GET /api/commande?numero=…`, `GET /api/commandes` (filtres et pagination), `GET /api/commande/reprise`, `GET /api/code-promo?code=…` |
+| Back-office | `/api/admin/login`, `me`, `logout`, `categories…`, `produits…` (dont `images`), `parametres/seuil`, `commandes…`, `codes-promo…`, `stats`, `statistiques` |
+
+Les routes `/api/admin/*` exigent une session administrateur, distincte de
+celle des clients, et un jeton CSRF pour les écritures (403 sinon).
+
+Les prix sont des entiers en centimes. Le stock est porté par la variante, c'est-à-dire par la combinaison d'un format et d'un service (cuillère, coupelle, cône) : chaque combinaison a son propre stock. La commande est une transaction : prix et stock sont relus en base, le stock est décrémenté et journalisé, puis recrédité si la commande est annulée.
 
 ## 7. Comptes de démonstration
 
-Comptes en dur dans `AuthController`, à remplacer par une table d'utilisateurs
-(`password_hash`) lors de l'US d'authentification.
+Comptes créés par `sql/glaces.sql` (table `utilisateur`, mots de passe hachés
+avec `password_hash`). À retirer avant tout dépôt public.
 
-| Login | Mot de passe | Rôle |
+| Email | Mot de passe | Rôle |
 |---|---|---|
-| `alice` | `azerty` | `user` |
-| `admin` | `motdepasse` | `admin` |
+| `alice@example.com` | `azerty` | client |
+| `admin@example.com` | `motdepasse` | admin (connexion sur `/admin`) |
+
+Codes promo de démonstration : `BIENVENUE10`, `GLACE20` ; `ANCIEN15` est
+désactivé, pour tester un refus.
 
 ## 8. Vérifier l'architecture
 
@@ -179,12 +206,26 @@ Comptes en dur dans `AuthController`, à remplacer par une table d'utilisateurs
 node .agents/skills/verifier-mvc/scripts/check-mvc.js .
 ```
 
-## 9. Si ça ne marche pas
+## 9. Tests
+
+```bash
+cd front
+for t in tests/*.mjs; do node "$t"; done     # logique pure : stock, options, promotion, CSV
+```
+
+Les scripts de `back/tests/` (`stock.php`, `options.php`, `variantes.php`,
+`commandes-admin.php`, `promotion.php`, `codes-promo.php`,
+`codes-promo-admin.php`) s'exécutent en ligne de commande, sur une **base
+jetable** : ils réimportent les données et effacent les commandes. Les
+variables d'environnement à fournir sont décrites en tête de chaque script.
+
+## 10. Si ça ne marche pas
 
 | Symptôme | Cause probable |
 |---|---|
 | Un listing de dossiers, ou une erreur 404 sur la racine | le `.htaccess` n'a pas été déposé, ou `front/dist/` est absent (lancer `npm run build`) |
 | Page blanche, fichiers `assets/…` en 404 | `BASE` de `vite.config.js` ne correspond pas au dossier de dépôt |
 | « Impossible de charger le catalogue » | identifiants de `config.php`, ou tables non importées |
+| Les images téléversées n'apparaissent pas | `uploads/` absent ou non inscriptible sur le serveur |
 | La connexion ne tient pas | `chemin` de `config.php` ne correspond pas au dossier de dépôt |
 | En développement, l'API répond 404 | le back n'est pas déployé sur le serveur, ou `BASE` est faux |

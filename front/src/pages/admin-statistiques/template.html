@@ -1,0 +1,21 @@
+<div class="flex flex-1 flex-col">
+  <slot name="barre"></slot>
+
+  <div class="flex flex-col gap-6 p-4 md:p-6 lg:p-8">
+    <slot name="entete"></slot>
+    <slot name="message"></slot>
+    <slot name="alerte"></slot>
+    <slot name="actions"></slot>
+
+    <section aria-label="Indicateurs" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <slot name="indicateurs"></slot>
+    </section>
+
+    <div class="grid items-start gap-6 lg:grid-cols-2">
+      <slot name="revenus"></slot>
+      <slot name="statuts"></slot>
+      <slot name="ventes"></slot>
+      <slot name="stocks"></slot>
+    </div>
+  </div>
+</div>

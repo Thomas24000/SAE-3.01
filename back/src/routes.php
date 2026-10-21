@@ -57,4 +57,5 @@ return [
     'GET  /api/admin/commande'              => [AdminCommandeController::class, 'show'],
     'POST /api/admin/commandes/statut'      => [AdminCommandeController::class, 'updateStatus'],
     'GET  /api/admin/stats' => [StatsController::class,     'index'],
+    'GET  /api/admin/statistiques' => [StatsController::class, 'detail'],
 ];

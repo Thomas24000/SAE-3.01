@@ -14,4 +14,17 @@ StatsData.fetch = async function () {
   return getRequest("admin/stats");
 };
 
+/**
+ * Statistiques détaillées du back-office : GET /api/admin/statistiques, réservé
+ * aux administrateurs (401 sans session). Relues à chaque appel, jamais en cache.
+ *
+ * { genereLe, seuilBientotEpuise, stocks: [{ produit, categorie, stock }],
+ *   revenus: [{ jour, commandes, totalCents }], commandes: { total, parStatut },
+ *   meilleuresVentes: [{ produit, quantite, totalCents }] }
+ * revenus couvre les 7 derniers jours (annulées exclues) ; montants en centimes.
+ */
+StatsData.fetchDetail = async function () {
+  return getRequest("admin/statistiques");
+};
+
 export { StatsData };

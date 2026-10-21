@@ -135,6 +135,33 @@ final class ProduitModel
     }
 
     /**
+     * Le stock total de chaque produit (somme des stocks de ses variantes), du plus
+     * faible au plus fort : de quoi dessiner l'histogramme des stocks (US PIL-a).
+     *
+     * @return array<int, array{produit:string, categorie:string, stock:int}>
+     */
+    public function stocksParProduit(): array
+    {
+        $lignes = $this->pdo->query(
+            'SELECT produit.nom, categorie.libelle AS categorie, COALESCE(SUM(variante.stock), 0) AS stock
+               FROM produit
+         INNER JOIN categorie ON categorie.id = produit.categorie_id
+          LEFT JOIN variante ON variante.produit_id = produit.id
+           GROUP BY produit.id, produit.nom, categorie.libelle
+           ORDER BY stock ASC, produit.nom ASC'
+        )->fetchAll();
+
+        return array_map(
+            static fn (array $ligne): array => [
+                'produit'   => $ligne['nom'],
+                'categorie' => $ligne['categorie'],
+                'stock'     => (int) $ligne['stock'],
+            ],
+            $lignes
+        );
+    }
+
+    /**
      * Des variantes retrouvées par leur identifiant, avec le produit auquel elles
      * appartiennent : de quoi afficher les lignes d'un panier. Un identifiant
      * inconnu est simplement absent du résultat.

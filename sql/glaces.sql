@@ -17,6 +17,7 @@
 SET NAMES utf8mb4;
 
 DROP TABLE IF EXISTS parametre;
+DROP TABLE IF EXISTS code_promo;
 DROP TABLE IF EXISTS option_choix;
 DROP TABLE IF EXISTS option_groupe;
 DROP TABLE IF EXISTS journal_commande;
@@ -227,12 +228,40 @@ CREATE TABLE utilisateur (
   COLLATE = utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------------
+-- Codes promotionnels (US PRO-a)
+--
+-- code : saisi par le client, stocké en MAJUSCULES (lettres, chiffres, - et _) ;
+-- la recherche ignore donc la casse. UNIQUE.
+-- pourcentage : remise sur le total de la commande, de 1 à 100.
+-- actif : un code désactivé n'est plus accepté mais reste dans l'historique.
+-- ---------------------------------------------------------------------------
+CREATE TABLE code_promo (
+    id          INT UNSIGNED        NOT NULL AUTO_INCREMENT,
+    code        VARCHAR(30)         NOT NULL,
+    pourcentage TINYINT UNSIGNED    NOT NULL,
+    actif       TINYINT(1)          NOT NULL DEFAULT 1,
+    cree_le     DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_code_promo_code (code),
+
+    CONSTRAINT ck_code_promo_pourcentage CHECK (pourcentage BETWEEN 1 AND 100)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
 -- Commandes (US CMD-a)
 --
 -- numero : numéro lisible et unique (ex. CC-2026-000123), fabriqué par l'API
 -- à partir de l'identifiant de la commande.
 -- statut : une commande validée naît « en_cours ».
--- total_cents : somme des lignes, figée à la validation (centimes).
+-- total_cents : total à payer, réduction du code promo déduite, figé à la
+-- validation (centimes).
+-- code_promo, reduction_pourcent, reduction_cents (US PRO-a) : le code utilisé,
+-- son pourcentage et la réduction obtenue, copiés à la validation. Ce n'est pas
+-- une clé étrangère : modifier ou supprimer un code ne change pas les commandes
+-- passées. Sous-total = total_cents + reduction_cents.
 -- ---------------------------------------------------------------------------
 CREATE TABLE commande (
     id             INT UNSIGNED                                        NOT NULL AUTO_INCREMENT,
@@ -240,6 +269,9 @@ CREATE TABLE commande (
     utilisateur_id INT UNSIGNED                                        NOT NULL,
     statut         ENUM('en_cours', 'prete', 'retiree', 'annulee')     NOT NULL DEFAULT 'en_cours',
     total_cents    INT UNSIGNED                                        NOT NULL,
+    code_promo         VARCHAR(30)                                     NULL,
+    reduction_pourcent TINYINT UNSIGNED                                NULL,
+    reduction_cents    INT UNSIGNED                                    NOT NULL DEFAULT 0,
     cree_le        DATETIME                                            NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (id),
@@ -515,6 +547,12 @@ UPDATE variante
 
 INSERT INTO parametre (cle, valeur) VALUES
     ('seuil_bientot_epuise', '5');
+
+-- Codes promotionnels de démonstration (ANCIEN15 est désactivé, pour tester un refus).
+INSERT INTO code_promo (code, pourcentage, actif) VALUES
+    ('BIENVENUE10', 10, 1),
+    ('GLACE20', 20, 1),
+    ('ANCIEN15', 15, 0);
 
 -- Comptes de démonstration : alice@example.com / azerty (client),
 -- admin@example.com / motdepasse (admin). Les mots de passe sont stockés hachés.

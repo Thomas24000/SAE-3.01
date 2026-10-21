@@ -1,6 +1,6 @@
 import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
-import { formaterPrix } from "../../lib/format.js";
 import { formaterOptions } from "../../lib/options.js";
+import { PrixPromoView } from "../prix-promo/index.js";
 import { SelecteurOptionsView } from "../selecteur-options/index.js";
 import template from "./template.html?raw";
 import templateEdition from "./edition.html?raw";
@@ -11,10 +11,12 @@ let LignePanierView = {
    * @param {{variantId: number, options: Array<{id: number, libelle: string, supplementCents: number}>,
    *          cle: string, nom: string, slug: string, libelle: string,
    *          image: string, teinte: number, quantite: number, totalCents: number,
+   *          totalPleinCents: (number|null),
    *          moinsPossible: boolean, plusPossible: boolean, modifiable: boolean,
    *          edition: null|{groupes: Array<Object>, manquants: boolean}}} data
-   *        totalCents : prix de la ligne en centimes ((prix du format + suppléments
-   *        des options) × quantité) ; cle : les identifiants des options séparés
+   *        totalCents : prix de la ligne en centimes ((prix à payer du format + suppléments
+   *        des options) × quantité) ; totalPleinCents : le même total sans la promotion
+   *        automatique, ou null hors promotion (le prix plein est alors barré) ; cle : les identifiants des options séparés
    *        par des virgules, qui distinguent les lignes d'une même variante ;
    *        plusPossible : false quand la quantité atteint le stock de la variante ;
    *        modifiable : le produit a des options à changer ; edition : null, ou les
@@ -45,12 +47,22 @@ let LignePanierView = {
         image: data.image,
         teinte: data.teinte,
         quantite: data.quantite,
-        prix: formaterPrix(data.totalCents),
         moinsDesactive: data.moinsPossible ? "" : "disabled",
         plusDesactive: data.plusPossible ? "" : "disabled",
         alerteStock: data.plusPossible ? "hidden" : "",
       })
     );
+
+    // Le prix de la ligne : barré puis promotionnel quand le produit est en promotion.
+    fragment
+      .querySelector('slot[name="prix"]')
+      .replaceWith(
+        PrixPromoView.dom(
+          data.totalPleinCents === null
+            ? { prixCents: data.totalCents, prixPromoCents: null }
+            : { prixCents: data.totalPleinCents, prixPromoCents: data.totalCents }
+        )
+      );
 
     let slotEdition = fragment.querySelector('slot[name="edition"]');
     if (data.edition === null) {

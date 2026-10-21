@@ -21,11 +21,13 @@ use App\Controller\AdminCategorieController;
 use App\Controller\AdminCommandeController;
 use App\Controller\AdminProduitController;
 use App\Controller\AuthController;
+use App\Controller\CodePromoController;
 use App\Controller\CommandeController;
 use App\Controller\CompteController;
 use App\Controller\ProduitController;
 use App\Controller\StatsController;
 use App\Model\CategorieModel;
+use App\Model\CodePromoModel;
 use App\Model\CommandeModel;
 use App\Model\ParametreModel;
 use App\Model\ProduitAdminModel;
@@ -74,6 +76,7 @@ try {
     $parametres   = new ParametreModel($pdo);
     $utilisateurs = new UtilisateurModel($pdo);
     $commandes    = new CommandeModel($pdo);
+    $codesPromo   = new CodePromoModel($pdo);
     $categories   = new CategorieModel($pdo);
     $produitsAdmin = new ProduitAdminModel($pdo);
 
@@ -81,6 +84,7 @@ try {
         ProduitController::class   => new ProduitController($produits, $parametres),
         AuthController::class      => new AuthController($utilisateurs),
         CommandeController::class  => new CommandeController($commandes),
+        CodePromoController::class => new CodePromoController($codesPromo),
         CompteController::class    => new CompteController($utilisateurs, $commandes),
         StatsController::class     => new StatsController($produits, $commandes, $parametres),
         AdminAuthController::class => new AdminAuthController($utilisateurs),

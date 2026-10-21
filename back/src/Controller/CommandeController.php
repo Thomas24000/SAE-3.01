@@ -6,6 +6,8 @@ namespace App\Controller;
 
 use App\Core\Request;
 use App\Core\Response;
+use App\Model\CodePromoInvalideException;
+use App\Model\CodePromoModel;
 use App\Model\CommandeModel;
 use DomainException;
 
@@ -41,19 +43,25 @@ final class CommandeController
     /**
      * POST /api/commande : valide la commande du client connecté.
      *
-     * Corps : { lignes: [{ variantId, quantite, options?: [idChoix] }] }
-     * Réponse (201) : { commande: { numero, statut, totalCents } }
-     * Erreurs : 401 si personne n'est connecté, 400 si les lignes sont invalides,
-     * 409 si une variante ou une option n'existe plus, si les options ne sont pas
-     * valides pour le produit ou si le stock manque.
+     * Corps : { lignes: [{ variantId, quantite, options?: [idChoix] }], codePromo?: string }
+     * Réponse (201) : { commande: { numero, statut, totalCents, reductionCents, codePromo } }
+     * (totalCents est le total à payer, réduction du code promo déduite).
+     * Erreurs : 401 si personne n'est connecté, 400 si les lignes ou le code sont
+     * invalides, 409 si une variante ou une option n'existe plus, si les options ne
+     * sont pas valides pour le produit ou si le stock manque, 422 si le code promo
+     * n'est pas valable (inconnu ou désactivé).
      */
     public function store(Request $requete): void
     {
         $utilisateurId = $this->utilisateurConnecte('Connecte-toi pour valider ta commande.');
-        $lignes        = $this->lignesValides($requete->corps()['lignes'] ?? null);
+        $corps         = $requete->corps();
+        $lignes        = $this->lignesValides($corps['lignes'] ?? null);
+        $codePromo     = $this->codePromoValide($corps['codePromo'] ?? null);
 
         try {
-            $commande = $this->commandes->creer($utilisateurId, $lignes);
+            $commande = $this->commandes->creer($utilisateurId, $lignes, $codePromo);
+        } catch (CodePromoInvalideException $e) {
+            Response::erreur($e->getMessage(), 422);
         } catch (DomainException $e) {
             Response::erreur($e->getMessage(), 409);
         }
@@ -191,6 +199,27 @@ final class CommandeController
         }
 
         return (int) $_SESSION['utilisateurId'];
+    }
+
+    /**
+     * Contrôle le code promotionnel reçu : absent, null ou vide, il n'y en a pas ;
+     * sinon c'est une chaîne de la longueur d'un code. Le code lui-même est vérifié
+     * par la commande.
+     *
+     * @param mixed $brut La valeur du corps JSON, de n'importe quel type.
+     * @return string|null Le code saisi, ou null s'il n'y en a pas.
+     */
+    private function codePromoValide(mixed $brut): ?string
+    {
+        if ($brut === null || $brut === '') {
+            return null;
+        }
+
+        if (!is_string($brut) || mb_strlen(trim($brut)) > CodePromoModel::LONGUEUR_MAX) {
+            Response::erreur('Le code promo est invalide.', 400);
+        }
+
+        return trim($brut) === '' ? null : $brut;
     }
 
     /**

@@ -1,6 +1,8 @@
 import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { formaterPrix } from "../../lib/format.js";
+import { BadgePromoView } from "../badge-promo/index.js";
 import { BadgeStockView } from "../badge-stock/index.js";
+import { PrixPromoView } from "../prix-promo/index.js";
 import { SelecteurOptionsView } from "../selecteur-options/index.js";
 import template from "./template.html?raw";
 import templateVariante from "./variante.html?raw";
@@ -44,7 +46,7 @@ let FicheProduitView = {
    * Un bouton de format, avec le badge de stock de sa variante. Une variante
    * sans stock est désactivée.
    *
-   * @param {{id: number, libelle: string, prixCents: number, stock: number,
+   * @param {{id: number, libelle: string, prixCents: number, prixPromoCents?: (number|null), stock: number,
    *          statutStock: "disponible"|"bientot"|"epuise"}} variante
    * @param {boolean} selectionnee - true pour la variante actuellement choisie.
    * @returns {DocumentFragment}
@@ -57,13 +59,15 @@ let FicheProduitView = {
       genericRenderer(templateVariante, {
         id: variante.id,
         libelle: variante.libelle,
-        prix: formaterPrix(variante.prixCents),
         selectionnee: selectionnee,
         desactivee: epuisee ? "disabled" : "",
         classes: ETATS[etat],
       })
     );
 
+    fragment
+      .querySelector('slot[name="prix"]')
+      .replaceWith(PrixPromoView.dom({ prixCents: variante.prixCents, prixPromoCents: variante.prixPromoCents ?? null }));
     fragment.querySelector('slot[name="badge"]').replaceWith(BadgeStockView.dom(variante.statutStock));
 
     return fragment;
@@ -98,9 +102,12 @@ let FicheProduitView = {
    *          varianteId: number, imageIndex: number, quantite: number,
    *          statutStock: "disponible"|"bientot"|"epuise", totalCents: number,
    *          moinsPossible: boolean, plusPossible: boolean, achatPossible: boolean,
-   *          unitCents: number, optionsManquantes: boolean}} data
-   *        varianteId désigne la variante choisie ; unitCents est son prix
-   *        avec les suppléments des options, affiché en grand ; imageIndex
+   *          unitCents: number, unitPleinCents: number, promoPourcent: (number|null),
+   *          optionsManquantes: boolean}} data
+   *        varianteId désigne la variante choisie ; unitCents est son prix à payer
+   *        avec les suppléments des options, affiché en grand ; unitPleinCents le même
+   *        prix sans la promotion (barré si promoPourcent n'est pas null, le pourcentage
+   *        de la promotion automatique) ; imageIndex
    *        l'image affichée en grand. produit.options (facultatif) liste les
    *        groupes d'options, chaque choix portant son état `selectionne`.
    * @param {{surVariante: function(number): void, surImage: function(number): void,
@@ -120,7 +127,6 @@ let FicheProduitView = {
         categorie: produit.categorie.libelle,
         teinte: produit.teinte,
         image: produit.images[data.imageIndex],
-        prix: formaterPrix(data.unitCents),
         quantite: data.quantite,
         moinsDesactive: !data.moinsPossible,
         plusDesactive: !data.plusPossible,
@@ -133,6 +139,17 @@ let FicheProduitView = {
       })
     );
 
+    fragment
+      .querySelector('slot[name="prix"]')
+      .replaceWith(
+        PrixPromoView.dom({
+          prixCents: data.unitPleinCents,
+          prixPromoCents: data.promoPourcent === null ? null : data.unitCents,
+        })
+      );
+    let slotPromo = fragment.querySelector('slot[name="promo"]');
+    if (data.promoPourcent === null) slotPromo.remove();
+    else slotPromo.replaceWith(BadgePromoView.dom(data.promoPourcent));
     fragment.querySelector('slot[name="badge"]').replaceWith(BadgeStockView.dom(data.statutStock));
 
     let vignettes = produit.images.map((image, index) =>

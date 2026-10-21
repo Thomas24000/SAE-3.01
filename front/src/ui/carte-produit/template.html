@@ -7,8 +7,11 @@
     <h3 class="text-lg leading-snug font-bold">
       <a href="/produit/{{slug}}" data-link class="hover:underline">{{nom}}</a>
     </h3>
-    <p class="text-sm text-fg-muted">dès {{prix}}</p>
-    <slot name="badge"></slot>
+    <p class="text-sm text-fg-muted">dès <slot name="prix"></slot></p>
+    <div class="flex flex-wrap items-center gap-2">
+      <slot name="promo"></slot>
+      <slot name="badge"></slot>
+    </div>
   </div>
 
   <slot name="action"></slot>

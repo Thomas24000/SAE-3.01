@@ -17,6 +17,7 @@ import { AdminCategoriesPage } from "./pages/admin-categories/page.js";
 import { AdminCategoriePage } from "./pages/admin-categorie/page.js";
 import { AdminCommandesPage } from "./pages/admin-commandes/page.js";
 import { AdminCommandePage } from "./pages/admin-commande/page.js";
+import { AdminStatistiquesPage } from "./pages/admin-statistiques/page.js";
 import { AdminProduitsPage } from "./pages/admin-produits/page.js";
 import { AdminProduitPage } from "./pages/admin-produit/page.js";
 import { The404Page } from "./pages/404/page.js";
@@ -48,6 +49,7 @@ router.addRoute("/admin/categories/nouvelle", AdminCategoriePage);
 router.addRoute("/admin/categories/:id/modifier", AdminCategoriePage);
 router.addRoute("/admin/commandes", AdminCommandesPage);
 router.addRoute("/admin/commandes/:numero", AdminCommandePage);
+router.addRoute("/admin/statistiques", AdminStatistiquesPage);
 
 // En dernier : toute adresse qui ne correspond à aucune route.
 router.addRoute("*", The404Page);

@@ -661,6 +661,108 @@ final class CommandeModel
     }
 
     /**
+     * Le nombre de commandes et leur montant, jour par jour, sur les derniers jours
+     * (aujourd'hui compris), commandes annulées exclues (US PIL-a). Un jour sans
+     * commande figure avec des zéros. Les jours sont ceux de la base (CURDATE).
+     *
+     * @param int $jours Nombre de jours à couvrir, au moins 1.
+     * @return array<int, array{jour:string, commandes:int, totalCents:int}>
+     *         Du plus ancien au plus récent ; jour au format AAAA-MM-JJ.
+     */
+    public function revenusParJour(int $jours): array
+    {
+        $jours   = max(1, $jours);
+        $requete = $this->pdo->prepare(
+            "SELECT DATE(cree_le) AS jour, COUNT(*) AS commandes, SUM(total_cents) AS total
+               FROM commande
+              WHERE statut <> :annulee
+                AND cree_le >= DATE_SUB(CURDATE(), INTERVAL :decalage DAY)
+           GROUP BY DATE(cree_le)"
+        );
+        $requete->bindValue('annulee', self::STATUT_ANNULEE);
+        $requete->bindValue('decalage', $jours - 1, PDO::PARAM_INT);
+        $requete->execute();
+
+        $parJour = array_column($requete->fetchAll(), null, 'jour');
+        $aujourdhui = new \DateTimeImmutable((string) $this->pdo->query('SELECT CURDATE()')->fetchColumn());
+
+        return array_map(
+            static function (int $decalage) use ($aujourdhui, $parJour): array {
+                $jour = $aujourdhui->modify('-' . $decalage . ' day')->format('Y-m-d');
+
+                return [
+                    'jour'       => $jour,
+                    'commandes'  => (int) ($parJour[$jour]['commandes'] ?? 0),
+                    'totalCents' => (int) ($parJour[$jour]['total'] ?? 0),
+                ];
+            },
+            range($jours - 1, 0)
+        );
+    }
+
+    /**
+     * L'heure de la base de données, la même que celle des dates de commande.
+     *
+     * @return string Date et heure au format AAAA-MM-JJ HH:MM:SS.
+     */
+    public function maintenant(): string
+    {
+        return (string) $this->pdo->query('SELECT NOW()')->fetchColumn();
+    }
+
+    /**
+     * Le nombre de commandes par statut, les quatre statuts toujours présents.
+     *
+     * @return array<string, int> Nombre de commandes, indexé par statut.
+     */
+    public function repartitionParStatut(): array
+    {
+        $lignes = $this->pdo->query('SELECT statut, COUNT(*) AS nombre FROM commande GROUP BY statut')->fetchAll();
+        $nombres = array_column($lignes, 'nombre', 'statut');
+
+        return array_combine(
+            self::STATUTS,
+            array_map(static fn (string $statut): int => (int) ($nombres[$statut] ?? 0), self::STATUTS)
+        );
+    }
+
+    /**
+     * Les produits les plus commandés, tous les temps confondus, commandes annulées
+     * exclues. Le nom est celui figé dans les lignes de commande : un produit
+     * supprimé du catalogue reste compté.
+     *
+     * @param int $limite Nombre de produits renvoyés.
+     * @return array<int, array{produit:string, quantite:int, totalCents:int}>
+     *         Du plus vendu au moins vendu.
+     */
+    public function produitsLesPlusVendus(int $limite): array
+    {
+        $requete = $this->pdo->prepare(
+            'SELECT ligne_commande.produit_nom,
+                    SUM(ligne_commande.quantite) AS quantite,
+                    SUM(ligne_commande.quantite * ligne_commande.prix_unitaire_cents) AS total
+               FROM ligne_commande
+         INNER JOIN commande ON commande.id = ligne_commande.commande_id
+              WHERE commande.statut <> :annulee
+           GROUP BY ligne_commande.produit_nom
+           ORDER BY quantite DESC, total DESC, ligne_commande.produit_nom ASC
+              LIMIT :limite'
+        );
+        $requete->bindValue('annulee', self::STATUT_ANNULEE);
+        $requete->bindValue('limite', $limite, PDO::PARAM_INT);
+        $requete->execute();
+
+        return array_map(
+            static fn (array $ligne): array => [
+                'produit'    => $ligne['produit_nom'],
+                'quantite'   => (int) $ligne['quantite'],
+                'totalCents' => (int) $ligne['total'],
+            ],
+            $requete->fetchAll()
+        );
+    }
+
+    /**
      * Prépare la reprise d'une ancienne commande dans le panier (US SUI-a) : pour
      * chaque ligne, ce qui peut être commandé de nouveau, d'après le catalogue et le
      * stock d'aujourd'hui.

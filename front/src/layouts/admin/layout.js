@@ -11,6 +11,7 @@ const LIENS = [
   { libelle: "Produits", href: "/admin/produits", icone: "produits", disponible: true },
   { libelle: "Catégories", href: "/admin/categories", icone: "categories", disponible: true },
   { libelle: "Commandes", href: "/admin/commandes", icone: "commandes", disponible: true },
+  { libelle: "Statistiques", href: "/admin/statistiques", icone: "statistiques", disponible: true },
 ];
 
 /**

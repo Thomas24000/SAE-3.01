@@ -5,6 +5,7 @@ import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { LigneCommandeView } from "../../ui/ligne-commande/index.js";
 import { MessageView } from "../../ui/message/index.js";
 import template from "./template.html?raw";
+import templateReduction from "./reduction.html?raw";
 import templateContenu from "./contenu.html?raw";
 import templateErreur from "./erreur.html?raw";
 
@@ -80,7 +81,7 @@ C.charger = async function (numero) {
 /**
  * Les données dont la Vue a besoin pour afficher la page.
  * > { message, connexionRequise, commande } ; commande vaut null en cas d'erreur,
- *   sinon { numero, statut, date, email, total, articles }
+ *   sinon { numero, statut, date, email, totalCents (à payer), reduction (code utilisé, ou null), articles }
  */
 C.viewData = function () {
   return {
@@ -95,6 +96,15 @@ C.viewData = function () {
             date: M.formatDate(M.commande.creeLe),
             email: M.commande.email,
             totalCents: M.commande.totalCents,
+            reduction:
+              M.commande.codePromo === null
+                ? null
+                : {
+                    code: M.commande.codePromo,
+                    pourcentage: M.commande.reductionPourcent,
+                    sousTotalCents: M.commande.totalCents + M.commande.reductionCents,
+                    cents: M.commande.reductionCents,
+                  },
             articles: M.articles(),
           },
   };
@@ -133,6 +143,23 @@ V.init = function (data) {
   contenu
     .querySelector('slot[name="lignes"]')
     .replaceWith(...data.commande.articles.map((article) => LigneCommandeView.dom(article)));
+
+  // Le code promo utilisé (US PRO-a) : sous-total et réduction, avant le total à payer.
+  let slotReduction = contenu.querySelector('slot[name="reduction"]');
+  if (data.commande.reduction === null) {
+    slotReduction.remove();
+  } else {
+    slotReduction.replaceWith(
+      htmlToFragment(
+        genericRenderer(templateReduction, {
+          sousTotal: formaterPrix(data.commande.reduction.sousTotalCents),
+          code: data.commande.reduction.code,
+          pourcentage: `−${data.commande.reduction.pourcentage} %`,
+          reduction: formaterPrix(data.commande.reduction.cents),
+        })
+      )
+    );
+  }
 
   slotContenu.replaceWith(contenu);
   return page;

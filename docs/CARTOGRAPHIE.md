@@ -45,7 +45,7 @@ En dev (`npm run dev`), `/api` passe par le proxy Vite vers `mmi.unilim.fr` : le
 | Catalogue, fiche produit | `/`, `/produit/:slug` | `produits`, `produit` |
 | Panier (`localStorage`, affichage seul) | `/panier` | `panier` (prix et stock actuels) |
 | Compte client | `/connexion`, `/inscription` | `login`, `inscription`, `me`, `logout` |
-| Commande | `/commande`, `/commande/:numero` | `commande` (POST/GET) |
+| Commande | `/commande`, `/commande/:numero` | `commande` (POST/GET), `commandes`, `commande/reprise`, `code-promo` |
 | Back-office (session admin séparée, CSRF) | `/admin`, `/admin/categories…`, `/admin/produits…`, `/admin/commandes…`, `/admin/statistiques` | `admin/login`, `admin/me`, `admin/logout`, `admin/categories…`, `admin/produits…`, `admin/parametres/seuil`, `admin/stats`, `admin/statistiques` |
 | Page inconnue | `*` → `pages/404` | — |
 
@@ -72,6 +72,7 @@ sur la fiche puis **figées** dans la commande, avec le prix unitaire.
 Points clés :
 - **Variante = combinaison (OPT-b).** `variante.libelle` est le format, `variante.choix_id` le choix du groupe d'options qui porte le stock (`option_groupe.porte_stock = 1`, le « Service »), `NULL` pour un produit sans service. Une combinaison absente de la table n'existe pas : la fiche et l'éditeur d'options du panier l'affichent « Indisponible », « Épuisé » si son stock est nul. La commande exige que le service des options soit celui de la variante. L'admin saisit un prix par format et un stock par service (champ vide = combinaison retirée).
 - **Promotion automatique (PRO-c).** Le produit au stock total le plus élevé (somme de ses variantes, à égalité le plus ancien, aucun si tout est épuisé) est à -20 %. Rien n'est enregistré : `PromotionModel` le déduit des stocks à chaque lecture, donc la promotion se déplace quand les stocks changent. La remise porte sur le prix du format ; les suppléments d'options restent au prix plein. L'API expose `promoPourcent`, `prixMinPromoCents` et `prixPromoCents` ; la commande recalcule le même prix et le fige dans la ligne de commande.
+- **Codes promo (PRO-a).** Table `code_promo` (code en majuscules, pourcentage 1-100, `actif`). Le client le saisit sur `/commande` ; `GET /api/code-promo?code=` le vérifie (404 si inconnu ou désactivé, 429 après 5 essais ratés par minute) et `POST /api/commande` accepte `codePromo`, revérifié dans la transaction (422 sinon). La réduction s'applique au total des lignes, **après** la promotion automatique (cumul). `commande.total_cents` est le total à payer ; `code_promo`, `reduction_pourcent` et `reduction_cents` sont copiés (pas de clé étrangère : modifier un code ne touche pas les commandes passées). Les statistiques de revenus (PIL-a) utilisent le total à payer ; le classement des meilleures ventes reste calculé sur les prix des lignes.
 - La commande est une transaction : variantes verrouillées, prix relus en base, stock décrémenté et journalisé. `CommandeModel::mouvementer()` est le seul à écrire `variante.stock`, et `changerStatut()` le seul à changer un statut (recrédit à l'annulation).
 - Comptes de démo dans les seeds (`alice@example.com`, `admin@example.com`) : retirer les mots de passe avant tout dépôt public.
 

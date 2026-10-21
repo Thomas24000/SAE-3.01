@@ -6,16 +6,18 @@ let CommandeData = {};
  * Valide une commande : POST /api/commande
  *
  * Seuls les identifiants de variantes, d'options et les quantités partent au
- * serveur : il relit lui-même les prix, les suppléments et le total. Réponse : { commande: { numero, statut,
- * totalCents } }.
+ * serveur, avec le code promo s'il y en a un : il relit lui-même les prix, les
+ * suppléments, le code et le total. Réponse : { commande: { numero, statut,
+ * totalCents, reductionCents, codePromo } }, totalCents étant le total à payer.
  *
  * Lève une ErreurApi (401 non connecté, 400 panier invalide, 409 article retiré
- * de la vente).
+ * de la vente, 422 code promo non valable).
  *
  * @param {Array<{variantId: number, quantite: number, options: number[]}>} lignes - les lignes du panier.
+ * @param {string|null} codePromo - le code appliqué, ou null.
  */
-CommandeData.create = function (lignes) {
-  return postRequest("commande", { lignes });
+CommandeData.create = function (lignes, codePromo = null) {
+  return postRequest("commande", codePromo === null ? { lignes } : { lignes, codePromo });
 };
 
 /**

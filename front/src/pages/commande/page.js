@@ -1,12 +1,14 @@
 import { AuthData } from "../../data/auth.js";
+import { CodePromoData } from "../../data/code-promo.js";
 import { CommandeData } from "../../data/commande.js";
 import { PanierData } from "../../data/panier.js";
 import { ProduitData } from "../../data/produit.js";
 import { goTo } from "../../lib/navigation.js";
 import { choixDeLigne, ligneInvalide } from "../../lib/options.js";
-import { prixEffectif } from "../../lib/promotion.js";
+import { prixEffectif, reductionCents } from "../../lib/promotion.js";
 import { ajusterLignes, texteAjustements } from "../../lib/stock.js";
 import { htmlToFragment } from "../../lib/utils.js";
+import { CodePromoView } from "../../ui/code-promo/index.js";
 import { EncartValidationView } from "../../ui/encart-validation/index.js";
 import { LigneCommandeView } from "../../ui/ligne-commande/index.js";
 import { MessageView } from "../../ui/message/index.js";
@@ -19,8 +21,9 @@ import templateVide from "./vide.html?raw";
  *
  * M : les lignes du panier (options comprises), les variantes et groupes
  * d'options relus auprès de l'API (noms, prix et suppléments actuels), la
- * session et l'état d'envoi. V : le gabarit, les lignes et
- * l'encart de confirmation. C : contrôle la connexion, charge, valide la commande.
+ * session, le code promo saisi (US PRO-a) et l'état d'envoi. V : le gabarit, les
+ * lignes, la saisie du code et l'encart de confirmation. C : contrôle la
+ * connexion, charge, vérifie le code, valide la commande.
  */
 
 let M = {
@@ -31,6 +34,7 @@ let M = {
   echec: false, // true si l'API n'a pas pu répondre
   envoiEnCours: false, // true entre le clic sur « Confirmer » et la réponse du serveur
   message: null, // { type, texte }, ou null
+  code: { saisie: "", appliquee: null, message: null, enCours: false }, // appliquee : { code, pourcentage } ou null
 };
 
 /**
@@ -131,6 +135,15 @@ M.totalCents = function () {
   return M.articles().reduce((total, article) => total + article.totalCents, 0);
 };
 
+/**
+ * La réduction du code promo appliqué, sur le total des lignes. Le serveur refait
+ * ce calcul à la validation : il fait foi.
+ * > la réduction en centimes (0 sans code)
+ */
+M.reductionCents = function () {
+  return M.code.appliquee === null ? 0 : reductionCents(M.totalCents(), M.code.appliquee.pourcentage);
+};
+
 let C = {};
 
 /**
@@ -158,6 +171,7 @@ C.charger = async function () {
   M.message = null;
   M.echec = false;
   M.envoiEnCours = false;
+  M.code = { saisie: "", appliquee: null, message: null, enCours: false };
   M.variantes = [];
   M.groupes = {};
   M.lignes = PanierData.read();
@@ -192,17 +206,68 @@ C.charger = async function () {
 };
 
 /**
+ * Clic sur « Appliquer » : demande au serveur si le code est valable. Un code
+ * accepté réduit le total affiché ; un refus l'explique sous le champ.
+ * . saisie : le code tapé par le client
+ */
+C.handler_applyCode = async function (saisie) {
+  if (M.code.enCours) return;
+
+  M.code = { saisie: saisie, appliquee: null, message: null, enCours: true };
+  V.refresh(C.viewData(), 'input[name="code"]');
+
+  try {
+    let reponse = await CodePromoData.verify(saisie);
+    M.code = {
+      saisie: "",
+      appliquee: reponse,
+      message: { type: "succes", texte: `Code ${reponse.code} accepté : −${reponse.pourcentage} % sur ta commande.` },
+      enCours: false,
+    };
+    V.refresh(C.viewData(), 'button[data-action="retirer"]');
+  } catch (erreur) {
+    if (erreur.statut === 401) {
+      goTo("/connexion?retour=" + encodeURIComponent("/commande"));
+      return;
+    }
+    M.code = { saisie: saisie, appliquee: null, message: { type: "erreur", texte: erreur.message }, enCours: false };
+    V.refresh(C.viewData(), 'input[name="code"]');
+  }
+};
+
+/**
+ * Clic sur « Retirer le code » : le total redevient celui des lignes.
+ */
+C.handler_removeCode = function () {
+  M.code = { saisie: "", appliquee: null, message: null, enCours: false };
+  V.refresh(C.viewData(), 'input[name="code"]');
+};
+
+/**
  * Les données dont la Vue a besoin pour afficher la page.
- * > { message, echec, articles, totalCents, email, enCours }
+ * > { message, echec, articles, totalCents (à payer, réduction déduite), email, enCours,
+ *   code (la saisie du code promo), reduction (le code appliqué avec sa réduction, ou null) }
  */
 C.viewData = function () {
+  let reduction = M.reductionCents();
+
   return {
     message: M.message,
     echec: M.echec,
     articles: M.echec ? [] : M.articles(),
-    totalCents: M.echec ? 0 : M.totalCents(),
+    totalCents: M.echec ? 0 : M.totalCents() - reduction,
     email: M.isConnected() ? M.session.email : "",
     enCours: M.envoiEnCours,
+    code: M.code,
+    reduction:
+      M.code.appliquee === null || M.echec
+        ? null
+        : {
+            code: M.code.appliquee.code,
+            pourcentage: M.code.appliquee.pourcentage,
+            sousTotalCents: M.totalCents(),
+            cents: reduction,
+          },
   };
 };
 
@@ -231,7 +296,7 @@ C.handler_confirm = async function () {
       return;
     }
 
-    let reponse = await CommandeData.create(M.lignes);
+    let reponse = await CommandeData.create(M.lignes, M.code.appliquee === null ? null : M.code.appliquee.code);
     PanierData.clear();
     goTo("/commande/" + encodeURIComponent(reponse.commande.numero));
   } catch (erreur) {
@@ -244,6 +309,11 @@ C.handler_confirm = async function () {
     }
 
     M.message = { type: "erreur", texte: erreur.message };
+
+    // Le code a été désactivé entre-temps : on le retire, le client confirme sans lui ou en saisit un autre.
+    if (erreur.statut === 422) {
+      M.code = { saisie: "", appliquee: null, message: null, enCours: false };
+    }
 
     // Stock épuisé entre-temps : on réajuste le panier pour que le client voie
     // ce qui reste possible.
@@ -304,9 +374,12 @@ V.createPageFragment = function (data) {
     contenu
       .querySelector('slot[name="lignes"]')
       .replaceWith(...data.articles.map((article) => LigneCommandeView.dom(article)));
+    contenu
+      .querySelector('slot[name="code"]')
+      .replaceWith(CodePromoView.dom(data.code, { surApplication: C.handler_applyCode, surRetrait: C.handler_removeCode }));
     contenu.querySelector('slot[name="encart"]').replaceWith(
       EncartValidationView.dom(
-        { totalCents: data.totalCents, email: data.email, enCours: data.enCours },
+        { totalCents: data.totalCents, email: data.email, enCours: data.enCours, reduction: data.reduction },
         { surConfirmation: C.handler_confirm }
       )
     );

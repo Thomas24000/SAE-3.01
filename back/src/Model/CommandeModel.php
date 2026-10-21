@@ -59,10 +59,15 @@ final class CommandeModel
      * @param int $utilisateurId Identifiant du client connecté.
      * @param array<int, array{variantId:int, quantite:int, options?:array<int, int>}> $lignes
      *        Lignes déjà validées (entiers positifs, couples variante + options distincts).
-     * @return array{numero:string, statut:string, totalCents:int}
+     * @param string|null $codePromo Code promotionnel saisi par le client (US PRO-a), ou null.
+     *        Il est revérifié ici : sa réduction s'applique au total des lignes, remise
+     *        automatique et suppléments compris.
+     * @return array{numero:string, statut:string, totalCents:int, reductionCents:int, codePromo:string|null}
+     *         totalCents : le total à payer, réduction déduite.
+     * @throws CodePromoInvalideException Si le code est inconnu ou désactivé.
      * @throws DomainException Si une variante ou une option n'existe plus, ou si le stock manque.
      */
-    public function creer(int $utilisateurId, array $lignes): array
+    public function creer(int $utilisateurId, array $lignes, ?string $codePromo = null): array
     {
         $this->pdo->beginTransaction();
 
@@ -119,17 +124,34 @@ final class CommandeModel
                 0
             );
 
+            // Le code promotionnel (US PRO-a) : lu dans la transaction, appliqué au
+            // total des lignes. Le total enregistré est celui à payer.
+            $code = null;
+
+            if ($codePromo !== null) {
+                $code = (new CodePromoModel($this->pdo))->trouverActif($codePromo);
+
+                if ($code === null) {
+                    throw new CodePromoInvalideException('Ce code promo n\'est pas valable.');
+                }
+            }
+
+            $reduction = $code === null ? 0 : CodePromoModel::reduction($total, $code['pourcentage']);
+
             // Numéro provisoire unique : le vrai dépend de l'identifiant que la
             // base attribue à l'insertion.
             $insertion = $this->pdo->prepare(
-                'INSERT INTO commande (numero, utilisateur_id, statut, total_cents)
-                 VALUES (:numero, :utilisateur, :statut, :total)'
+                'INSERT INTO commande (numero, utilisateur_id, statut, total_cents, code_promo, reduction_pourcent, reduction_cents)
+                 VALUES (:numero, :utilisateur, :statut, :total, :code, :pourcentage, :reduction)'
             );
             $insertion->execute([
                 'numero'      => 'TMP-' . bin2hex(random_bytes(8)),
                 'utilisateur' => $utilisateurId,
                 'statut'      => self::STATUT_INITIAL,
-                'total'       => $total,
+                'total'       => $total - $reduction,
+                'code'        => $code['code'] ?? null,
+                'pourcentage' => $code['pourcentage'] ?? null,
+                'reduction'   => $reduction,
             ]);
             $commandeId = (int) $this->pdo->lastInsertId();
             $numero     = sprintf('CC-%s-%06d', date('Y'), $commandeId);
@@ -184,7 +206,13 @@ final class CommandeModel
             throw $e;
         }
 
-        return ['numero' => $numero, 'statut' => self::STATUT_INITIAL, 'totalCents' => $total];
+        return [
+            'numero'         => $numero,
+            'statut'         => self::STATUT_INITIAL,
+            'totalCents'     => $total - $reduction,
+            'reductionCents' => $reduction,
+            'codePromo'      => $code['code'] ?? null,
+        ];
     }
 
     /**
@@ -425,17 +453,19 @@ final class CommandeModel
      *
      * @param string $numero Numéro de la commande (ex. CC-2026-000123).
      * @param int $utilisateurId Identifiant du client connecté.
-     * @return array{numero:string, statut:string, totalCents:int, creeLe:string,
+     * @return array{numero:string, statut:string, totalCents:int, codePromo:string|null,
+     *               reductionPourcent:int|null, reductionCents:int, creeLe:string,
      *               lignes:array<int, array{produit:string, libelle:string, prixUnitaireCents:int,
      *               quantite:int, totalCents:int,
      *               options:array<int, array{groupe:string, libelle:string, supplementCents:int}>}>}|null
      *         null si le numéro est inconnu ou appartient à un autre client. Le prix
-     *         unitaire d'une ligne comprend les suppléments de ses options.
+     *         unitaire d'une ligne comprend les suppléments de ses options ; totalCents
+     *         est le total à payer, réduction du code promo (US PRO-a) déjà déduite.
      */
     public function findByNumero(string $numero, int $utilisateurId): ?array
     {
         $requete = $this->pdo->prepare(
-            'SELECT id, numero, statut, total_cents, cree_le
+            'SELECT id, numero, statut, total_cents, code_promo, reduction_pourcent, reduction_cents, cree_le
                FROM commande
               WHERE numero = :numero AND utilisateur_id = :utilisateur'
         );
@@ -450,6 +480,9 @@ final class CommandeModel
             'numero'     => $commande['numero'],
             'statut'     => $commande['statut'],
             'totalCents' => (int) $commande['total_cents'],
+            'codePromo'  => $commande['code_promo'],
+            'reductionPourcent' => $commande['reduction_pourcent'] === null ? null : (int) $commande['reduction_pourcent'],
+            'reductionCents'    => (int) $commande['reduction_cents'],
             'creeLe'     => $commande['cree_le'],
             'lignes'     => $this->lireLignes((int) $commande['id']),
         ];

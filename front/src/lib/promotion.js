@@ -6,6 +6,20 @@
  */
 
 /**
+ * La réduction d'un code promotionnel sur un total (US PRO-a), arrondie au centime
+ * le plus proche (moitié vers le haut), sans jamais dépasser le total. C'est le
+ * même calcul que le serveur (CodePromoModel::reduction) ; elle sert à afficher le
+ * total avant la validation, le serveur restant seul juge du montant facturé.
+ *
+ * @param {number} totalCents - le total avant réduction, en centimes.
+ * @param {number} pourcent - la remise du code, de 1 à 100.
+ * @returns {number} la réduction, en centimes.
+ */
+export function reductionCents(totalCents, pourcent) {
+  return Math.min(totalCents, Math.floor((totalCents * pourcent + 50) / 100));
+}
+
+/**
  * Le format est-il en promotion ?
  *
  * @param {{prixPromoCents?: number|null}} variante - un format renvoyé par l'API.

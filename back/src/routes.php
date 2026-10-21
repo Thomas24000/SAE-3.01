@@ -7,6 +7,7 @@ use App\Controller\AdminCategorieController;
 use App\Controller\AdminCommandeController;
 use App\Controller\AdminProduitController;
 use App\Controller\AuthController;
+use App\Controller\CodePromoController;
 use App\Controller\CommandeController;
 use App\Controller\CompteController;
 use App\Controller\ProduitController;
@@ -33,6 +34,7 @@ return [
     'POST /api/commande'    => [CommandeController::class,  'store'],
     'GET  /api/commande'    => [CommandeController::class,  'show'],
     'GET  /api/commandes'   => [CommandeController::class,  'index'],
+    'GET  /api/code-promo'  => [CodePromoController::class, 'verifier'],
     'GET  /api/commande/reprise' => [CommandeController::class, 'reprise'],
     'GET  /api/compte'              => [CompteController::class,    'show'],
     'POST /api/compte/profil'       => [CompteController::class,    'updateProfile'],

@@ -13,6 +13,7 @@ import {
   varianteAChoisir,
   varianteDe,
 } from "../../lib/options.js";
+import { enPromotion, prixEffectif } from "../../lib/promotion.js";
 import { statutStock } from "../../lib/stock.js";
 import { FicheProduitView } from "../../ui/fiche-produit/index.js";
 import { HeaderView } from "../../ui/header/index.js";
@@ -256,12 +257,14 @@ M.cartCount = function () {
  * Les données dont la fiche a besoin pour s'afficher.
  * > { produit (une variante par format enrichie de son statutStock, options de leur état `selectionne` et, pour
  *     le groupe porteur de stock, de leur indisponibilité), varianteId,
- *     imageIndex, quantite, statutStock, unitCents (prix unitaire avec suppléments), totalCents,
+ *     imageIndex, quantite, statutStock, unitCents (prix unitaire à payer avec suppléments), unitPleinCents (le même
+ *     prix sans la promotion automatique), promoPourcent (null hors promotion), totalCents,
  *     moinsPossible, plusPossible, achatPossible, optionsManquantes }
  */
 M.ficheData = function () {
   let variante = M.currentVariante();
-  let unitCents = variante.prixCents + supplementCents(M.produit.options, M.choix);
+  let supplements = supplementCents(M.produit.options, M.choix);
+  let unitCents = prixEffectif(variante) + supplements;
   let optionsManquantes = hasMissing(M.produit.options, M.choix);
 
   return {
@@ -278,6 +281,8 @@ M.ficheData = function () {
     quantite: M.quantite,
     statutStock: M.stockStatus(variante),
     unitCents: unitCents,
+    unitPleinCents: variante.prixCents + supplements,
+    promoPourcent: enPromotion(variante) ? M.produit.promoPourcent : null,
     totalCents: unitCents * M.quantite,
     moinsPossible: M.quantite > 1,
     plusPossible: M.quantite < M.maxAddable(),

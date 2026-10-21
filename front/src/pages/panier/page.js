@@ -14,6 +14,7 @@ import {
   toggleChoix,
   varianteDe,
 } from "../../lib/options.js";
+import { enPromotion, prixEffectif } from "../../lib/promotion.js";
 import { ajusterLignes, texteAjustements } from "../../lib/stock.js";
 import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { HeaderView } from "../../ui/header/index.js";
@@ -180,7 +181,8 @@ M.articles = function () {
       image: variante.produit.image,
       teinte: variante.produit.teinte,
       quantite: ligne.quantite,
-      totalCents: (variante.prixCents + supplement) * ligne.quantite,
+      totalCents: (prixEffectif(variante) + supplement) * ligne.quantite,
+      totalPleinCents: enPromotion(variante) ? (variante.prixCents + supplement) * ligne.quantite : null,
       moinsPossible: ligne.quantite > 1,
       plusPossible: M.variantQuantity(ligne.variantId) < variante.stock,
       modifiable: M.produitGroupes(variante).length > 0,

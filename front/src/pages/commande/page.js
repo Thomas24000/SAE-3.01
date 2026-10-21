@@ -4,6 +4,7 @@ import { PanierData } from "../../data/panier.js";
 import { ProduitData } from "../../data/produit.js";
 import { goTo } from "../../lib/navigation.js";
 import { choixDeLigne, ligneInvalide } from "../../lib/options.js";
+import { prixEffectif } from "../../lib/promotion.js";
 import { ajusterLignes, texteAjustements } from "../../lib/stock.js";
 import { htmlToFragment } from "../../lib/utils.js";
 import { EncartValidationView } from "../../ui/encart-validation/index.js";
@@ -109,7 +110,7 @@ M.articles = function () {
   return M.lignes.map((ligne) => {
     let variante = M.findVariante(ligne.variantId);
     let choix = M.lineChoix(ligne);
-    let unitaire = variante.prixCents + choix.reduce((total, autre) => total + autre.supplementCents, 0);
+    let unitaire = prixEffectif(variante) + choix.reduce((total, autre) => total + autre.supplementCents, 0);
 
     return {
       nom: variante.produit.nom,

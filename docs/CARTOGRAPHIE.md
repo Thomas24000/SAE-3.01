@@ -71,6 +71,7 @@ sur la fiche puis **figées** dans la commande, avec le prix unitaire.
 
 Points clés :
 - **Variante = combinaison (OPT-b).** `variante.libelle` est le format, `variante.choix_id` le choix du groupe d'options qui porte le stock (`option_groupe.porte_stock = 1`, le « Service »), `NULL` pour un produit sans service. Une combinaison absente de la table n'existe pas : la fiche et l'éditeur d'options du panier l'affichent « Indisponible », « Épuisé » si son stock est nul. La commande exige que le service des options soit celui de la variante. L'admin saisit un prix par format et un stock par service (champ vide = combinaison retirée).
+- **Promotion automatique (PRO-c).** Le produit au stock total le plus élevé (somme de ses variantes, à égalité le plus ancien, aucun si tout est épuisé) est à -20 %. Rien n'est enregistré : `PromotionModel` le déduit des stocks à chaque lecture, donc la promotion se déplace quand les stocks changent. La remise porte sur le prix du format ; les suppléments d'options restent au prix plein. L'API expose `promoPourcent`, `prixMinPromoCents` et `prixPromoCents` ; la commande recalcule le même prix et le fige dans la ligne de commande.
 - La commande est une transaction : variantes verrouillées, prix relus en base, stock décrémenté et journalisé. `CommandeModel::mouvementer()` est le seul à écrire `variante.stock`, et `changerStatut()` le seul à changer un statut (recrédit à l'annulation).
 - Comptes de démo dans les seeds (`alice@example.com`, `admin@example.com`) : retirer les mots de passe avant tout dépôt public.
 

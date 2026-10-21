@@ -29,7 +29,9 @@ final class ProduitModel
      *
      * @return array<int, array{id:int, nom:string, slug:string, description:string,
      *                          teinte:int, image:string, categorie:string,
-     *                          categorieSlug:string, prixMin:int, stock:int}>
+     *                          categorieSlug:string, prixMin:int, stock:int,
+     *                          promoPourcent:int|null, prixMinPromoCents:int|null}>
+     *         promoPourcent et prixMinPromoCents valent null sauf pour le produit en promotion (US PRO-c).
      */
     public function lister(): array
     {
@@ -53,6 +55,8 @@ final class ProduitModel
            ORDER BY categorie.id, produit.nom'
         )->fetchAll();
 
+        $promoId = PromotionModel::produitEnPromotion($this->pdo);
+
         // MySQL renvoie les nombres sous forme de chaînes : on les convertit
         // pour que le JSON contienne de vrais nombres.
         return array_map(
@@ -67,6 +71,8 @@ final class ProduitModel
                 'categorieSlug' => $ligne['categorie_slug'],
                 'prixMin'     => (int) $ligne['prix_min'],
                 'stock'       => (int) $ligne['stock'],
+                'promoPourcent'     => (int) $ligne['id'] === $promoId ? PromotionModel::POURCENT : null,
+                'prixMinPromoCents' => PromotionModel::prixPromo((int) $ligne['id'], (int) $ligne['prix_min'], $promoId),
             ],
             $lignes
         );
@@ -167,8 +173,10 @@ final class ProduitModel
      * inconnu est simplement absent du résultat.
      *
      * @param array<int, int> $ids Identifiants de variantes (déjà validés comme entiers positifs).
-     * @return array<int, array{variantId:int, libelle:string, choixId:int|null, prixCents:int, stock:int,
+     * @return array<int, array{variantId:int, libelle:string, choixId:int|null, prixCents:int,
+     *                          prixPromoCents:int|null, stock:int,
      *                          produit:array{id:int, nom:string, slug:string, image:string, teinte:int}}>
+     *         prixPromoCents : le prix remisé si le produit est en promotion (US PRO-c), sinon null.
      */
     public function findVariantesByIds(array $ids): array
     {
@@ -197,6 +205,7 @@ final class ProduitModel
            ORDER BY variante.id'
         );
         $requete->execute(array_values($ids));
+        $promoId = PromotionModel::produitEnPromotion($this->pdo);
 
         return array_map(
             static fn (array $ligne): array => [
@@ -204,6 +213,7 @@ final class ProduitModel
                 'libelle'   => $ligne['libelle'],
                 'choixId'   => $ligne['choix_id'] === null ? null : (int) $ligne['choix_id'],
                 'prixCents' => (int) $ligne['prix_cents'],
+                'prixPromoCents' => PromotionModel::prixPromo((int) $ligne['produit_id'], (int) $ligne['prix_cents'], $promoId),
                 'stock'     => (int) $ligne['stock'],
                 'produit'   => [
                     'id'     => (int) $ligne['produit_id'],
@@ -286,7 +296,8 @@ final class ProduitModel
      * combinaisons voisines d'une ligne et savoir lesquelles sont épuisées.
      *
      * @param array<int, int> $produitIds Identifiants de produits (entiers positifs).
-     * @return array<int, array<int, array{variantId:int, libelle:string, choixId:int|null, prixCents:int, stock:int}>>
+     * @return array<int, array<int, array{variantId:int, libelle:string, choixId:int|null, prixCents:int,
+     *                                     prixPromoCents:int|null, stock:int}>>
      *         Les variantes de chaque produit, indexées par identifiant de produit.
      */
     public function findCombinaisonsByProduits(array $produitIds): array
@@ -305,15 +316,17 @@ final class ProduitModel
            ORDER BY produit_id, prix_cents, libelle, id'
         );
         $requete->execute(array_values($produitIds));
+        $promoId = PromotionModel::produitEnPromotion($this->pdo);
 
         return array_reduce(
             $requete->fetchAll(),
-            static function (array $produits, array $ligne): array {
+            static function (array $produits, array $ligne) use ($promoId): array {
                 $produits[(int) $ligne['produit_id']][] = [
                     'variantId' => (int) $ligne['id'],
                     'libelle'   => $ligne['libelle'],
                     'choixId'   => $ligne['choix_id'] === null ? null : (int) $ligne['choix_id'],
                     'prixCents' => (int) $ligne['prix_cents'],
+                    'prixPromoCents' => PromotionModel::prixPromo((int) $ligne['produit_id'], (int) $ligne['prix_cents'], $promoId),
                     'stock'     => (int) $ligne['stock'],
                 ];
 
@@ -336,7 +349,9 @@ final class ProduitModel
      *               descriptionLongue:string, ingredients:string, teinte:int,
      *               image:string, images:array<int, string>,
      *               categorie:array{libelle:string, slug:string},
-     *               variantes:array<int, array{id:int, libelle:string, choixId:int|null, prixCents:int, stock:int}>,
+     *               promoPourcent:int|null,
+     *               variantes:array<int, array{id:int, libelle:string, choixId:int|null, prixCents:int,
+     *                                          prixPromoCents:int|null, stock:int}>,
      *               options:array<int, array{id:int, libelle:string, multiple:bool, obligatoire:bool,
      *                                        choix:array<int, array{id:int, libelle:string, supplementCents:int}>}>}|null
      *         null si aucun produit ne porte ce slug.
@@ -384,6 +399,9 @@ final class ProduitModel
         $requeteImages->execute(['produit_id' => (int) $produit['id']]);
         $images = $requeteImages->fetchAll(PDO::FETCH_COLUMN);
 
+        $promoId = PromotionModel::produitEnPromotion($this->pdo);
+        $enPromo = (int) $produit['id'] === $promoId;
+
         return [
             'id'          => (int) $produit['id'],
             'nom'         => $produit['nom'],
@@ -399,12 +417,14 @@ final class ProduitModel
                 'libelle' => $produit['categorie_libelle'],
                 'slug'    => $produit['categorie_slug'],
             ],
+            'promoPourcent' => $enPromo ? PromotionModel::POURCENT : null,
             'variantes'   => array_map(
                 static fn (array $ligne): array => [
                     'id'        => (int) $ligne['id'],
                     'libelle'   => $ligne['libelle'],
                     'choixId'   => $ligne['choix_id'] === null ? null : (int) $ligne['choix_id'],
                     'prixCents' => (int) $ligne['prix_cents'],
+                    'prixPromoCents' => $enPromo ? PromotionModel::prixRemise((int) $ligne['prix_cents']) : null,
                     'stock'     => (int) $ligne['stock'],
                 ],
                 $variantes

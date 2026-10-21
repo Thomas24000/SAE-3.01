@@ -1029,7 +1029,7 @@ final class CommandeModel
      * que deux commandes ne s'attendent jamais l'une l'autre).
      *
      * @param array<int, int> $ids Identifiants de variantes.
-     * @return array<int, array{id:int, libelle:string, choix_id:int|null, combinaison:string, prix_cents:int,
+     * @return array<int, array{id:int, libelle:string, choix_id:int|null, combinaison:string, prix_cents:int, prix_facture_cents:int,
      *                          stock:int, produit_id:int, nom:string}>
      *         Indexé par identifiant de variante. combinaison : le format suivi du choix qui porte le
      *         stock (« Pot 465 ml, Cône gaufrette »), pour les messages.
@@ -1051,7 +1051,8 @@ final class CommandeModel
         );
         $requete->execute(array_values($ids));
 
-        $lignes = $requete->fetchAll();
+        $lignes  = $requete->fetchAll();
+        $promoId = PromotionModel::produitEnPromotion($this->pdo);
 
         return array_combine(
             array_map(static fn (array $ligne): int => (int) $ligne['id'], $lignes),
@@ -1064,6 +1065,9 @@ final class CommandeModel
                         ? $ligne['libelle']
                         : $ligne['libelle'] . ', ' . $ligne['choix_libelle'],
                     'prix_cents' => (int) $ligne['prix_cents'],
+                    // Le prix facturé : remisé si le produit est en promotion (US PRO-c).
+                    'prix_facture_cents' => PromotionModel::prixPromo((int) $ligne['produit_id'], (int) $ligne['prix_cents'], $promoId)
+                        ?? (int) $ligne['prix_cents'],
                     'stock'      => (int) $ligne['stock'],
                     'produit_id' => (int) $ligne['produit_id'],
                     'nom'        => $ligne['nom'],
@@ -1159,7 +1163,7 @@ final class CommandeModel
      *
      * @param array{variantId:int, quantite:int, options?:array<int, int>} $ligne La ligne reçue.
      * @param array<int, array{id:int, libelle:string, choix_id:int|null, combinaison:string, prix_cents:int,
-     *                         stock:int, produit_id:int, nom:string}> $variantes
+     *                         prix_facture_cents:int, stock:int, produit_id:int, nom:string}> $variantes
      *        Les variantes lues, indexées par identifiant.
      * @param array<int, array{id:int, libelle:string, supplement_cents:int, groupe_id:int,
      *                         groupe_libelle:string, multiple:bool, produit_id:int}> $choix
@@ -1239,7 +1243,7 @@ final class CommandeModel
                 ],
                 $retenus
             ),
-            'prix_unitaire' => $variante['prix_cents'] + $supplements,
+            'prix_unitaire' => $variante['prix_facture_cents'] + $supplements,
         ];
     }
 }

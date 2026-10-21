@@ -6,8 +6,9 @@ let ProduitData = {};
  * Le catalogue des produits : GET /api/produits
  *
  * La réponse contient { produits, total, seuilBientotEpuise }. Chaque produit est de la forme
- * { id, nom, slug, description, teinte, image, categorie, prixMin } ; prixMin est un
- * prix en centimes, celui de la variante la moins chère.
+ * { id, nom, slug, description, teinte, image, categorie, prixMin, promoPourcent, prixMinPromoCents } ; prixMin est un
+ * prix en centimes, celui de la variante la moins chère. Le produit en promotion automatique
+ * (US PRO-c) a promoPourcent (20) et prixMinPromoCents ; les autres les ont à null.
  */
 ProduitData.fetchAll = async function () {
   let reponse = await getRequest("produits");
@@ -28,7 +29,7 @@ ProduitData.fetchAll = async function () {
  * La réponse contient { produit, seuilBientotEpuise } avec produit de la forme
  * { id, nom, slug, description, descriptionLongue, ingredients, teinte, image,
  * images: [chemin], categorie: { libelle, slug },
- * variantes: [{ id, libelle, prixCents, stock }],
+ * promoPourcent (null hors promotion), variantes: [{ id, libelle, choixId, prixCents, prixPromoCents, stock }],
  * options: [{ id, libelle, multiple, obligatoire,
  * choix: [{ id, libelle, supplementCents }] }] }. Les prix sont en centimes.
  *
@@ -47,9 +48,10 @@ ProduitData.fetchOne = async function (slug) {
  * Les variantes d'un panier : GET /api/panier?ids=3,5
  *
  * La réponse contient { variantes, options, combinaisons, seuilBientotEpuise }. Chaque variante est de la forme
- * { variantId, libelle, choixId, prixCents, stock, produit: { id, nom, slug, image, teinte } } ;
- * combinaisons est un objet { [idProduit]: [{ variantId, libelle, choixId, prixCents, stock }] },
+ * { variantId, libelle, choixId, prixCents, prixPromoCents, stock, produit: { id, nom, slug, image, teinte } } ;
+ * combinaisons est un objet { [idProduit]: [{ variantId, libelle, choixId, prixCents, prixPromoCents, stock }] },
  * toutes les variantes (format + service) des produits du panier ;
+ * prixPromoCents est le prix remisé du produit en promotion, null pour les autres ;
  * options est un objet { [idProduit]: [{ id, libelle, multiple, obligatoire,
  * choix: [{ id, libelle, supplementCents }] }] } (un produit sans option en est
  * absent). Les prix sont en centimes. Une variante inconnue du serveur est

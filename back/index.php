@@ -18,6 +18,7 @@ use App\Core\Response;
 use App\Core\Router;
 use App\Controller\AdminAuthController;
 use App\Controller\AdminCategorieController;
+use App\Controller\AdminCodePromoController;
 use App\Controller\AdminCommandeController;
 use App\Controller\AdminProduitController;
 use App\Controller\AuthController;
@@ -85,6 +86,7 @@ try {
         AuthController::class      => new AuthController($utilisateurs),
         CommandeController::class  => new CommandeController($commandes),
         CodePromoController::class => new CodePromoController($codesPromo),
+        AdminCodePromoController::class => new AdminCodePromoController($codesPromo),
         CompteController::class    => new CompteController($utilisateurs, $commandes),
         StatsController::class     => new StatsController($produits, $commandes, $parametres),
         AdminAuthController::class => new AdminAuthController($utilisateurs),

@@ -1,69 +1,76 @@
 -- ---------------------------------------------------------------------------
--- SAE301 Ben & Jerry's — catégories, produits et variantes (US DEC-b)
+-- SAE301 Ben & Jerry's — base de données complète
 --
--- Ce script crée toutes les tables de l'application. Importez-le depuis
--- phpMyAdmin, dans votre base.
+-- Ce script crée toutes les tables de l'application, puis charge le catalogue
+-- et les données de démonstration. Importez-le depuis phpMyAdmin, dans votre
+-- base. Il est rejouable : les tables sont supprimées avant d'être recréées
+-- (y compris celles d'une ancienne version du schéma).
 --
--- Le stock est porté par la variante (un pot 100 ml et un pot 465 ml du même
--- parfum ont chacun le leur). Les prix sont des entiers en centimes : un
--- décimal flottant arrondirait mal.
+-- Organisation :
+--   1. Catalogue    : catégories, produits, images, allergènes, formats,
+--                     choix (services et toppings)
+--   2. Variantes    : produit x format x service, avec prix et stock
+--   3. Utilisateurs
+--   4. Promotions et paramètres
+--   5. Commandes, stock et journaux
+--   6. Données      : catalogue, puis démonstration (comptes, codes promo)
 --
--- 3 catégories de 4 produits, chaque produit avec 2 variantes.
--- Les textes de description longue et d'ingrédients/allergènes sont des exemples
--- provisoires : ils ne remplacent pas les vraies informations produit.
--- L'import est rejouable : les tables sont supprimées avant d'être recréées.
+-- Les prix sont des entiers en centimes. Les textes longs des produits sont des
+-- exemples provisoires, pas les vraies informations produit.
 -- ---------------------------------------------------------------------------
 
 SET NAMES utf8mb4;
 
-DROP TABLE IF EXISTS parametre;
-DROP TABLE IF EXISTS code_promo;
-DROP TABLE IF EXISTS option_choix;
-DROP TABLE IF EXISTS option_groupe;
 DROP TABLE IF EXISTS journal_commande;
 DROP TABLE IF EXISTS mouvement_stock;
 DROP TABLE IF EXISTS ligne_commande_option;
 DROP TABLE IF EXISTS ligne_commande;
 DROP TABLE IF EXISTS commande;
+DROP TABLE IF EXISTS statut_commande;
+DROP TABLE IF EXISTS parametre;
+DROP TABLE IF EXISTS code_promo;
 DROP TABLE IF EXISTS utilisateur;
-DROP TABLE IF EXISTS produit_image;
 DROP TABLE IF EXISTS variante;
+DROP TABLE IF EXISTS categorie_topping;
+DROP TABLE IF EXISTS option_choix;
+DROP TABLE IF EXISTS option_groupe;
+DROP TABLE IF EXISTS format;
+DROP TABLE IF EXISTS produit_allergene;
+DROP TABLE IF EXISTS allergene;
+DROP TABLE IF EXISTS produit_image;
 DROP TABLE IF EXISTS produit;
 DROP TABLE IF EXISTS categorie;
 
--- ---------------------------------------------------------------------------
--- Catégories
--- ---------------------------------------------------------------------------
+-- ===========================================================================
+-- 1. Catalogue
+-- ===========================================================================
+
+-- Les formats, services et toppings sont des référentiels partagés par tous les
+-- produits : on ne les recopie jamais produit par produit.
 CREATE TABLE categorie (
-    id          TINYINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    libelle     VARCHAR(60)      NOT NULL,
-    slug        VARCHAR(60)      NOT NULL,
-    description VARCHAR(255)     NOT NULL DEFAULT '',
+    id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    libelle     VARCHAR(60)  NOT NULL,
+    slug        VARCHAR(60)  NOT NULL,
+    description VARCHAR(255) NOT NULL DEFAULT '',
+    cree_le     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modifie_le  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_categorie_slug (slug)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
--- ---------------------------------------------------------------------------
--- Produits (un parfum de glace)
---
 -- teinte : angle de couleur (0-359) qui colore le fond de la carte.
--- image  : chemin du visuel, relatif à la racine du site (front/public/).
--- description_longue, ingredients : textes de la fiche détail. Les allergènes
--- font partie du texte des ingrédients.
--- ---------------------------------------------------------------------------
 CREATE TABLE produit (
-    id           SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    categorie_id TINYINT UNSIGNED  NOT NULL,
-    nom          VARCHAR(120)      NOT NULL,
-    slug         VARCHAR(120)      NOT NULL,
-    description  VARCHAR(400)      NOT NULL,
-    teinte       SMALLINT UNSIGNED NOT NULL,
-    image        VARCHAR(200)      NOT NULL,
-    description_longue VARCHAR(800) NOT NULL,
-    ingredients        VARCHAR(600) NOT NULL,
+    id                 INT UNSIGNED      NOT NULL AUTO_INCREMENT,
+    categorie_id       INT UNSIGNED      NOT NULL,
+    nom                VARCHAR(120)      NOT NULL,
+    slug               VARCHAR(120)      NOT NULL,
+    description        VARCHAR(400)      NOT NULL,
+    description_longue VARCHAR(800)      NOT NULL,
+    ingredients        VARCHAR(600)      NOT NULL,
+    teinte             SMALLINT UNSIGNED NOT NULL,
+    cree_le            DATETIME          NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modifie_le         DATETIME          NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_produit_slug (slug),
@@ -71,148 +78,146 @@ CREATE TABLE produit (
 
     CONSTRAINT fk_produit_categorie
         FOREIGN KEY (categorie_id) REFERENCES categorie (id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+        ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
--- ---------------------------------------------------------------------------
--- Images de la galerie d'un produit, de la première (visuel principal) à la
--- dernière. chemin : relatif à la racine du site (front/public/).
--- ---------------------------------------------------------------------------
+-- Galerie d'un produit. position 1 = visuel principal. chemin : relatif à la
+-- racine du site (front/public/).
 CREATE TABLE produit_image (
-    id         INT UNSIGNED      NOT NULL AUTO_INCREMENT,
-    produit_id SMALLINT UNSIGNED NOT NULL,
-    chemin     VARCHAR(200)      NOT NULL,
-    position   TINYINT UNSIGNED  NOT NULL,
+    id         INT UNSIGNED     NOT NULL AUTO_INCREMENT,
+    produit_id INT UNSIGNED     NOT NULL,
+    chemin     VARCHAR(200)     NOT NULL,
+    position   TINYINT UNSIGNED NOT NULL,
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_produit_image_position (produit_id, position),
 
     CONSTRAINT fk_produit_image_produit
         FOREIGN KEY (produit_id) REFERENCES produit (id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
--- ---------------------------------------------------------------------------
--- Variantes (US OPT-b) — une variante est une COMBINAISON : un format de pot
--- (libelle) et, si le produit en a un, un choix d'un groupe d'options qui porte
--- le stock (choix_id, par exemple le « Service » : cuillère, coupelle ou cône).
--- C'est elle qui porte prix et stock : Pot 465 ml + Cône et Pot 465 ml + Coupelle
--- ont chacun le leur. Une combinaison absente de cette table n'existe pas.
---
--- choix_id : NULL pour un produit sans groupe porteur de stock. La clé de
--- l'unicité utilise choix_cle car MySQL accepte plusieurs NULL dans un index
--- UNIQUE : choix_cle vaut 0 quand choix_id est NULL. La clé étrangère vers
--- option_choix est ajoutée plus bas (cette table est créée après variante).
--- ---------------------------------------------------------------------------
-CREATE TABLE variante (
-    id         INT UNSIGNED      NOT NULL AUTO_INCREMENT,
-    produit_id SMALLINT UNSIGNED NOT NULL,
-    libelle    VARCHAR(60)       NOT NULL,
-    choix_id   INT UNSIGNED      NULL,
-    choix_cle  INT UNSIGNED      AS (COALESCE(choix_id, 0)) VIRTUAL,
-    prix_cents INT UNSIGNED      NOT NULL,
-    stock      INT UNSIGNED      NOT NULL DEFAULT 0,
+-- Allergènes à déclaration obligatoire : une ligne par allergène, reliée aux
+-- produits (et non écrite dans le texte des ingrédients).
+CREATE TABLE allergene (
+    id      INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    code    VARCHAR(30)  NOT NULL,
+    libelle VARCHAR(60)  NOT NULL,
 
     PRIMARY KEY (id),
-    UNIQUE KEY uq_variante_combinaison (produit_id, libelle, choix_cle),
-    -- Dernier garde-fou (US STK-a) : le stock ne peut jamais être négatif.
+    UNIQUE KEY uq_allergene_code (code)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE produit_allergene (
+    produit_id   INT UNSIGNED NOT NULL,
+    allergene_id INT UNSIGNED NOT NULL,
+
+    PRIMARY KEY (produit_id, allergene_id),
+
+    CONSTRAINT fk_produit_allergene_produit
+        FOREIGN KEY (produit_id) REFERENCES produit (id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_produit_allergene_allergene
+        FOREIGN KEY (allergene_id) REFERENCES allergene (id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- Formats de pot, partagés par tous les produits.
+CREATE TABLE format (
+    id            INT UNSIGNED      NOT NULL AUTO_INCREMENT,
+    libelle       VARCHAR(60)       NOT NULL,
+    contenance_ml SMALLINT UNSIGNED NOT NULL,
+
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_format_libelle (libelle)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- Choix proposés au client, partagés par tous les produits : le service
+-- (cuillère, coupelle, cône : choix unique, obligatoire, qui multiplie les
+-- variantes) et les toppings (choix multiple, facultatif, sans stock).
+-- Une seule table pour que l'identifiant d'un choix soit unique quel que soit
+-- son type : le panier garde une simple liste d'identifiants. supplement_cents
+-- s'ajoute au prix de la variante. La clé (id, type) permet aux tables qui
+-- suivent d'imposer le type attendu par une clé étrangère composite.
+CREATE TABLE option_choix (
+    id               INT UNSIGNED             NOT NULL AUTO_INCREMENT,
+    type             ENUM('service', 'topping') NOT NULL,
+    libelle          VARCHAR(60)              NOT NULL,
+    supplement_cents INT UNSIGNED             NOT NULL DEFAULT 0,
+    position         TINYINT UNSIGNED         NOT NULL,
+
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_option_choix_libelle (type, libelle),
+    UNIQUE KEY uq_option_choix_type (id, type)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- Toppings proposés par catégorie (pas de chantilly, qui contient du lait, en
+-- sans lactose). type vaut toujours « topping » : la clé composite refuse un
+-- choix d'un autre type.
+CREATE TABLE categorie_topping (
+    categorie_id INT UNSIGNED       NOT NULL,
+    choix_id     INT UNSIGNED       NOT NULL,
+    type         ENUM('service', 'topping') NOT NULL DEFAULT 'topping',
+
+    PRIMARY KEY (categorie_id, choix_id),
+    -- Même ENUM que option_choix (une clé étrangère compare les indices des
+    -- valeurs) : le CHECK fixe la seule valeur permise.
+    CONSTRAINT ck_categorie_topping_type CHECK (type = 'topping'),
+
+    CONSTRAINT fk_categorie_topping_categorie
+        FOREIGN KEY (categorie_id) REFERENCES categorie (id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_categorie_topping_choix
+        FOREIGN KEY (choix_id, type) REFERENCES option_choix (id, type)
+        ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- ===========================================================================
+-- 2. Variantes
+-- ===========================================================================
+
+-- Une variante est une combinaison produit x format x service (un choix de type
+-- « service » de option_choix). Elle porte le prix de base (centimes, sans le
+-- supplément du service) et le stock. Une combinaison absente de cette table
+-- n'existe pas.
+CREATE TABLE variante (
+    id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    produit_id INT UNSIGNED NOT NULL,
+    format_id  INT UNSIGNED NOT NULL,
+    service_id INT UNSIGNED NOT NULL,
+    service_type ENUM('service', 'topping') NOT NULL DEFAULT 'service',
+    prix_cents INT UNSIGNED NOT NULL,
+    stock      INT UNSIGNED NOT NULL DEFAULT 0,
+    cree_le    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modifie_le DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_variante_combinaison (produit_id, format_id, service_id),
+    KEY idx_variante_format (format_id),
+    KEY idx_variante_service (service_id),
+    -- Dernier garde-fou : le stock ne peut jamais être négatif.
     CONSTRAINT ck_variante_stock CHECK (stock >= 0),
+    CONSTRAINT ck_variante_service_type CHECK (service_type = 'service'),
 
     CONSTRAINT fk_variante_produit
         FOREIGN KEY (produit_id) REFERENCES produit (id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_variante_format
+        FOREIGN KEY (format_id) REFERENCES format (id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    -- service_type vaut toujours « service » : la clé composite refuse un topping.
+    CONSTRAINT fk_variante_service
+        FOREIGN KEY (service_id, service_type) REFERENCES option_choix (id, type)
+        ON DELETE RESTRICT
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
--- ---------------------------------------------------------------------------
--- Options d'un produit (US OPT-c), en deux niveaux
---
--- option_groupe : une question posée sur la fiche produit (« Service »,
--- « Toppings »). multiple = 1 permet de cocher plusieurs choix, sinon un seul.
--- obligatoire = 1 impose au moins un choix avant l'ajout au panier.
--- option_choix : une réponse possible. supplement_cents s'ajoute au prix de la
--- variante (centimes, 0 si gratuit). Le serveur relit ces prix : le navigateur
--- ne fait jamais foi. Le figement dans les lignes de commande est l'US OPT-a.
--- porte_stock = 1 (US OPT-b) : les choix du groupe forment, avec le format, les
--- variantes (variante.choix_id) et chacun a donc son stock. Un tel groupe est
--- obligatoire et à choix unique.
--- ---------------------------------------------------------------------------
-CREATE TABLE option_groupe (
-    id          INT UNSIGNED      NOT NULL AUTO_INCREMENT,
-    produit_id  SMALLINT UNSIGNED NOT NULL,
-    libelle     VARCHAR(60)       NOT NULL,
-    multiple    TINYINT(1)        NOT NULL DEFAULT 0,
-    obligatoire TINYINT(1)        NOT NULL DEFAULT 0,
-    porte_stock TINYINT(1)        NOT NULL DEFAULT 0,
-    position    TINYINT UNSIGNED  NOT NULL,
+-- ===========================================================================
+-- 3. Utilisateurs
+-- ===========================================================================
 
-    PRIMARY KEY (id),
-    UNIQUE KEY uq_option_groupe_libelle (produit_id, libelle),
-
-    CONSTRAINT fk_option_groupe_produit
-        FOREIGN KEY (produit_id) REFERENCES produit (id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
-
-CREATE TABLE option_choix (
-    id               INT UNSIGNED     NOT NULL AUTO_INCREMENT,
-    groupe_id        INT UNSIGNED     NOT NULL,
-    libelle          VARCHAR(60)      NOT NULL,
-    supplement_cents INT UNSIGNED     NOT NULL DEFAULT 0,
-    position         TINYINT UNSIGNED NOT NULL,
-
-    PRIMARY KEY (id),
-    UNIQUE KEY uq_option_choix_libelle (groupe_id, libelle),
-
-    CONSTRAINT fk_option_choix_groupe
-        FOREIGN KEY (groupe_id) REFERENCES option_groupe (id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
-
--- Supprimer un choix supprime les variantes qui le portent (leur stock avec).
-ALTER TABLE variante
-    ADD CONSTRAINT fk_variante_choix
-        FOREIGN KEY (choix_id) REFERENCES option_choix (id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE;
-
--- ---------------------------------------------------------------------------
--- Paramètres de l'application (US STK-b) : un couple clé / valeur par réglage.
--- seuil_bientot_epuise : stock à partir duquel (inclus) une variante est
--- « Bientôt épuisé ». Modifiable à terme depuis le back-office.
--- ---------------------------------------------------------------------------
-CREATE TABLE parametre (
-    cle    VARCHAR(60)  NOT NULL,
-    valeur VARCHAR(255) NOT NULL,
-
-    PRIMARY KEY (cle)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
-
--- ---------------------------------------------------------------------------
--- Utilisateurs (US CMD-c)
---
--- email : identifiant de connexion, unique (stocké en minuscules par l'API).
--- mot_de_passe : hachage produit par password_hash() (jamais le mot de passe
--- en clair) ; 255 caractères laissent la place aux futurs algorithmes.
--- nom : nom d'affichage facultatif, modifiable dans l'espace personnel (SUI-b).
--- role : décidé ici, côté serveur ; le navigateur ne peut pas le choisir.
--- ---------------------------------------------------------------------------
+-- email : identifiant de connexion, stocké en minuscules.
+-- mot_de_passe : hachage de password_hash(), jamais le mot de passe en clair.
+-- role : décidé côté serveur, le navigateur ne peut pas le choisir.
 CREATE TABLE utilisateur (
     id           INT UNSIGNED            NOT NULL AUTO_INCREMENT,
     email        VARCHAR(254)            NOT NULL,
@@ -220,83 +225,93 @@ CREATE TABLE utilisateur (
     mot_de_passe VARCHAR(255)            NOT NULL,
     role         ENUM('client', 'admin') NOT NULL DEFAULT 'client',
     cree_le      DATETIME                NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modifie_le   DATETIME                NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_utilisateur_email (email)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
--- ---------------------------------------------------------------------------
--- Codes promotionnels (US PRO-a)
---
--- code : saisi par le client, stocké en MAJUSCULES (lettres, chiffres, - et _) ;
--- la recherche ignore donc la casse. UNIQUE.
--- pourcentage : remise sur le total de la commande, de 1 à 100.
--- actif : un code désactivé n'est plus accepté mais reste dans l'historique.
--- ---------------------------------------------------------------------------
+-- ===========================================================================
+-- 4. Promotions et paramètres
+-- ===========================================================================
+
+-- code : saisi par le client, stocké en MAJUSCULES (la recherche ignore la
+-- casse). actif = 0 : le code n'est plus accepté mais reste dans l'historique.
 CREATE TABLE code_promo (
-    id          INT UNSIGNED        NOT NULL AUTO_INCREMENT,
-    code        VARCHAR(30)         NOT NULL,
-    pourcentage TINYINT UNSIGNED    NOT NULL,
-    actif       TINYINT(1)          NOT NULL DEFAULT 1,
-    cree_le     DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id          INT UNSIGNED     NOT NULL AUTO_INCREMENT,
+    code        VARCHAR(30)      NOT NULL,
+    pourcentage TINYINT UNSIGNED NOT NULL,
+    actif       TINYINT(1)       NOT NULL DEFAULT 1,
+    cree_le     DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modifie_le  DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_code_promo_code (code),
-
     CONSTRAINT ck_code_promo_pourcentage CHECK (pourcentage BETWEEN 1 AND 100)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
--- ---------------------------------------------------------------------------
--- Commandes (US CMD-a)
---
--- numero : numéro lisible et unique (ex. CC-2026-000123), fabriqué par l'API
--- à partir de l'identifiant de la commande.
--- statut : une commande validée naît « en_cours ».
--- total_cents : total à payer, réduction du code promo déduite, figé à la
--- validation (centimes).
--- code_promo, reduction_pourcent, reduction_cents (US PRO-a) : le code utilisé,
--- son pourcentage et la réduction obtenue, copiés à la validation. Ce n'est pas
--- une clé étrangère : modifier ou supprimer un code ne change pas les commandes
--- passées. Sous-total = total_cents + reduction_cents.
--- ---------------------------------------------------------------------------
+-- Réglages de l'application (clé / valeur).
+CREATE TABLE parametre (
+    cle    VARCHAR(60)  NOT NULL,
+    valeur VARCHAR(255) NOT NULL,
+
+    PRIMARY KEY (cle)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- ===========================================================================
+-- 5. Commandes, stock et journaux
+-- ===========================================================================
+
+-- Commandes. Les lignes sont des instantanés : libellés et prix copiés à la
+-- validation, pour qu'une modification du catalogue ne change jamais une
+-- commande passée.
+
+CREATE TABLE statut_commande (
+    code    VARCHAR(20)      NOT NULL,
+    libelle VARCHAR(60)      NOT NULL,
+    ordre   TINYINT UNSIGNED NOT NULL,
+
+    PRIMARY KEY (code)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+INSERT INTO statut_commande (code, libelle, ordre) VALUES
+    ('en_cours', 'En cours de préparation', 1),
+    ('prete',    'Prête à retirer',          2),
+    ('retiree',  'Retirée',                  3),
+    ('annulee',  'Annulée',                  4);
+
+-- numero : numéro lisible et unique (ex. CC-2026-000123), fabriqué par l'API.
+-- total_cents : total à payer, remise déduite. Sous-total = total + remise.
+-- code_promo, reduction_* : copiés à la validation, volontairement sans clé
+-- étrangère vers code_promo.
 CREATE TABLE commande (
-    id             INT UNSIGNED                                        NOT NULL AUTO_INCREMENT,
-    numero         VARCHAR(20)                                         NOT NULL,
-    utilisateur_id INT UNSIGNED                                        NOT NULL,
-    statut         ENUM('en_cours', 'prete', 'retiree', 'annulee')     NOT NULL DEFAULT 'en_cours',
-    total_cents    INT UNSIGNED                                        NOT NULL,
-    code_promo         VARCHAR(30)                                     NULL,
-    reduction_pourcent TINYINT UNSIGNED                                NULL,
-    reduction_cents    INT UNSIGNED                                    NOT NULL DEFAULT 0,
-    cree_le        DATETIME                                            NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id                 INT UNSIGNED     NOT NULL AUTO_INCREMENT,
+    numero             VARCHAR(20)      NOT NULL,
+    utilisateur_id     INT UNSIGNED     NOT NULL,
+    statut             VARCHAR(20)      NOT NULL DEFAULT 'en_cours',
+    total_cents        INT UNSIGNED     NOT NULL,
+    code_promo         VARCHAR(30)      NULL,
+    reduction_pourcent TINYINT UNSIGNED NULL,
+    reduction_cents    INT UNSIGNED     NOT NULL DEFAULT 0,
+    cree_le            DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modifie_le         DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_commande_numero (numero),
     KEY idx_commande_utilisateur (utilisateur_id),
+    KEY idx_commande_statut (statut),
 
     CONSTRAINT fk_commande_utilisateur
         FOREIGN KEY (utilisateur_id) REFERENCES utilisateur (id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_commande_statut
+        FOREIGN KEY (statut) REFERENCES statut_commande (code)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
--- ---------------------------------------------------------------------------
--- Lignes de commande
---
--- Instantané : le nom du produit, le format et le prix unitaire sont copiés au
--- moment de la commande. Un changement de prix ou de libellé ultérieur ne
--- modifie donc jamais une commande passée. variante_id passe à NULL si la
--- variante est supprimée, la ligne reste lisible grâce à l'instantané.
--- prix_unitaire_cents : prix du format PLUS suppléments des options (voir
--- ligne_commande_option). Un même format peut figurer sur plusieurs lignes, avec
--- des options différentes.
--- ---------------------------------------------------------------------------
+-- variante_id passe à NULL si la variante est supprimée : la ligne reste
+-- lisible grâce à l'instantané. prix_unitaire_cents comprend le prix de la
+-- variante, le supplément du service et ceux des toppings.
 CREATE TABLE ligne_commande (
     id                  INT UNSIGNED      NOT NULL AUTO_INCREMENT,
     commande_id         INT UNSIGNED      NOT NULL,
@@ -310,23 +325,12 @@ CREATE TABLE ligne_commande (
     KEY idx_ligne_commande (commande_id),
 
     CONSTRAINT fk_ligne_commande
-        FOREIGN KEY (commande_id) REFERENCES commande (id)
-        ON DELETE CASCADE,
+        FOREIGN KEY (commande_id) REFERENCES commande (id) ON DELETE CASCADE,
     CONSTRAINT fk_ligne_variante
-        FOREIGN KEY (variante_id) REFERENCES variante (id)
-        ON DELETE SET NULL
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+        FOREIGN KEY (variante_id) REFERENCES variante (id) ON DELETE SET NULL
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
--- ---------------------------------------------------------------------------
--- Options d'une ligne de commande (US OPT-a)
---
--- Instantané, comme la ligne elle-même : le libellé du groupe, celui du choix et
--- son supplément sont copiés à la commande. Modifier ou supprimer une option du
--- catalogue ne change donc jamais une commande passée (aucune clé vers
--- option_choix). Le prix_unitaire_cents de la ligne comprend déjà ces suppléments.
--- ---------------------------------------------------------------------------
+-- Toppings (et service) d'une ligne, en instantané : aucune clé vers le catalogue.
 CREATE TABLE ligne_commande_option (
     id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
     ligne_id         INT UNSIGNED NOT NULL,
@@ -338,224 +342,221 @@ CREATE TABLE ligne_commande_option (
     KEY idx_ligne_commande_option (ligne_id),
 
     CONSTRAINT fk_ligne_commande_option
-        FOREIGN KEY (ligne_id) REFERENCES ligne_commande (id)
-        ON DELETE CASCADE
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+        FOREIGN KEY (ligne_id) REFERENCES ligne_commande (id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
--- ---------------------------------------------------------------------------
--- Journal des mouvements de stock (US STK-a)
---
--- Une ligne par variante et par mouvement : « sortie » à la validation d'une
--- commande, « retour » à son annulation. quantite est toujours positive, le
--- sens est donné par le type. stock_avant / stock_apres permettent de rejouer
--- l'historique. La clé unique rend chaque mouvement idempotent : une commande
--- ne peut ni sortir ni revenir deux fois le stock d'une même variante.
--- Le journal est conservé même si la variante est supprimée (variante_id NULL).
--- ---------------------------------------------------------------------------
+-- Journal des mouvements de stock : « sortie » à la validation, « retour » à
+-- l'annulation. quantite est positive, le sens est donné par le type. La clé
+-- unique rend chaque mouvement idempotent. Conservé si la variante disparaît.
 CREATE TABLE mouvement_stock (
-    id          INT UNSIGNED         NOT NULL AUTO_INCREMENT,
-    variante_id INT UNSIGNED         NULL,
-    commande_id INT UNSIGNED         NOT NULL,
+    id          INT UNSIGNED             NOT NULL AUTO_INCREMENT,
+    variante_id INT UNSIGNED             NULL,
+    commande_id INT UNSIGNED             NOT NULL,
     type        ENUM('sortie', 'retour') NOT NULL,
-    quantite    SMALLINT UNSIGNED    NOT NULL,
-    stock_avant INT UNSIGNED         NOT NULL,
-    stock_apres INT UNSIGNED         NOT NULL,
-    cree_le     DATETIME             NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    quantite    SMALLINT UNSIGNED        NOT NULL,
+    stock_avant INT UNSIGNED             NOT NULL,
+    stock_apres INT UNSIGNED             NOT NULL,
+    cree_le     DATETIME                 NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_mouvement (commande_id, variante_id, type),
     KEY idx_mouvement_variante (variante_id),
 
     CONSTRAINT fk_mouvement_variante
-        FOREIGN KEY (variante_id) REFERENCES variante (id)
-        ON DELETE SET NULL,
+        FOREIGN KEY (variante_id) REFERENCES variante (id) ON DELETE SET NULL,
     CONSTRAINT fk_mouvement_commande
-        FOREIGN KEY (commande_id) REFERENCES commande (id)
-        ON DELETE CASCADE
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+        FOREIGN KEY (commande_id) REFERENCES commande (id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
--- ---------------------------------------------------------------------------
--- Journal des modifications de commandes par les administrateurs (US PIL-b)
---
--- Une ligne par changement de statut : qui (admin_id), quelle commande,
--- de quel statut à quel statut, et quand. Écrit dans la même transaction que le
--- changement : pas de modification sans trace. Les lignes ne sont jamais
--- modifiées. Un compte administrateur référencé ne peut pas être supprimé.
--- ---------------------------------------------------------------------------
+-- Journal des changements de statut par les administrateurs, écrit dans la même
+-- transaction que le changement. Jamais modifié ; un admin référencé ne peut
+-- pas être supprimé.
 CREATE TABLE journal_commande (
-    id              INT UNSIGNED                                    NOT NULL AUTO_INCREMENT,
-    commande_id     INT UNSIGNED                                    NOT NULL,
-    admin_id        INT UNSIGNED                                    NOT NULL,
-    ancien_statut   ENUM('en_cours', 'prete', 'retiree', 'annulee') NOT NULL,
-    nouveau_statut  ENUM('en_cours', 'prete', 'retiree', 'annulee') NOT NULL,
-    cree_le         DATETIME                                        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    commande_id    INT UNSIGNED NOT NULL,
+    admin_id       INT UNSIGNED NOT NULL,
+    ancien_statut  VARCHAR(20)  NOT NULL,
+    nouveau_statut VARCHAR(20)  NOT NULL,
+    cree_le        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (id),
     KEY idx_journal_commande (commande_id),
     KEY idx_journal_admin (admin_id),
 
     CONSTRAINT fk_journal_commande
-        FOREIGN KEY (commande_id) REFERENCES commande (id)
-        ON DELETE CASCADE,
+        FOREIGN KEY (commande_id) REFERENCES commande (id) ON DELETE CASCADE,
     CONSTRAINT fk_journal_admin
-        FOREIGN KEY (admin_id) REFERENCES utilisateur (id)
-        ON DELETE RESTRICT
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+        FOREIGN KEY (admin_id) REFERENCES utilisateur (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_journal_ancien_statut
+        FOREIGN KEY (ancien_statut) REFERENCES statut_commande (code),
+    CONSTRAINT fk_journal_nouveau_statut
+        FOREIGN KEY (nouveau_statut) REFERENCES statut_commande (code)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
--- ---------------------------------------------------------------------------
--- Jeu de données
--- ---------------------------------------------------------------------------
+-- ===========================================================================
+-- 6. Données : catalogue
+-- ===========================================================================
+
+-- Jeu de données du catalogue : référentiels, produits, variantes. Les textes
+-- longs sont des exemples provisoires, pas les vraies informations produit.
+
 INSERT INTO categorie (id, libelle, slug, description) VALUES
     (1, 'Pots classiques', 'pots-classiques', 'Les parfums historiques de Ben & Jerry''s, en pot.'),
     (2, 'Sans lactose',    'sans-lactose',    'Recettes sans produits laitiers, à base de boisson à l''amande.'),
     (3, 'Sorbets',         'sorbets',         'Sorbets aux fruits, frais et sans produits laitiers.');
 
-INSERT INTO produit (id, categorie_id, nom, slug, description, teinte, image, description_longue, ingredients) VALUES
-    (1,  1, 'Cookie Dough',          'cookie-dough',          'Glace vanille avec des morceaux de pâte à cookie et des pépites de chocolat.',            45, 'images/produits/cookie-dough.svg',
-     'Une glace onctueuse à la vanille, généreusement garnie de morceaux de pâte à cookie et de pépites de chocolat. Un grand classique de la maison, à savourer à la cuillère.',
-     'Crème, lait écrémé, sucre, pâte à cookie (farine de blé, beurre, cassonade), pépites de chocolat, jaunes d''œufs, extrait de vanille. Allergènes : lait, œufs, blé, soja.'),
-    (2,  1, 'Chocolate Fudge Brownie','chocolate-fudge-brownie','Glace au chocolat avec des morceaux de brownie fondants.',                                 20, 'images/produits/chocolate-fudge-brownie.svg',
-     'Une glace au chocolat intense, riche en morceaux de brownie moelleux. Pour les amateurs de chocolat qui n''ont pas peur de la gourmandise.',
-     'Crème, lait écrémé, sucre, cacao maigre, brownie (farine de blé, œufs, beurre, chocolat), jaunes d''œufs. Allergènes : lait, œufs, blé, soja.'),
-    (3,  1, 'Cherry Garcia',         'cherry-garcia',         'Glace à la cerise avec des morceaux de cerises et des pépites de chocolat.',               350, 'images/produits/cherry-garcia.svg',
-     'Une glace à la cerise douce et acidulée, parsemée de vraies cerises et d''éclats de chocolat noir. Un duo fruité et gourmand.',
-     'Crème, lait écrémé, sucre, cerises, pépites de chocolat noir, jaunes d''œufs, arôme naturel de cerise. Allergènes : lait, œufs, soja.'),
-    (4,  1, 'Caramel Chew Chew',     'caramel-chew-chew',     'Glace au caramel, swirl de caramel et morceaux de caramel fondant.',                       35, 'images/produits/caramel-chew-chew.svg',
-     'Une glace au caramel soyeuse, traversée d''un swirl de caramel coulant et de morceaux de caramel fondants. Un voyage 100 % caramel.',
-     'Crème, lait écrémé, sucre, caramel (sucre, crème, beurre), jaunes d''œufs, sel de mer. Allergènes : lait, œufs.'),
-    (5,  2, 'Cookie Dough Sans Lactose','cookie-dough-sans-lactose','Pâte à cookie et pépites de chocolat sur une base à l''amande, sans lactose.',       50, 'images/produits/cookie-dough-sans-lactose.svg',
-     'La version sans lactose du grand classique : une base à l''amande légère, de la pâte à cookie et des pépites de chocolat.',
-     'Boisson à l''amande, sucre, pâte à cookie (farine de blé, huile de coco, cassonade), pépites de chocolat, extrait de vanille. Allergènes : fruits à coque (amande), blé, soja.'),
-    (6,  2, 'Peanut Butter Cup',     'peanut-butter-cup',     'Glace au beurre de cacahuète, swirl de beurre de cacahuète et coques de chocolat.',        30, 'images/produits/peanut-butter-cup.svg',
-     'Du beurre de cacahuète à profusion, un swirl onctueux et de généreuses coques de chocolat croquantes. Sans lactose, pas sans plaisir.',
-     'Boisson à l''amande, sucre, beurre de cacahuète, coques de chocolat, cacao. Allergènes : arachides, fruits à coque (amande), soja.'),
-    (7,  2, 'Chocolate Chip Cookie', 'chocolate-chip-cookie', 'Glace cookie dough sur une base végétale, avec des pépites de chocolat.',                 40, 'images/produits/chocolate-chip-cookie.svg',
-     'Une glace cookie dough sur base végétale, avec des pépites de chocolat et une pointe de vanille. Toute la gourmandise, sans lactose.',
-     'Base végétale (amande), sucre, pâte à cookie (farine de blé, huile de coco), pépites de chocolat, extrait de vanille. Allergènes : fruits à coque (amande), blé, soja.'),
-    (8,  2, 'Vanille Caramel Fudge', 'vanille-caramel-fudge', 'Glace vanille, caramel et fudge sur une base à l''amande.',                                 38, 'images/produits/vanille-caramel-fudge.svg',
-     'Vanille douce, caramel et fudge se mêlent sur une base à l''amande. Un trio de saveurs rondes et fondantes, sans lactose.',
-     'Boisson à l''amande, sucre, caramel, fudge (sucre, cacao, huile de coco), extrait de vanille. Allergènes : fruits à coque (amande), soja.'),
-    (9,  3, 'Mangue Passion',        'mangue-passion',        'Sorbet à la mangue avec un swirl de fruit de la passion.',                                 42, 'images/produits/mangue-passion.svg',
-     'Un sorbet à la mangue bien mûre, relevé d''un swirl de fruit de la passion. Exotique, frais et sans produits laitiers.',
-     'Purée de mangue, sucre, eau, purée de fruit de la passion, jus de citron. Allergènes : aucun.'),
-    (10, 3, 'Fraise Basilic',        'fraise-basilic',        'Sorbet à la fraise parfumé au basilic, frais et acidulé.',                                 0, 'images/produits/fraise-basilic.svg',
-     'Un sorbet à la fraise rafraîchi par une touche de basilic. Une association fraîche et acidulée, parfaite en été.',
-     'Purée de fraise, sucre, eau, basilic, jus de citron. Allergènes : aucun.'),
-    (11, 3, 'Citron Menthe',         'citron-menthe',         'Sorbet au citron avec des feuilles de menthe, très désaltérant.',                          95, 'images/produits/citron-menthe.svg',
-     'Un sorbet au citron vif et à la menthe fraîche, très désaltérant. L''idéal pour terminer un repas en douceur.',
-     'Jus de citron, sucre, eau, feuilles de menthe, zeste de citron. Allergènes : aucun.'),
-    (12, 3, 'Framboise Myrtille',    'framboise-myrtille',    'Sorbet aux framboises et aux myrtilles, intense et fruité.',                               290, 'images/produits/framboise-myrtille.svg',
-     'Un sorbet intense aux framboises et aux myrtilles, riche en fruits. Fruité, profond et acidulé à souhait.',
-     'Purée de framboise, purée de myrtille, sucre, eau, jus de citron. Allergènes : aucun.');
+INSERT INTO format (id, libelle, contenance_ml) VALUES
+    (1, 'Pot 100 ml', 100),
+    (2, 'Pot 465 ml', 465);
 
--- Galerie provisoire : trois entrées par produit, qui pointent toutes vers le
--- visuel du produit. À remplacer par de vraies photos.
+INSERT INTO option_choix (id, type, libelle, supplement_cents, position) VALUES
+    (1,  'service', 'Cuillère en bois',        0,  1),
+    (2,  'service', 'Coupelle',                30, 2),
+    (3,  'service', 'Cône gaufrette',          60, 3),
+    (4,  'topping', 'Sauce chocolat',          50, 1),
+    (5,  'topping', 'Sauce caramel',           50, 2),
+    (6,  'topping', 'Chantilly',               40, 3),
+    (7,  'topping', 'Pépites de chocolat',     40, 4),
+    (8,  'topping', 'Amandes effilées',        40, 5),
+    (9,  'topping', 'Coulis de fruits rouges', 50, 6),
+    (10, 'topping', 'Feuilles de menthe',      30, 7),
+    (11, 'topping', 'Éclats de meringue',      40, 8);
+
+INSERT INTO categorie_topping (categorie_id, choix_id) VALUES
+    (1, 4), (1, 5), (1, 6), (1, 7),
+    (2, 4), (2, 5), (2, 8),
+    (3, 9), (3, 10), (3, 11);
+
+INSERT INTO allergene (id, code, libelle) VALUES
+    (1, 'lait',           'Lait'),
+    (2, 'oeufs',          'Œufs'),
+    (3, 'ble',            'Blé (gluten)'),
+    (4, 'soja',           'Soja'),
+    (5, 'fruits-a-coque', 'Fruits à coque (amande)'),
+    (6, 'arachides',      'Arachides');
+
+INSERT INTO produit (id, categorie_id, nom, slug, description, description_longue, ingredients, teinte) VALUES
+    (1,  1, 'Cookie Dough', 'cookie-dough',
+     'Glace vanille avec des morceaux de pâte à cookie et des pépites de chocolat.',
+     'Une glace onctueuse à la vanille, généreusement garnie de morceaux de pâte à cookie et de pépites de chocolat. Un grand classique de la maison, à savourer à la cuillère.',
+     'Crème, lait écrémé, sucre, pâte à cookie (farine de blé, beurre, cassonade), pépites de chocolat, jaunes d''œufs, extrait de vanille.', 45),
+    (2,  1, 'Chocolate Fudge Brownie', 'chocolate-fudge-brownie',
+     'Glace au chocolat avec des morceaux de brownie fondants.',
+     'Une glace au chocolat intense, riche en morceaux de brownie moelleux. Pour les amateurs de chocolat qui n''ont pas peur de la gourmandise.',
+     'Crème, lait écrémé, sucre, cacao maigre, brownie (farine de blé, œufs, beurre, chocolat), jaunes d''œufs.', 20),
+    (3,  1, 'Cherry Garcia', 'cherry-garcia',
+     'Glace à la cerise avec des morceaux de cerises et des pépites de chocolat.',
+     'Une glace à la cerise douce et acidulée, parsemée de vraies cerises et d''éclats de chocolat noir. Un duo fruité et gourmand.',
+     'Crème, lait écrémé, sucre, cerises, pépites de chocolat noir, jaunes d''œufs, arôme naturel de cerise.', 350),
+    (4,  1, 'Caramel Chew Chew', 'caramel-chew-chew',
+     'Glace au caramel, swirl de caramel et morceaux de caramel fondant.',
+     'Une glace au caramel soyeuse, traversée d''un swirl de caramel coulant et de morceaux de caramel fondants. Un voyage 100 % caramel.',
+     'Crème, lait écrémé, sucre, caramel (sucre, crème, beurre), jaunes d''œufs, sel de mer.', 35),
+    (5,  2, 'Cookie Dough Sans Lactose', 'cookie-dough-sans-lactose',
+     'Pâte à cookie et pépites de chocolat sur une base à l''amande, sans lactose.',
+     'La version sans lactose du grand classique : une base à l''amande légère, de la pâte à cookie et des pépites de chocolat.',
+     'Boisson à l''amande, sucre, pâte à cookie (farine de blé, huile de coco, cassonade), pépites de chocolat, extrait de vanille.', 50),
+    (6,  2, 'Peanut Butter Cup', 'peanut-butter-cup',
+     'Glace au beurre de cacahuète, swirl de beurre de cacahuète et coques de chocolat.',
+     'Du beurre de cacahuète à profusion, un swirl onctueux et de généreuses coques de chocolat croquantes. Sans lactose, pas sans plaisir.',
+     'Boisson à l''amande, sucre, beurre de cacahuète, coques de chocolat, cacao.', 30),
+    (7,  2, 'Chocolate Chip Cookie', 'chocolate-chip-cookie',
+     'Glace cookie dough sur une base végétale, avec des pépites de chocolat.',
+     'Une glace cookie dough sur base végétale, avec des pépites de chocolat et une pointe de vanille. Toute la gourmandise, sans lactose.',
+     'Base végétale (amande), sucre, pâte à cookie (farine de blé, huile de coco), pépites de chocolat, extrait de vanille.', 40),
+    (8,  2, 'Vanille Caramel Fudge', 'vanille-caramel-fudge',
+     'Glace vanille, caramel et fudge sur une base à l''amande.',
+     'Vanille douce, caramel et fudge se mêlent sur une base à l''amande. Un trio de saveurs rondes et fondantes, sans lactose.',
+     'Boisson à l''amande, sucre, caramel, fudge (sucre, cacao, huile de coco), extrait de vanille.', 38),
+    (9,  3, 'Mangue Passion', 'mangue-passion',
+     'Sorbet à la mangue avec un swirl de fruit de la passion.',
+     'Un sorbet à la mangue bien mûre, relevé d''un swirl de fruit de la passion. Exotique, frais et sans produits laitiers.',
+     'Purée de mangue, sucre, eau, purée de fruit de la passion, jus de citron.', 42),
+    (10, 3, 'Fraise Basilic', 'fraise-basilic',
+     'Sorbet à la fraise parfumé au basilic, frais et acidulé.',
+     'Un sorbet à la fraise rafraîchi par une touche de basilic. Une association fraîche et acidulée, parfaite en été.',
+     'Purée de fraise, sucre, eau, basilic, jus de citron.', 0),
+    (11, 3, 'Citron Menthe', 'citron-menthe',
+     'Sorbet au citron avec des feuilles de menthe, très désaltérant.',
+     'Un sorbet au citron vif et à la menthe fraîche, très désaltérant. L''idéal pour terminer un repas en douceur.',
+     'Jus de citron, sucre, eau, feuilles de menthe, zeste de citron.', 95),
+    (12, 3, 'Framboise Myrtille', 'framboise-myrtille',
+     'Sorbet aux framboises et aux myrtilles, intense et fruité.',
+     'Un sorbet intense aux framboises et aux myrtilles, riche en fruits. Fruité, profond et acidulé à souhait.',
+     'Purée de framboise, purée de myrtille, sucre, eau, jus de citron.', 290);
+
+INSERT INTO produit_allergene (produit_id, allergene_id) VALUES
+    (1, 1), (1, 2), (1, 3), (1, 4),
+    (2, 1), (2, 2), (2, 3), (2, 4),
+    (3, 1), (3, 2), (3, 4),
+    (4, 1), (4, 2),
+    (5, 5), (5, 3), (5, 4),
+    (6, 6), (6, 5), (6, 4),
+    (7, 5), (7, 3), (7, 4),
+    (8, 5), (8, 4);
+
+-- Galerie provisoire : trois entrées par produit vers le même visuel, à
+-- remplacer par de vraies photos.
 INSERT INTO produit_image (produit_id, chemin, position)
-SELECT produit.id, produit.image, positions.n
+SELECT produit.id, CONCAT('images/produits/', produit.slug, '.svg'), positions.n
   FROM produit
  CROSS JOIN (SELECT 1 AS n UNION SELECT 2 UNION SELECT 3) AS positions;
 
-INSERT INTO variante (produit_id, libelle, prix_cents, stock) VALUES
-    (1,  'Pot 100 ml', 290, 40), (1,  'Pot 465 ml', 790, 25),
-    (2,  'Pot 100 ml', 290, 35), (2,  'Pot 465 ml', 790, 20),
-    (3,  'Pot 100 ml', 290, 30), (3,  'Pot 465 ml', 790, 3),
-    (4,  'Pot 100 ml', 290, 28), (4,  'Pot 465 ml', 790, 18),
-    (5,  'Pot 100 ml', 320, 22), (5,  'Pot 465 ml', 850, 12),
-    (6,  'Pot 100 ml', 320, 26), (6,  'Pot 465 ml', 850, 0),
-    (7,  'Pot 100 ml', 320, 18), (7,  'Pot 465 ml', 850, 10),
-    (8,  'Pot 100 ml', 320, 20), (8,  'Pot 465 ml', 850, 14),
-    (9,  'Pot 100 ml', 270, 32), (9,  'Pot 465 ml', 720, 16),
-    (10, 'Pot 100 ml', 270, 27), (10, 'Pot 465 ml', 720, 11),
-    (11, 'Pot 100 ml', 270, 24), (11, 'Pot 465 ml', 720, 9),
-    (12, 'Pot 100 ml', 270, 29), (12, 'Pot 465 ml', 720, 15);
+-- Variantes = produit x format x service. Le prix de base dépend de la
+-- catégorie et du format ; le stock de départ, du produit et du format (chaque
+-- service reçoit le même).
+INSERT INTO variante (produit_id, format_id, service_id, prix_cents, stock)
+SELECT produit.id, format.id, service.id, tarif.prix_cents, stock_depart.stock
+  FROM produit
+ CROSS JOIN format
+  JOIN option_choix AS service ON service.type = 'service'
+  JOIN (SELECT 1 AS categorie_id, 1 AS format_id, 290 AS prix_cents
+  UNION SELECT 1, 2, 790 UNION SELECT 2, 1, 320 UNION SELECT 2, 2, 850
+  UNION SELECT 3, 1, 270 UNION SELECT 3, 2, 720) AS tarif
+    ON tarif.categorie_id = produit.categorie_id AND tarif.format_id = format.id
+  JOIN (SELECT 1 AS produit_id, 1 AS format_id, 40 AS stock UNION SELECT 1, 2, 25
+  UNION SELECT 2, 1, 35 UNION SELECT 2, 2, 20
+  UNION SELECT 3, 1, 30 UNION SELECT 3, 2, 3
+  UNION SELECT 4, 1, 28 UNION SELECT 4, 2, 18
+  UNION SELECT 5, 1, 22 UNION SELECT 5, 2, 12
+  UNION SELECT 6, 1, 26 UNION SELECT 6, 2, 0
+  UNION SELECT 7, 1, 18 UNION SELECT 7, 2, 10
+  UNION SELECT 8, 1, 20 UNION SELECT 8, 2, 14
+  UNION SELECT 9, 1, 32 UNION SELECT 9, 2, 16
+  UNION SELECT 10, 1, 27 UNION SELECT 10, 2, 11
+  UNION SELECT 11, 1, 24 UNION SELECT 11, 2, 9
+  UNION SELECT 12, 1, 29 UNION SELECT 12, 2, 15) AS stock_depart
+    ON stock_depart.produit_id = produit.id AND stock_depart.format_id = format.id
+ -- Ordre fixe : d'abord les variantes à la cuillère, puis les autres services,
+ -- pour que les identifiants des variantes soient stables d'un import à l'autre.
+ ORDER BY service.position > 1, produit.id, format.id, service.id;
 
--- Options : chaque produit a un groupe « Service » (un seul choix, obligatoire,
--- porteur de stock : US OPT-b) et un groupe « Toppings » (plusieurs choix,
--- facultatif, sans stock).
-INSERT INTO option_groupe (produit_id, libelle, multiple, obligatoire, porte_stock, position)
-SELECT id, 'Service',  0, 1, 1, 1 FROM produit
-UNION ALL
-SELECT id, 'Toppings', 1, 0, 0, 2 FROM produit;
+-- Combinaisons à part, pour voir « Épuisé » et « Bientôt épuisé » alors que le
+-- format a encore du stock avec un autre service.
+UPDATE variante SET stock = 0
+ WHERE (produit_id = 1 AND format_id = 2 AND service_id = 3)
+    OR (produit_id = 2 AND format_id = 1 AND service_id = 3);
+UPDATE variante SET stock = 4
+ WHERE produit_id = 1 AND format_id = 1 AND service_id = 2;
 
-INSERT INTO option_choix (groupe_id, libelle, supplement_cents, position)
-SELECT g.id, c.libelle, c.supplement_cents, c.position
-  FROM option_groupe g
- CROSS JOIN (
-       SELECT 'Cuillère en bois' AS libelle, 0 AS supplement_cents, 1 AS position
- UNION SELECT 'Coupelle',                   30,                      2
- UNION SELECT 'Cône gaufrette',             60,                      3
- ) AS c
- WHERE g.libelle = 'Service';
+-- ===========================================================================
+-- 6. Données : démonstration
+-- ===========================================================================
 
--- Toppings adaptés à la catégorie : pas de chantilly (lait) pour le sans
--- lactose, des garnitures fruitées pour les sorbets.
-INSERT INTO option_choix (groupe_id, libelle, supplement_cents, position)
-SELECT g.id, t.libelle, t.supplement_cents, t.position
-  FROM option_groupe g
-  JOIN produit p ON p.id = g.produit_id
-  JOIN (
-       SELECT 1 AS categorie_id, 'Sauce chocolat' AS libelle, 50 AS supplement_cents, 1 AS position
- UNION SELECT 1, 'Sauce caramel',      50, 2
- UNION SELECT 1, 'Chantilly',          40, 3
- UNION SELECT 1, 'Pépites de chocolat', 40, 4
- UNION SELECT 2, 'Sauce chocolat',     50, 1
- UNION SELECT 2, 'Sauce caramel',      50, 2
- UNION SELECT 2, 'Amandes effilées',   40, 3
- UNION SELECT 3, 'Coulis de fruits rouges', 50, 1
- UNION SELECT 3, 'Feuilles de menthe', 30, 2
- UNION SELECT 3, 'Éclats de meringue', 40, 3
-  ) AS t ON t.categorie_id = p.categorie_id
- WHERE g.libelle = 'Toppings';
-
--- Variantes = format x Service (US OPT-b). Les 24 formats ci-dessus reçoivent le
--- premier choix du Service (« Cuillère en bois »), puis chaque format est
--- dupliqué pour les autres choix, avec le même prix et le même stock de départ.
-UPDATE variante
-  JOIN option_groupe ON option_groupe.produit_id = variante.produit_id
-                    AND option_groupe.porte_stock = 1
-  JOIN option_choix  ON option_choix.groupe_id = option_groupe.id
-                    AND option_choix.libelle = 'Cuillère en bois'
-   SET variante.choix_id = option_choix.id
- WHERE variante.choix_id IS NULL;
-
-INSERT INTO variante (produit_id, libelle, choix_id, prix_cents, stock)
-SELECT variante.produit_id, variante.libelle, option_choix.id, variante.prix_cents, variante.stock
-  FROM variante
-  JOIN option_groupe ON option_groupe.produit_id = variante.produit_id
-                    AND option_groupe.porte_stock = 1
-  JOIN option_choix  ON option_choix.groupe_id = option_groupe.id
-                    AND option_choix.libelle <> 'Cuillère en bois';
-
--- Quelques combinaisons à part, pour voir « Épuisé » et « Bientôt épuisé » alors
--- que le format a encore du stock avec un autre service.
-UPDATE variante
-  JOIN option_choix ON option_choix.id = variante.choix_id
-   SET variante.stock = 0
- WHERE (variante.produit_id = 1 AND variante.libelle = 'Pot 465 ml' AND option_choix.libelle = 'Cône gaufrette')
-    OR (variante.produit_id = 2 AND variante.libelle = 'Pot 100 ml' AND option_choix.libelle = 'Cône gaufrette');
-
-UPDATE variante
-  JOIN option_choix ON option_choix.id = variante.choix_id
-   SET variante.stock = 4
- WHERE variante.produit_id = 1 AND variante.libelle = 'Pot 100 ml' AND option_choix.libelle = 'Coupelle';
+-- Données de démonstration : réglages, codes promo et comptes. NE PAS charger en
+-- production.
+--   alice@example.com / azerty        (client)
+--   admin@example.com / motdepasse    (admin)
+-- ANCIEN15 est désactivé, pour tester un refus.
 
 INSERT INTO parametre (cle, valeur) VALUES
     ('seuil_bientot_epuise', '5');
 
--- Codes promotionnels de démonstration (ANCIEN15 est désactivé, pour tester un refus).
 INSERT INTO code_promo (code, pourcentage, actif) VALUES
     ('BIENVENUE10', 10, 1),
     ('GLACE20', 20, 1),
     ('ANCIEN15', 15, 0);
 
--- Comptes de démonstration : alice@example.com / azerty (client),
--- admin@example.com / motdepasse (admin). Les mots de passe sont stockés hachés.
 INSERT INTO utilisateur (email, nom, mot_de_passe, role) VALUES
     ('alice@example.com', 'Alice Martin', '$2y$12$usrCg0MWBP4EzYZMwaL.xuLJL2dw9Rz36dZg3tNLXTivNt8NVv3PW', 'client'),
     ('admin@example.com', NULL, '$2y$12$8APxNRkGWxMMBSamJ1eewuXeMWJ7Eq/sZBm.466uy0pt4.MCQWyzi', 'admin');

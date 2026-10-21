@@ -57,7 +57,7 @@ front/               sources du front (Vite + Tailwind)
 
 | Étape | Action |
 |---|---|
-| 1 | Importer `sql/glaces.sql` dans votre base depuis phpMyAdmin (il crée toutes les tables : catalogue, variantes, options, utilisateurs, commandes, stock, codes promo ; une table existante de même nom serait remplacée) |
+| 1 | Importer `sql/glaces.sql` dans votre base depuis phpMyAdmin (il crée toutes les tables : catalogue, formats, services et toppings, allergènes, variantes, utilisateurs, commandes, stock, codes promo, puis charge les données ; une table existante de même nom, y compris d'une ancienne version du schéma, serait remplacée) |
 | 2 | Dans `back/config/config.php`, renseigner les identifiants de la base et le chemin du projet (`/~votre_login/SAE301-Starter/`) |
 | 3 | Dans `front/vite.config.js`, donner à `BASE` **exactement** le même chemin |
 | 4 | Dans `front/`, lancer `npm install` |
@@ -185,7 +185,7 @@ renvoient un JSON `{ erreur }` avec un statut HTTP explicite.
 Les routes `/api/admin/*` exigent une session administrateur, distincte de
 celle des clients, et un jeton CSRF pour les écritures (403 sinon).
 
-Les prix sont des entiers en centimes. Le stock est porté par la variante, c'est-à-dire par la combinaison d'un format et d'un service (cuillère, coupelle, cône) : chaque combinaison a son propre stock. La commande est une transaction : prix et stock sont relus en base, le stock est décrémenté et journalisé, puis recrédité si la commande est annulée.
+Les prix sont des entiers en centimes. Le stock est porté par la variante, c'est-à-dire par la combinaison d'un produit, d'un format de la table `format` et d'un service (cuillère, coupelle, cône) : chaque combinaison a son propre stock. Les allergènes d'un produit sont une liste (`allergenes` sur la fiche) gérée dans le formulaire du back-office. La commande est une transaction : prix et stock sont relus en base, le stock est décrémenté et journalisé, puis recrédité si la commande est annulée.
 
 ## 7. Comptes de démonstration
 

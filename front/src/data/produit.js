@@ -27,8 +27,8 @@ ProduitData.fetchAll = async function () {
  * La fiche d'un produit : GET /api/produit?slug=…
  *
  * La réponse contient { produit, seuilBientotEpuise } avec produit de la forme
- * { id, nom, slug, description, descriptionLongue, ingredients, teinte, image,
- * images: [chemin], categorie: { libelle, slug },
+ * { id, nom, slug, description, descriptionLongue, ingredients,
+ * allergenes: [{ id, code, libelle }], teinte, image, images: [chemin], categorie: { libelle, slug },
  * promoPourcent (null hors promotion), variantes: [{ id, libelle, choixId, prixCents, prixPromoCents, stock }],
  * options: [{ id, libelle, multiple, obligatoire,
  * choix: [{ id, libelle, supplementCents }] }] }. Les prix sont en centimes.

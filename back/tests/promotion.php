@@ -102,9 +102,9 @@ function variante(PDO $pdo, int $produitId): array
  */
 function optionsDe(PDO $pdo, int $variantId): array
 {
-    $choix = $pdo->query("SELECT choix_id FROM variante WHERE id = $variantId")->fetchColumn();
+    $choix = $pdo->query("SELECT service_id FROM variante WHERE id = $variantId")->fetchColumn();
 
-    return $choix === null || $choix === false ? [] : [(int) $choix];
+    return [(int) $choix];
 }
 
 /**
@@ -177,8 +177,7 @@ verifier('total = 2 × prix remisé + prix plein', $total === 2 * PromotionModel
 
 // Les suppléments d'options restent au prix plein : on prend un format + une option payante.
 $sauce = (int) $pdo->query(
-    "SELECT option_choix.id FROM option_choix JOIN option_groupe ON option_groupe.id = option_choix.groupe_id
-      WHERE option_groupe.produit_id = 1 AND option_choix.libelle = 'Sauce caramel'"
+    "SELECT id FROM option_choix WHERE type = 'topping' AND libelle = 'Sauce caramel'"
 )->fetchColumn();
 $options = array_merge(optionsDe($pdo, $v1), [$sauce]);
 repartir($pdo, [1 => 50, 2 => 10]);

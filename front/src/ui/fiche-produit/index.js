@@ -95,7 +95,7 @@ let FicheProduitView = {
 
   /**
    * @param {{produit: {nom: string, description: string, descriptionLongue: string,
-   *          ingredients: string, teinte: number, images: string[],
+   *          ingredients: string, allergenes: Array<{libelle: string}>, teinte: number, images: string[],
    *          categorie: {libelle: string}, variantes: Array<{id: number, libelle: string,
    *          prixCents: number, stock: number,
    *          statutStock: "disponible"|"bientot"|"epuise"}>},
@@ -124,6 +124,7 @@ let FicheProduitView = {
         description: produit.description,
         descriptionLongue: produit.descriptionLongue,
         ingredients: produit.ingredients,
+        allergenes: produit.allergenes.length === 0 ? "aucun à déclarer" : produit.allergenes.map((allergene) => allergene.libelle).join(", "),
         categorie: produit.categorie.libelle,
         teinte: produit.teinte,
         image: produit.images[data.imageIndex],

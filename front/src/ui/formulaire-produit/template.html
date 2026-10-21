@@ -28,10 +28,18 @@
       </label>
 
       <label class="flex flex-col gap-2 text-sm">
-        Ingrédients et allergènes
+        Ingrédients
         <textarea name="ingredients" maxlength="600" rows="4" class="rounded-md border border-border-default bg-bg-default px-3 py-3 text-base transition-colors hover:border-border-strong">{{ingredients}}</textarea>
         <span class="text-xs text-fg-muted">600 caractères au maximum.</span>
       </label>
+
+      <fieldset class="flex flex-col gap-3">
+        <legend class="mb-1 text-sm">Allergènes</legend>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <slot name="allergenes"></slot>
+        </div>
+        <span class="text-xs text-fg-muted">Cochez ceux que contient le produit ; aucun si la recette n'en contient pas.</span>
+      </fieldset>
     </section>
 
     <slot name="images"></slot>
@@ -39,7 +47,7 @@
     <section class="flex flex-col gap-4 rounded-lg border border-border-default bg-bg-default p-4 md:p-6">
       <div class="flex flex-col gap-1">
         <h2 class="text-lg leading-tight font-bold">Formats et prix</h2>
-        <p class="text-xs text-fg-muted">Chaque format a son prix ; le stock se saisit par service (cuillère, coupelle, cône) et un champ vide retire la combinaison de la boutique. Gardez un seul format si le produit n'a pas d'options.</p>
+        <p class="text-xs text-fg-muted">Chaque format a son prix ; le stock se saisit par service (cuillère, coupelle, cône) et un champ vide retire la combinaison de la boutique.</p>
       </div>
 
       <div class="flex flex-col gap-4">

@@ -26,6 +26,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 require_once __DIR__ . '/../src/Model/PromotionModel.php';
+require_once __DIR__ . '/../src/Model/ProduitModel.php';
 require_once __DIR__ . '/../src/Model/CommandeModel.php';
 
 $dsn = getenv('STK_DSN');
@@ -72,10 +73,9 @@ function choix(PDO $pdo, int $produitId, string $groupe, string $libelle): int
     $requete = $pdo->prepare(
         'SELECT option_choix.id
            FROM option_choix
-     INNER JOIN option_groupe ON option_groupe.id = option_choix.groupe_id
-          WHERE option_groupe.produit_id = :produit AND option_groupe.libelle = :groupe AND option_choix.libelle = :libelle'
+          WHERE option_choix.type = :type AND option_choix.libelle = :libelle'
     );
-    $requete->execute(['produit' => $produitId, 'groupe' => $groupe, 'libelle' => $libelle]);
+    $requete->execute(['type' => $groupe === 'Service' ? 'service' : 'topping', 'libelle' => $libelle]);
 
     return (int) $requete->fetchColumn();
 }
@@ -120,7 +120,8 @@ function tenter(CommandeModel $model, array $lignes): ?string
  */
 function combinaison(PDO $pdo, int $produitId, string $format, int $choixId): int
 {
-    $requete = $pdo->prepare('SELECT id FROM variante WHERE produit_id = :produit AND libelle = :format AND choix_id = :choix');
+    $requete = $pdo->prepare('SELECT variante.id FROM variante INNER JOIN format ON format.id = variante.format_id
+          WHERE variante.produit_id = :produit AND format.libelle = :format AND variante.service_id = :choix');
     $requete->execute(['produit' => $produitId, 'format' => $format, 'choix' => $choixId]);
 
     return (int) $requete->fetchColumn();

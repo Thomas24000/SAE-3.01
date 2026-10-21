@@ -56,21 +56,25 @@ Ajouter une route back : `routes.php`, `$controleurs` dans `index.php`, méthode
 
 ## 5. Données
 
-Un produit a au moins une **variante** (format × choix de service) qui porte le
-stock et le prix. Les options (`option_groupe` / `option_choix`) sont choisies
-sur la fiche puis **figées** dans la commande, avec le prix unitaire.
+Un produit a au moins une **variante** (format × service) qui porte le stock et
+le prix. Les formats, services et toppings sont des référentiels **partagés** par
+tous les produits. Les options choisies sur la fiche sont **figées** dans la
+commande, avec le prix unitaire.
 
 | Tables | Rôle |
 | --- | --- |
 | `categorie`, `produit`, `produit_image`, `variante` | catalogue |
-| `option_groupe`, `option_choix` | options des produits |
+| `format` | formats de pot (« Pot 100 ml »), partagés |
+| `option_choix` (`type` = `service` ou `topping`), `categorie_topping` | services (un par variante) et toppings (par catégorie) ; une seule table pour que l'identifiant d'un choix soit unique |
+| `allergene`, `produit_allergene` | allergènes d'un produit (liste, pas du texte libre) |
+| `statut_commande` | statuts d'une commande (`en_cours`, `prete`, `retiree`, `annulee`) |
 | `utilisateur` | clients et admins (`role`) |
 | `commande`, `ligne_commande`, `ligne_commande_option` | commandes figées (nom, prix, options copiés) |
 | `mouvement_stock` | journal des sorties/retours, idempotent |
 | `parametre` | seuil « Bientôt épuisé » |
 
 Points clés :
-- **Variante = combinaison (OPT-b).** `variante.libelle` est le format, `variante.choix_id` le choix du groupe d'options qui porte le stock (`option_groupe.porte_stock = 1`, le « Service »), `NULL` pour un produit sans service. Une combinaison absente de la table n'existe pas : la fiche et l'éditeur d'options du panier l'affichent « Indisponible », « Épuisé » si son stock est nul. La commande exige que le service des options soit celui de la variante. L'admin saisit un prix par format et un stock par service (champ vide = combinaison retirée).
+- **Variante = combinaison (OPT-b).** `variante.format_id` est le format, `variante.service_id` le service (un choix de type `service`, jamais un topping : clé étrangère composite). L'API garde les deux groupes « Service » et « Toppings » avec des identifiants de choix uniques. Une combinaison absente de la table n'existe pas : la fiche et l'éditeur d'options du panier l'affichent « Indisponible », « Épuisé » si son stock est nul. La commande exige que le service des options soit celui de la variante. L'admin choisit le format dans une liste (les formats existants), saisit un prix par format et un stock par service (champ vide = combinaison retirée), et coche les allergènes. Un produit a toujours des services : un produit sans service n'existe plus.
 - **Promotion automatique (PRO-c).** Le produit au stock total le plus élevé (somme de ses variantes, à égalité le plus ancien, aucun si tout est épuisé) est à -20 %. Rien n'est enregistré : `PromotionModel` le déduit des stocks à chaque lecture, donc la promotion se déplace quand les stocks changent. La remise porte sur le prix du format ; les suppléments d'options restent au prix plein. L'API expose `promoPourcent`, `prixMinPromoCents` et `prixPromoCents` ; la commande recalcule le même prix et le fige dans la ligne de commande.
 - **Codes promo (PRO-a).** Table `code_promo` (code en majuscules, pourcentage 1-100, `actif`). Le client le saisit sur `/commande` ; `GET /api/code-promo?code=` le vérifie (404 si inconnu ou désactivé, 429 après 5 essais ratés par minute) et `POST /api/commande` accepte `codePromo`, revérifié dans la transaction (422 sinon). La réduction s'applique au total des lignes, **après** la promotion automatique (cumul). `commande.total_cents` est le total à payer ; `code_promo`, `reduction_pourcent` et `reduction_cents` sont copiés (pas de clé étrangère : modifier un code ne touche pas les commandes passées). Les statistiques de revenus (PIL-a) utilisent le total à payer ; le classement des meilleures ventes reste calculé sur les prix des lignes.
 - **Gestion des codes (PRO-b).** `/admin/codes-promo` (liste + statistiques : utilisations hors annulées, réductions accordées, chiffre d'affaires, dernière utilisation), `/admin/codes-promo/nouveau`, `/admin/codes-promo/:id/modifier`. Un code ne se renomme jamais ; on change son pourcentage ou on le désactive (les commandes passées gardent leur pourcentage). Un code n'est supprimable que s'aucune commande ne l'a cité. Écritures protégées par le jeton CSRF.
@@ -87,6 +91,6 @@ Points clés :
 | `ui/message` utilise des couleurs Tailwind brutes | exception connue, ne pas la recopier |
 | Composants `formulaire-connexion` / `statistiques` hérités de la page admin de démo, plus utilisés | à supprimer sur demande |
 | Stock saisi en back-office non journalisé | acceptable en MVP |
-| Produits créés dans l'admin : aucun groupe d'options ni service (la création d'options reste hors périmètre) | un seul stock par format |
+| Formats, services, toppings et allergènes ne se créent pas dans l'admin (listes fixes en base) | à ajouter dans `sql/glaces.sql` |
 | Stock affiché dans le catalogue = somme des combinaisons du produit | acceptable |
 | Pages admin et commande pas toutes testées en navigateur ni sur la vraie base | à tester |

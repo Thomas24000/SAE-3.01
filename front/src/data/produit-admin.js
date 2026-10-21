@@ -35,7 +35,8 @@ let imagesAvecAdresses = function (images) {
  * Tous les produits : GET /api/admin/produits
  *
  * { produits: [{ id, nom, slug, categorieId, categorie, image, miniature, prixMin, stock,
- *   nombreFormats, nombreImages }], categories: [{ id, libelle }], seuilBientotEpuise }
+ *   nombreFormats, nombreImages }], categories: [{ id, libelle }], formats: [{ id, libelle }],
+ *   services: [{ id, libelle }], allergenes: [{ id, libelle }], seuilBientotEpuise }
  * Les prix sont en centimes ; image et miniature sont des adresses réelles.
  * Lève une ErreurApi (401 sans session administrateur).
  */
@@ -55,9 +56,9 @@ ProduitAdminData.fetchAll = async function () {
  * Un produit complet : GET /api/admin/produit?id=
  *
  * { produit: { id, nom, slug, categorieId, description, descriptionLongue, ingredients,
- *   variantes: [{ id, libelle, choixId, prixCents, stock }] (une par combinaison format + service,
- *   choixId null sans service), services: [{ id, libelle }], images: [{ id, src, miniature, principale }] },
- *   categories, seuilBientotEpuise }
+ *   allergeneIds: [id], variantes: [{ id, libelle, choixId, prixCents, stock }] (une par combinaison
+ *   format + service), services: [{ id, libelle }], images: [{ id, src, miniature, principale }] },
+ *   categories, formats: [{ id, libelle }], allergenes: [{ id, libelle }], seuilBientotEpuise }
  * Lève une ErreurApi (401, 404 si le produit n'existe pas).
  */
 ProduitAdminData.fetchOne = async function (id) {
@@ -71,8 +72,8 @@ ProduitAdminData.fetchOne = async function (id) {
 /**
  * Crée un produit : POST /api/admin/produits
  *
- * produit : { nom, categorieId, description, descriptionLongue, ingredients,
- * variantes: [{ libelle, choixId, prixCents, stock }] }. Réponse : { produit: { id, nom, slug } }
+ * produit : { nom, categorieId, description, descriptionLongue, ingredients, allergeneIds: [id],
+ * variantes: [{ libelle (celui d'un format existant), choixId, prixCents, stock }] }. Réponse : { produit: { id, nom, slug } }
  * Lève une ErreurApi (400 champ invalide, 403 jeton CSRF, 409 nom déjà pris).
  */
 ProduitAdminData.create = async function (produit) {

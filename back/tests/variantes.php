@@ -90,6 +90,7 @@ function donnees(array $produit, array $variantes): array
         'description'       => $produit['description'],
         'descriptionLongue' => $produit['descriptionLongue'],
         'ingredients'       => $produit['ingredients'],
+        'allergeneIds'      => $produit['allergeneIds'],
         'variantes'         => $variantes,
     ];
 }
@@ -102,7 +103,7 @@ verifier('chaque variante porte son choixId', count(array_filter(
     $fiche['variantes'],
     static fn (array $v): bool => is_int($v['choixId'])
 )) === 6);
-$cone = (int) $pdo->query("SELECT id FROM option_choix WHERE libelle = 'Cône gaufrette' AND groupe_id IN (SELECT id FROM option_groupe WHERE produit_id = 1)")->fetchColumn();
+$cone = (int) $pdo->query("SELECT id FROM option_choix WHERE type = 'service' AND libelle = 'Cône gaufrette'")->fetchColumn();
 $pot465Cone = array_values(array_filter(
     $fiche['variantes'],
     static fn (array $v): bool => $v['libelle'] === 'Pot 465 ml' && $v['choixId'] === $cone
@@ -116,8 +117,8 @@ verifier('aucune combinaison pour une liste vide', $produits->findCombinaisonsBy
 
 echo "2. Une combinaison est unique en base\n";
 try {
-    $pdo->prepare('INSERT INTO variante (produit_id, libelle, choix_id, prix_cents, stock) VALUES (1, :format, :choix, 1, 1)')
-        ->execute(['format' => 'Pot 465 ml', 'choix' => $cone]);
+    $pdo->prepare('INSERT INTO variante (produit_id, format_id, service_id, prix_cents, stock) VALUES (1, 2, :choix, 1, 1)')
+        ->execute(['choix' => $cone]);
     verifier('un doublon format + service est refusé', false);
 } catch (PDOException $e) {
     verifier('un doublon format + service est refusé', $e->getCode() === '23000');
@@ -140,12 +141,16 @@ $changee = $variantes;
 $changee[0]['choixId'] = $changee[1]['choixId'];
 verifier('changer le service d\'une variante est refusé', str_contains((string) tenter($admin, 1, donnees($produit, $changee)), 'ne peut pas être changé'));
 
-$autreProduit = $admin->trouver(2);
-$etrangere = $variantes;
-$etrangere[] = ['libelle' => 'Pot 1 l', 'choixId' => $autreProduit['services'][0]['id'], 'prixCents' => 1500, 'stock' => 3];
-verifier('un service d\'un autre produit est refusé', str_contains((string) tenter($admin, 1, donnees($produit, $etrangere)), 'services choisis'));
+$topping = (int) $pdo->query("SELECT id FROM option_choix WHERE type = 'topping' LIMIT 1")->fetchColumn();
+$fausse = $variantes;
+$fausse[] = ['libelle' => 'Pot 465 ml', 'choixId' => $topping, 'prixCents' => 1500, 'stock' => 3];
+verifier('un topping à la place d\'un service est refusé', str_contains((string) tenter($admin, 1, donnees($produit, $fausse)), 'service'));
+$inconnu = $variantes;
+$inconnu[] = ['libelle' => 'Pot 1 l', 'choixId' => $produit['services'][0]['id'], 'prixCents' => 1500, 'stock' => 3];
+verifier('un format qui n\'existe pas est refusé', str_contains((string) tenter($admin, 1, donnees($produit, $inconnu)), 'n\'existe pas'));
 verifier('rien n\'a été modifié par ces refus', count($admin->trouver(1)['variantes']) === 5);
 
+$pdo->exec("INSERT INTO format (libelle, contenance_ml) VALUES ('Pot 1 l', 1000)");
 $nouvelle = $variantes;
 $nouvelle[] = ['libelle' => 'Pot 1 l', 'choixId' => $produit['services'][0]['id'], 'prixCents' => 1500, 'stock' => 3];
 verifier('un nouveau format avec un seul service (les autres non proposés) passe', tenter($admin, 1, donnees($produit, $nouvelle)) === null);
@@ -154,18 +159,49 @@ verifier('il apparaît comme une seule combinaison', count(array_filter(
     static fn (array $v): bool => $v['libelle'] === 'Pot 1 l'
 )) === 1);
 
-echo "4. Produit sans service\n";
-$id = $admin->creer([
+echo "4. Un produit a toujours un service\n";
+$base = [
     'nom' => 'Test variantes', 'slug' => 'test-variantes', 'categorieId' => 1, 'description' => 'd',
     'descriptionLongue' => '', 'ingredients' => '', 'teinte' => 10,
-    'variantes' => [['libelle' => 'Pot', 'choixId' => null, 'prixCents' => 100, 'stock' => 2]],
-]);
+];
+$sansService = false;
+try {
+    $admin->creer($base + ['variantes' => [['libelle' => 'Pot 100 ml', 'choixId' => null, 'prixCents' => 100, 'stock' => 2]]]);
+} catch (DomainException $e) {
+    $sansService = true;
+}
+verifier('une variante sans service est refusée', $sansService);
+verifier('et le produit n\'a pas été créé', (int) $pdo->query("SELECT COUNT(*) FROM produit WHERE slug = 'test-variantes'")->fetchColumn() === 0);
+
+$id = $admin->creer($base + ['variantes' => [['libelle' => 'Pot 100 ml', 'choixId' => $produit['services'][0]['id'], 'prixCents' => 100, 'stock' => 2]]]);
 $neuf = $admin->trouver($id);
-verifier('il a une variante et aucun service', count($neuf['variantes']) === 1 && $neuf['services'] === []);
-verifier('lui donner un service est refusé', str_contains((string) tenter($admin, $id, donnees($neuf, [
-    ['libelle' => 'Pot', 'choixId' => $produit['services'][0]['id'], 'prixCents' => 100, 'stock' => 2],
-])), 'services choisis'));
+verifier('avec un service, il a une variante et les 3 services restent proposés', count($neuf['variantes']) === 1 && count($neuf['services']) === 3);
+verifier('son visuel est celui par défaut tant qu\'il n\'a pas d\'image', $admin->lister()[count($admin->lister()) - 1]['image'] === ProduitModel::IMAGE_DEFAUT);
 $admin->supprimer($id);
+
+echo "5. Listes du formulaire et allergènes\n";
+verifier('les formats proposés sont ceux de la base, du plus petit au plus grand',
+    array_column($admin->formats(), 'libelle') === ['Pot 100 ml', 'Pot 465 ml', 'Pot 1 l']);
+verifier('tous les allergènes sont proposés', count($admin->allergenes()) === 6);
+
+$produit = $admin->trouver(1);
+verifier('le Cookie Dough a ses 4 allergènes (lait, œufs, blé, soja)', $produit['allergeneIds'] === [1, 2, 3, 4]);
+
+$donnees = donnees($produit, $produit['variantes']);
+verifier('remplacer les allergènes passe', tenter($admin, 1, ['allergeneIds' => [5, 6]] + $donnees) === null
+    && $admin->trouver(1)['allergeneIds'] === [5, 6]);
+verifier('une liste vide les retire tous', tenter($admin, 1, ['allergeneIds' => []] + $donnees) === null
+    && $admin->trouver(1)['allergeneIds'] === []);
+verifier('un allergène inconnu est refusé', str_contains((string) tenter($admin, 1, ['allergeneIds' => [1, 999]] + $donnees), 'allergènes'));
+verifier('et rien n\'a changé', $admin->trouver(1)['allergeneIds'] === []);
+
+$id = $admin->creer($base + ['allergeneIds' => [1], 'variantes' => [['libelle' => 'Pot 100 ml', 'choixId' => $produit['services'][0]['id'], 'prixCents' => 100, 'stock' => 2]]]);
+verifier('un produit se crée avec ses allergènes', $admin->trouver($id)['allergeneIds'] === [1]);
+$admin->supprimer($id);
+$id = $admin->creer($base + ['variantes' => [['libelle' => 'Pot 100 ml', 'choixId' => $produit['services'][0]['id'], 'prixCents' => 100, 'stock' => 2]]]);
+verifier('ou sans aucun allergène', $admin->trouver($id)['allergeneIds'] === []);
+$admin->supprimer($id);
+verifier('supprimer un produit retire ses liens d\'allergènes', (int) $pdo->query("SELECT COUNT(*) FROM produit_allergene WHERE produit_id = $id")->fetchColumn() === 0);
 
 echo $echecs === 0 ? "\nTous les tests passent.\n" : "\n$echecs test(s) en échec.\n";
 exit($echecs === 0 ? 0 : 1);

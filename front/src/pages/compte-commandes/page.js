@@ -1,22 +1,28 @@
 import { CommandeData } from "../../data/commande.js";
+import { PanierData } from "../../data/panier.js";
 import { goTo } from "../../lib/navigation.js";
 import { libelleStatut } from "../../lib/statut-commande.js";
 import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { FiltresHistoriqueView } from "../../ui/filtres-historique/index.js";
+import { HeaderView } from "../../ui/header/index.js";
 import { ListeHistoriqueView } from "../../ui/liste-historique/index.js";
 import { MessageView } from "../../ui/message/index.js";
 import { NavigationCompteView } from "../../ui/navigation-compte/index.js";
 import { PaginationView } from "../../ui/pagination/index.js";
 import template from "./template.html?raw";
+import templateLienPanier from "./lien-panier.html?raw";
 
 /**
- * Page « Mes commandes » (US SUI-c), à l'adresse /compte/commandes : l'historique
- * du client, de la plus récente à la plus ancienne, filtrable par statut et par
- * période, paginé. Chaque commande mène à son détail (/commande/:numero).
+ * Page « Mes commandes » (US SUI-c et SUI-a), à l'adresse /compte/commandes :
+ * l'historique du client, de la plus récente à la plus ancienne, filtrable par
+ * statut et par période, paginé. Chaque commande mène à son détail
+ * (/commande/:numero) et peut être recommandée : ses articles encore disponibles
+ * passent dans le panier, avec leurs options.
  *
- * M : filtres, page, réponse du serveur (qui filtre et pagine). V : le gabarit,
- * les filtres, la liste et la pagination. C : charge, applique un filtre ou une
- * page, renvoie vers la connexion si le serveur répond 401.
+ * M : filtres, page, réponse du serveur (qui filtre et pagine), reprise en cours
+ * et panier. V : le gabarit, les filtres, la liste et la pagination. C : charge,
+ * applique un filtre ou une page, lance une reprise, renvoie vers la connexion si
+ * le serveur répond 401.
  */
 
 const STATUTS = ["", "en_cours", "prete", "retiree", "annulee"];
@@ -30,6 +36,8 @@ let M = {
   total: 0,
   commandes: null, // [{ numero, statut, totalCents, creeLe }], ou null tant que le chargement n'a pas réussi
   message: null, // { type, texte }, ou null
+  enCours: false, // true pendant qu'une reprise s'exécute
+  lienPanier: false, // true quand la dernière reprise a ajouté des articles au panier
 };
 
 /**
@@ -84,6 +92,51 @@ M.formatDate = function (dateSql) {
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeStyle: "short" }).format(date);
 };
 
+/**
+ * Ajoute au panier les lignes d'une reprise qui peuvent être recommandées. Les
+ * quantités s'additionnent à celles déjà présentes ; le panier lui-même est remis
+ * d'accord avec le stock quand il s'affiche.
+ * . reprise : la réponse de GET /api/commande/reprise
+ * > le nombre d'articles ajoutés, quantités comprises
+ */
+M.addToCart = function (reprise) {
+  let ajoutes = 0;
+
+  for (let i = 0; i < reprise.lignes.length; i++) {
+    let ligne = reprise.lignes[i];
+    if (ligne.statut === "indisponible") continue;
+
+    PanierData.add(ligne.variantId, ligne.quantite, ligne.options);
+    ajoutes += ligne.quantite;
+  }
+
+  return ajoutes;
+};
+
+/**
+ * Le message qui suit une reprise : ce qui a été ajouté et, au besoin, ce qui ne
+ * l'a pas été ou l'a été en quantité réduite.
+ * . reprise : la réponse de GET /api/commande/reprise
+ * . ajoutes : le nombre d'articles ajoutés au panier
+ * > { type, texte } : « succes » si au moins un article est passé, sinon « erreur »
+ */
+M.reorderMessage = function (reprise, ajoutes) {
+  let remarques = reprise.lignes
+    .filter((ligne) => ligne.statut !== "ok")
+    .map((ligne) => `${ligne.nom} (${ligne.libelle}) ${ligne.motif}`);
+  let suite = remarques.length === 0 ? "" : ` À noter : ${remarques.join(" ; ")}.`;
+
+  if (ajoutes === 0) {
+    return {
+      type: "erreur",
+      texte: `Aucun article de la commande ${reprise.numero} n'est disponible.${suite}`,
+    };
+  }
+
+  let articles = ajoutes === 1 ? "1 article a été ajouté" : `${ajoutes} articles ont été ajoutés`;
+  return { type: "succes", texte: `${articles} à ton panier depuis la commande ${reprise.numero}.${suite}` };
+};
+
 let C = {};
 
 /**
@@ -93,6 +146,8 @@ let C = {};
  * > false si le visiteur a été redirigé, true sinon
  */
 C.charger = async function () {
+  M.lienPanier = false;
+
   let probleme = M.periodProblem();
   if (probleme !== null) {
     M.message = { type: "erreur", texte: probleme };
@@ -149,9 +204,38 @@ C.handler_page = async function (numero) {
 };
 
 /**
+ * Commander à nouveau : récupère auprès du serveur ce qui est encore disponible,
+ * l'ajoute au panier puis explique le résultat. Sans effet pendant une reprise.
+ * . numero : le numéro de la commande à recommander
+ */
+C.handler_reorder = async function (numero) {
+  if (M.enCours) return;
+
+  M.enCours = true;
+  M.lienPanier = false;
+  V.refresh(C.viewData(), `button[data-numero="${numero}"]`);
+
+  try {
+    let reprise = await CommandeData.fetchReprise(numero);
+    let ajoutes = M.addToCart(reprise);
+    M.message = M.reorderMessage(reprise, ajoutes);
+    M.lienPanier = ajoutes > 0;
+  } catch (erreur) {
+    if (erreur.statut === 401) {
+      goTo("/connexion?retour=" + encodeURIComponent("/compte/commandes"));
+      return;
+    }
+    M.message = { type: "erreur", texte: `Impossible de commander à nouveau : ${erreur.message}` };
+  }
+
+  M.enCours = false;
+  V.refresh(C.viewData(), `button[data-numero="${numero}"]`);
+};
+
+/**
  * Les données dont la Vue a besoin pour afficher la page.
- * > { message, filtres, resume, liste, pagination } ; liste et pagination valent
- *   null tant que le chargement n'a pas réussi
+ * > { message, lienPanier, panierCount, filtres, resume, liste, pagination } ; liste
+ *   et pagination valent null tant que le chargement n'a pas réussi
  */
 C.viewData = function () {
   let filtres = {
@@ -161,11 +245,13 @@ C.viewData = function () {
   };
 
   if (M.commandes === null) {
-    return { message: M.message, filtres, resume: "", liste: null, pagination: null };
+    return { message: M.message, lienPanier: false, panierCount: PanierData.count(), filtres, resume: "", liste: null, pagination: null };
   }
 
   return {
     message: M.message,
+    lienPanier: M.lienPanier,
+    panierCount: PanierData.count(),
     filtres,
     resume: M.countText(),
     liste: {
@@ -178,6 +264,7 @@ C.viewData = function () {
       texteVide: M.hasFilter()
         ? "Aucune commande ne correspond à ces filtres."
         : "Tu n'as pas encore passé de commande.",
+      enCours: M.enCours,
     },
     pagination: M.pages > 1 ? { page: M.page, pages: M.pages } : null,
   };
@@ -189,6 +276,8 @@ C.init = async function () {
   M.page = 1;
   M.commandes = null;
   M.message = null;
+  M.enCours = false;
+  M.lienPanier = false;
 
   let afficher = await C.charger();
   // Visiteur non connecté : le routeur affiche déjà la page de connexion.
@@ -214,6 +303,8 @@ V.refresh = function (data, focusSelector) {
   V.racine.replaceWith(fragment);
   V.racine = nouvelleRacine;
 
+  // Le compteur du header est hors de la page : une reprise l'a fait changer.
+  HeaderView.updateCount(data.panierCount);
   document.querySelector(focusSelector)?.focus();
 };
 
@@ -222,6 +313,11 @@ V.createPageFragment = function (data) {
 
   page.querySelector('slot[name="navigation"]').replaceWith(NavigationCompteView.dom());
   page.querySelector('slot[name="message"]').replaceWith(MessageView.dom(data.message));
+
+  let slotPanier = page.querySelector('slot[name="panier"]');
+  if (data.lienPanier) slotPanier.replaceWith(htmlToFragment(templateLienPanier));
+  else slotPanier.remove();
+
   page
     .querySelector('slot[name="filtres"]')
     .replaceWith(
@@ -233,7 +329,7 @@ V.createPageFragment = function (data) {
 
   let slotListe = page.querySelector('slot[name="liste"]');
   if (data.liste === null) slotListe.remove();
-  else slotListe.replaceWith(ListeHistoriqueView.dom(data.liste));
+  else slotListe.replaceWith(ListeHistoriqueView.dom(data.liste, { surReprise: C.handler_reorder }));
 
   let slotPagination = page.querySelector('slot[name="pagination"]');
   if (data.pagination === null) slotPagination.remove();

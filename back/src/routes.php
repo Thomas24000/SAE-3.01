@@ -33,6 +33,7 @@ return [
     'POST /api/commande'    => [CommandeController::class,  'store'],
     'GET  /api/commande'    => [CommandeController::class,  'show'],
     'GET  /api/commandes'   => [CommandeController::class,  'index'],
+    'GET  /api/commande/reprise' => [CommandeController::class, 'reprise'],
     'GET  /api/compte'              => [CompteController::class,    'show'],
     'POST /api/compte/profil'       => [CompteController::class,    'updateProfile'],
     'POST /api/compte/mot-de-passe' => [CompteController::class,    'updatePassword'],

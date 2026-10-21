@@ -7,7 +7,7 @@ description: Ajoute une fonctionnalité front au site click & collect de glaces 
 
 ## Étapes obligatoires
 
-1. Identifier l'US concernée dans le tableau de la section 8 d'`AGENTS.md` et
+1. Identifier l'US concernée dans le tableau de `docs/US.md` et
    vérifier ses dépendances.
 2. Lire les pages, composants, modules data, routeur et templates concernés.
 3. Présenter un découpage avant d'écrire :

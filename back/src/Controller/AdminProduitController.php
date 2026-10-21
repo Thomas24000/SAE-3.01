@@ -32,6 +32,7 @@ final class AdminProduitController
     private const DESCRIPTION_LONGUE_MAX = 800;
     private const INGREDIENTS_MAX = 600;
     private const FORMATS_MAX = 10;
+    private const SERVICES_MAX = 10; // services par format (combinaisons format + service)
     private const LIBELLE_FORMAT_MAX = 60;
     private const PRIX_MAX_CENTS = 1000000;
     private const STOCK_MAX = 1000000;
@@ -77,8 +78,8 @@ final class AdminProduitController
      * GET /api/admin/produit?id= : un produit complet.
      *
      * Réponse : { produit: { id, nom, slug, categorieId, description, descriptionLongue,
-     * ingredients, variantes: [{ id, libelle, prixCents, stock }],
-     * images: [{ id, chemin, miniature, principale }] }, categories, seuilBientotEpuise }
+     * ingredients, variantes: [{ id, libelle, choixId, prixCents, stock }],
+     * services: [{ id, libelle }], images: [{ id, chemin, miniature, principale }] }, categories, seuilBientotEpuise }
      * Erreurs : 401, 400 (identifiant invalide), 404.
      */
     public function show(Request $requete): void
@@ -102,7 +103,7 @@ final class AdminProduitController
      * ensuite depuis sa page de modification).
      *
      * Corps : { nom, categorieId, description, descriptionLongue, ingredients,
-     * variantes: [{ libelle, prixCents, stock }] }
+     * variantes: [{ libelle, choixId?, prixCents, stock }] }
      * Réponse (201) : { produit: { id, nom, slug } }
      * Erreurs : 401, 403 (CSRF), 400 (champ invalide), 409 (nom ou format en double).
      */
@@ -281,7 +282,7 @@ final class AdminProduitController
      * Vérifie et normalise les champs d'un produit et de ses formats.
      *
      * @return array{nom:string, categorieId:int, description:string, descriptionLongue:string,
-     *         ingredients:string, variantes:array<int, array{id?:int, libelle:string, prixCents:int, stock:int}>}
+     *         ingredients:string, variantes:array<int, array{id?:int, libelle:string, choixId:int|null, prixCents:int, stock:int}>}
      */
     private function donneesValides(array $corps): array
     {
@@ -314,19 +315,23 @@ final class AdminProduitController
     }
 
     /**
-     * Vérifie la liste des formats : de 1 à 10, nom unique dans le produit, prix
-     * en centimes strictement positif, stock entier positif ou nul.
+     * Vérifie la liste des variantes (US OPT-b : une par combinaison format + service) :
+     * de 1 à 10 formats, chacun avec au plus un stock par service, un couple
+     * format + service unique dans le produit, prix en centimes strictement positif,
+     * stock entier positif ou nul. L'appartenance du service au produit est vérifiée
+     * par le modèle.
      *
-     * @return array<int, array{id?:int, libelle:string, prixCents:int, stock:int}>
+     * @return array<int, array{id?:int, libelle:string, choixId:int|null, prixCents:int, stock:int}>
      */
     private function variantesValides(mixed $brutes): array
     {
-        if (!is_array($brutes) || !array_is_list($brutes) || count($brutes) < 1 || count($brutes) > self::FORMATS_MAX) {
+        if (!is_array($brutes) || !array_is_list($brutes) || count($brutes) < 1
+            || count($brutes) > self::FORMATS_MAX * self::SERVICES_MAX) {
             Response::erreur('Un produit doit avoir entre 1 et ' . self::FORMATS_MAX . ' formats.', 400);
         }
 
         $variantes = [];
-        $libelles  = [];
+        $couples   = [];
         for ($i = 0; $i < count($brutes); $i++) {
             $brute = is_array($brutes[$i]) ? $brutes[$i] : [];
 
@@ -334,10 +339,13 @@ final class AdminProduitController
             if ($libelle === '' || mb_strlen($libelle) > self::LIBELLE_FORMAT_MAX) {
                 Response::erreur('Le nom d\'un format est obligatoire (' . self::LIBELLE_FORMAT_MAX . ' caractères au maximum).', 400);
             }
-            if (in_array(mb_strtolower($libelle), $libelles, true)) {
-                Response::erreur('Deux formats portent le même nom : « ' . $libelle . ' ».', 400);
+            $choixId = isset($brute['choixId']) ? $this->identifiant($brute['choixId']) : null;
+
+            $couple = mb_strtolower($libelle) . '|' . ($choixId ?? '');
+            if (in_array($couple, $couples, true)) {
+                Response::erreur('Deux variantes portent le même format et le même service : « ' . $libelle . ' ».', 400);
             }
-            $libelles[] = mb_strtolower($libelle);
+            $couples[] = $couple;
 
             $prix = $brute['prixCents'] ?? null;
             if (!is_int($prix) || $prix < 1 || $prix > self::PRIX_MAX_CENTS) {
@@ -349,11 +357,16 @@ final class AdminProduitController
                 Response::erreur('Le stock du format « ' . $libelle . ' » doit être un nombre entier positif ou nul.', 400);
             }
 
-            $variante = ['libelle' => $libelle, 'prixCents' => $prix, 'stock' => $stock];
+            $variante = ['libelle' => $libelle, 'choixId' => $choixId, 'prixCents' => $prix, 'stock' => $stock];
             if (isset($brute['id'])) {
                 $variante['id'] = $this->identifiant($brute['id']);
             }
             $variantes[] = $variante;
+        }
+
+        // La limite porte sur les formats, pas sur leurs combinaisons avec les services.
+        if (count(array_unique(array_map(static fn (array $v): string => mb_strtolower($v['libelle']), $variantes))) > self::FORMATS_MAX) {
+            Response::erreur('Un produit doit avoir entre 1 et ' . self::FORMATS_MAX . ' formats.', 400);
         }
 
         return $variantes;

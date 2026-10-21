@@ -68,4 +68,4 @@ invalide → panier vide. Ce module est le seul à toucher `localStorage`
 ## 5. Fin de tâche
 
 `node .agents/skills/verifier-mvc/scripts/check-mvc.js .`, `cd front && npm
-run build`, compte rendu AGENTS §11. Ne jamais commit/push.
+run build`, compte rendu AGENTS §10. Ne jamais commit/push.

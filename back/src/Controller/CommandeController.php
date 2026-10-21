@@ -150,6 +150,36 @@ final class CommandeController
     }
 
     /**
+     * GET /api/commande/reprise?numero=CC-2026-000123 : ce qu'on peut recommander
+     * d'une ancienne commande (US SUI-a).
+     *
+     * Réponse : { numero, lignes: [{ variantId, nom, libelle, quantiteDemandee, quantite,
+     * options: [idChoix], statut, motif }] }. statut vaut « ok », « ajustee » (stock
+     * partiel : quantite < quantiteDemandee) ou « indisponible » (quantite vaut 0, motif
+     * dit pourquoi). Rien n'est écrit : le front ajoute les lignes au panier, et la
+     * validation relira tout.
+     * Erreurs : 401 si personne n'est connecté, 400 si le numéro est mal formé, 404 si la
+     * commande n'existe pas ou appartient à un autre client.
+     */
+    public function reprise(Request $requete): void
+    {
+        $utilisateurId = $this->utilisateurConnecte('Connecte-toi pour commander à nouveau.');
+        $numero        = $requete->parametre('numero', '');
+
+        if (preg_match('/^CC-[0-9]{4}-[0-9]{6,}$/', $numero) !== 1) {
+            Response::erreur('Le numéro de commande est absent ou invalide.', 400);
+        }
+
+        $reprise = $this->commandes->preparerReprise($numero, $utilisateurId);
+
+        if ($reprise === null) {
+            Response::erreur('Commande introuvable.', 404);
+        }
+
+        Response::json($reprise);
+    }
+
+    /**
      * L'identifiant du client connecté, lu dans la session.
      *
      * @param string $message Le message de l'erreur 401 si personne n'est connecté.

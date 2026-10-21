@@ -55,7 +55,8 @@ ProduitAdminData.fetchAll = async function () {
  * Un produit complet : GET /api/admin/produit?id=
  *
  * { produit: { id, nom, slug, categorieId, description, descriptionLongue, ingredients,
- *   variantes: [{ id, libelle, prixCents, stock }], images: [{ id, src, miniature, principale }] },
+ *   variantes: [{ id, libelle, choixId, prixCents, stock }] (une par combinaison format + service,
+ *   choixId null sans service), services: [{ id, libelle }], images: [{ id, src, miniature, principale }] },
  *   categories, seuilBientotEpuise }
  * Lève une ErreurApi (401, 404 si le produit n'existe pas).
  */
@@ -71,7 +72,7 @@ ProduitAdminData.fetchOne = async function (id) {
  * Crée un produit : POST /api/admin/produits
  *
  * produit : { nom, categorieId, description, descriptionLongue, ingredients,
- * variantes: [{ libelle, prixCents, stock }] }. Réponse : { produit: { id, nom, slug } }
+ * variantes: [{ libelle, choixId, prixCents, stock }] }. Réponse : { produit: { id, nom, slug } }
  * Lève une ErreurApi (400 champ invalide, 403 jeton CSRF, 409 nom déjà pris).
  */
 ProduitAdminData.create = async function (produit) {

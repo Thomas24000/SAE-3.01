@@ -98,17 +98,28 @@ CREATE TABLE produit_image (
   COLLATE = utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------------
--- Variantes (un format de pot) — c'est elle qui porte prix et stock
+-- Variantes (US OPT-b) — une variante est une COMBINAISON : un format de pot
+-- (libelle) et, si le produit en a un, un choix d'un groupe d'options qui porte
+-- le stock (choix_id, par exemple le « Service » : cuillère, coupelle ou cône).
+-- C'est elle qui porte prix et stock : Pot 465 ml + Cône et Pot 465 ml + Coupelle
+-- ont chacun le leur. Une combinaison absente de cette table n'existe pas.
+--
+-- choix_id : NULL pour un produit sans groupe porteur de stock. La clé de
+-- l'unicité utilise choix_cle car MySQL accepte plusieurs NULL dans un index
+-- UNIQUE : choix_cle vaut 0 quand choix_id est NULL. La clé étrangère vers
+-- option_choix est ajoutée plus bas (cette table est créée après variante).
 -- ---------------------------------------------------------------------------
 CREATE TABLE variante (
     id         INT UNSIGNED      NOT NULL AUTO_INCREMENT,
     produit_id SMALLINT UNSIGNED NOT NULL,
     libelle    VARCHAR(60)       NOT NULL,
+    choix_id   INT UNSIGNED      NULL,
+    choix_cle  INT UNSIGNED      AS (COALESCE(choix_id, 0)) VIRTUAL,
     prix_cents INT UNSIGNED      NOT NULL,
     stock      INT UNSIGNED      NOT NULL DEFAULT 0,
 
     PRIMARY KEY (id),
-    UNIQUE KEY uq_variante_produit_libelle (produit_id, libelle),
+    UNIQUE KEY uq_variante_combinaison (produit_id, libelle, choix_cle),
     -- Dernier garde-fou (US STK-a) : le stock ne peut jamais être négatif.
     CONSTRAINT ck_variante_stock CHECK (stock >= 0),
 
@@ -129,6 +140,9 @@ CREATE TABLE variante (
 -- option_choix : une réponse possible. supplement_cents s'ajoute au prix de la
 -- variante (centimes, 0 si gratuit). Le serveur relit ces prix : le navigateur
 -- ne fait jamais foi. Le figement dans les lignes de commande est l'US OPT-a.
+-- porte_stock = 1 (US OPT-b) : les choix du groupe forment, avec le format, les
+-- variantes (variante.choix_id) et chacun a donc son stock. Un tel groupe est
+-- obligatoire et à choix unique.
 -- ---------------------------------------------------------------------------
 CREATE TABLE option_groupe (
     id          INT UNSIGNED      NOT NULL AUTO_INCREMENT,
@@ -136,6 +150,7 @@ CREATE TABLE option_groupe (
     libelle     VARCHAR(60)       NOT NULL,
     multiple    TINYINT(1)        NOT NULL DEFAULT 0,
     obligatoire TINYINT(1)        NOT NULL DEFAULT 0,
+    porte_stock TINYINT(1)        NOT NULL DEFAULT 0,
     position    TINYINT UNSIGNED  NOT NULL,
 
     PRIMARY KEY (id),
@@ -166,6 +181,13 @@ CREATE TABLE option_choix (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
+
+-- Supprimer un choix supprime les variantes qui le portent (leur stock avec).
+ALTER TABLE variante
+    ADD CONSTRAINT fk_variante_choix
+        FOREIGN KEY (choix_id) REFERENCES option_choix (id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE;
 
 -- ---------------------------------------------------------------------------
 -- Paramètres de l'application (US STK-b) : un couple clé / valeur par réglage.
@@ -421,12 +443,13 @@ INSERT INTO variante (produit_id, libelle, prix_cents, stock) VALUES
     (11, 'Pot 100 ml', 270, 24), (11, 'Pot 465 ml', 720, 9),
     (12, 'Pot 100 ml', 270, 29), (12, 'Pot 465 ml', 720, 15);
 
--- Options : chaque produit a un groupe « Service » (un seul choix, obligatoire)
--- et un groupe « Toppings » (plusieurs choix, facultatif).
-INSERT INTO option_groupe (produit_id, libelle, multiple, obligatoire, position)
-SELECT id, 'Service',  0, 1, 1 FROM produit
+-- Options : chaque produit a un groupe « Service » (un seul choix, obligatoire,
+-- porteur de stock : US OPT-b) et un groupe « Toppings » (plusieurs choix,
+-- facultatif, sans stock).
+INSERT INTO option_groupe (produit_id, libelle, multiple, obligatoire, porte_stock, position)
+SELECT id, 'Service',  0, 1, 1, 1 FROM produit
 UNION ALL
-SELECT id, 'Toppings', 1, 0, 2 FROM produit;
+SELECT id, 'Toppings', 1, 0, 0, 2 FROM produit;
 
 INSERT INTO option_choix (groupe_id, libelle, supplement_cents, position)
 SELECT g.id, c.libelle, c.supplement_cents, c.position
@@ -457,6 +480,38 @@ SELECT g.id, t.libelle, t.supplement_cents, t.position
  UNION SELECT 3, 'Éclats de meringue', 40, 3
   ) AS t ON t.categorie_id = p.categorie_id
  WHERE g.libelle = 'Toppings';
+
+-- Variantes = format x Service (US OPT-b). Les 24 formats ci-dessus reçoivent le
+-- premier choix du Service (« Cuillère en bois »), puis chaque format est
+-- dupliqué pour les autres choix, avec le même prix et le même stock de départ.
+UPDATE variante
+  JOIN option_groupe ON option_groupe.produit_id = variante.produit_id
+                    AND option_groupe.porte_stock = 1
+  JOIN option_choix  ON option_choix.groupe_id = option_groupe.id
+                    AND option_choix.libelle = 'Cuillère en bois'
+   SET variante.choix_id = option_choix.id
+ WHERE variante.choix_id IS NULL;
+
+INSERT INTO variante (produit_id, libelle, choix_id, prix_cents, stock)
+SELECT variante.produit_id, variante.libelle, option_choix.id, variante.prix_cents, variante.stock
+  FROM variante
+  JOIN option_groupe ON option_groupe.produit_id = variante.produit_id
+                    AND option_groupe.porte_stock = 1
+  JOIN option_choix  ON option_choix.groupe_id = option_groupe.id
+                    AND option_choix.libelle <> 'Cuillère en bois';
+
+-- Quelques combinaisons à part, pour voir « Épuisé » et « Bientôt épuisé » alors
+-- que le format a encore du stock avec un autre service.
+UPDATE variante
+  JOIN option_choix ON option_choix.id = variante.choix_id
+   SET variante.stock = 0
+ WHERE (variante.produit_id = 1 AND variante.libelle = 'Pot 465 ml' AND option_choix.libelle = 'Cône gaufrette')
+    OR (variante.produit_id = 2 AND variante.libelle = 'Pot 100 ml' AND option_choix.libelle = 'Cône gaufrette');
+
+UPDATE variante
+  JOIN option_choix ON option_choix.id = variante.choix_id
+   SET variante.stock = 4
+ WHERE variante.produit_id = 1 AND variante.libelle = 'Pot 100 ml' AND option_choix.libelle = 'Coupelle';
 
 INSERT INTO parametre (cle, valeur) VALUES
     ('seuil_bientot_epuise', '5');

@@ -114,7 +114,18 @@ function tenter(CommandeModel $model, array $lignes): ?string
     }
 }
 
-// Produit 1 (Cookie Dough, pots classiques) : variante 1 = Pot 100 ml à 2,90 €.
+/**
+ * Identifiant de la variante d'un produit pour un format et un choix de Service (US OPT-b).
+ */
+function combinaison(PDO $pdo, int $produitId, string $format, int $choixId): int
+{
+    $requete = $pdo->prepare('SELECT id FROM variante WHERE produit_id = :produit AND libelle = :format AND choix_id = :choix');
+    $requete->execute(['produit' => $produitId, 'format' => $format, 'choix' => $choixId]);
+
+    return (int) $requete->fetchColumn();
+}
+
+// Produit 1 (Cookie Dough, pots classiques) : variante 1 = Pot 100 ml à 2,90 €, avec la cuillère.
 $variant = 1;
 $service = choix($pdo, 1, 'Service', 'Cuillère en bois');
 $cone    = choix($pdo, 1, 'Service', 'Cône gaufrette');       // + 0,60 €
@@ -122,10 +133,12 @@ $coupe   = choix($pdo, 1, 'Service', 'Coupelle');
 $sauce   = choix($pdo, 1, 'Toppings', 'Sauce caramel');       // + 0,50 €
 $chantilly = choix($pdo, 1, 'Toppings', 'Chantilly');         // + 0,40 €
 $autreProduit = choix($pdo, 9, 'Service', 'Cône gaufrette');  // un sorbet
+$varianteCone  = combinaison($pdo, 1, 'Pot 100 ml', $cone);
+$varianteCoupe = combinaison($pdo, 1, 'Pot 100 ml', $coupe);
 
 echo "1. Prix unitaire avec suppléments et options figées\n";
-reinitialiser($pdo, $variant, 20);
-$commande = $model->creer(1, [['variantId' => $variant, 'quantite' => 2, 'options' => [$cone, $sauce]]]);
+reinitialiser($pdo, $varianteCone, 20);
+$commande = $model->creer(1, [['variantId' => $varianteCone, 'quantite' => 2, 'options' => [$cone, $sauce]]]);
 verifier('total = 2 × (2,90 + 0,60 + 0,50) = 8,00 €', $commande['totalCents'] === 800);
 $relue = $model->findByNumero($commande['numero'], 1);
 verifier('la ligne porte le prix unitaire avec suppléments (4,00 €)', $relue['lignes'][0]['prixUnitaireCents'] === 400);
@@ -143,17 +156,17 @@ verifier('options et prix de la commande inchangés', $relue['lignes'][0]['prixU
     && $relue['totalCents'] === 800);
 $pdo->exec("UPDATE option_choix SET supplement_cents = 60, libelle = 'Cône gaufrette' WHERE id = $cone");
 
-echo "3. Même variante sur deux lignes (options différentes)\n";
+echo "3. Même variante sur deux lignes (toppings différents)\n";
 reinitialiser($pdo, $variant, 10);
 $commande = $model->creer(1, [
     ['variantId' => $variant, 'quantite' => 3, 'options' => [$service]],
-    ['variantId' => $variant, 'quantite' => 2, 'options' => [$cone, $chantilly]],
+    ['variantId' => $variant, 'quantite' => 2, 'options' => [$service, $chantilly]],
 ]);
 verifier('deux lignes enregistrées', compter($pdo, 'ligne_commande') === 2);
 verifier('le stock baisse de la somme (10 - 5 = 5)', stock($pdo, $variant) === 5);
 verifier('une seule sortie au journal, de 5', compter($pdo, 'mouvement_stock') === 1
     && (int) $pdo->query('SELECT quantite FROM mouvement_stock')->fetchColumn() === 5);
-verifier('total = 3 × 2,90 + 2 × 3,90 = 16,50 €', $commande['totalCents'] === 1650);
+verifier('total = 3 × 2,90 + 2 × 3,30 = 15,30 €', $commande['totalCents'] === 1530);
 
 $id = (int) $pdo->query('SELECT id FROM commande')->fetchColumn();
 $model->changerStatut($id, 'annulee');
@@ -164,7 +177,7 @@ echo "4. Le stock se contrôle sur la somme des lignes\n";
 reinitialiser($pdo, $variant, 3);
 $refus = tenter($model, [
     ['variantId' => $variant, 'quantite' => 2, 'options' => [$service]],
-    ['variantId' => $variant, 'quantite' => 2, 'options' => [$coupe]],
+    ['variantId' => $variant, 'quantite' => 2, 'options' => [$service, $sauce]],
 ]);
 verifier('2 + 2 avec 3 en stock est refusé', $refus !== null && str_contains($refus, 'Stock insuffisant'));
 verifier('rien n\'a été écrit (stock 3, aucune commande)', stock($pdo, $variant) === 3 && compter($pdo, 'commande') === 0);
@@ -191,6 +204,29 @@ verifier('aucune commande ni stock modifié par ces refus', compter($pdo, 'comma
 echo "6. Plusieurs toppings acceptés\n";
 verifier('service + 2 toppings passent', tenter($model, [
     ['variantId' => $variant, 'quantite' => 1, 'options' => [$service, $sauce, $chantilly]],
+]) === null);
+
+echo "7. Variante = combinaison format + service (OPT-b)\n";
+reinitialiser($pdo, $variant, 10);
+$pdo->prepare('UPDATE variante SET stock = 7 WHERE id = :id')->execute(['id' => $varianteCoupe]);
+verifier('la variante « cuillère » avec le service « cône » est refusée', str_contains((string) tenter($model, [
+    ['variantId' => $variant, 'quantite' => 1, 'options' => [$cone]],
+]), 'ne sont plus valides'));
+verifier('le message nomme la combinaison', str_contains((string) tenter($model, [
+    ['variantId' => $variant, 'quantite' => 1, 'options' => [$cone]],
+]), 'Pot 100 ml, Cuillère en bois'));
+verifier('aucune commande ni stock modifié par ce refus', compter($pdo, 'commande') === 0 && stock($pdo, $variant) === 10);
+verifier('la variante « coupelle » avec le service « coupelle » passe', tenter($model, [
+    ['variantId' => $varianteCoupe, 'quantite' => 2, 'options' => [$coupe]],
+]) === null);
+verifier('seul le stock de la combinaison baisse (7 - 2 = 5), pas celui de la cuillère', stock($pdo, $varianteCoupe) === 5
+    && stock($pdo, $variant) === 10);
+$pdo->prepare('UPDATE variante SET stock = 0 WHERE id = :id')->execute(['id' => $varianteCone]);
+$refus = tenter($model, [['variantId' => $varianteCone, 'quantite' => 1, 'options' => [$cone]]]);
+verifier('la combinaison épuisée est refusée et nommée', $refus !== null && str_contains($refus, 'Stock insuffisant')
+    && str_contains($refus, 'Cône gaufrette'));
+verifier('une combinaison voisine en stock reste commandable', tenter($model, [
+    ['variantId' => $variant, 'quantite' => 1, 'options' => [$service]],
 ]) === null);
 
 reinitialiser($pdo, $variant, 40);

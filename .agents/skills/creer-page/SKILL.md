@@ -14,7 +14,7 @@ Modèles : `pages/produits/page.js` (catalogue, filtres, « voir plus »),
 
 ## 1. Avant d'écrire
 
-1. Identifier l'US (AGENTS §8) et **vérifier ses dépendances** ; sinon
+1. Identifier l'US (`docs/US.md`) et **vérifier ses dépendances** ; sinon
    s'arrêter et demander.
 2. Lire la page voisine, `main.js`, `lib/router.js` et le module `data/`
    concerné. Si l'endpoint API n'existe pas : le signaler, ne pas modifier le
@@ -159,5 +159,5 @@ nécessaires à la page ; renommer/déplacer un fichier existant.
 
 `node .agents/skills/verifier-mvc/scripts/check-mvc.js .` puis
 `cd front && npm run build`, vérification à 320/375, 768, 1440 px, compte
-rendu AGENTS §11 (avec l'US couverte et le rôle M/V/C de chaque changement).
+rendu AGENTS §10 (avec l'US couverte et le rôle M/V/C de chaque changement).
 Ne jamais commit/push.

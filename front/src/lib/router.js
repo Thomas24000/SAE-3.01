@@ -53,12 +53,12 @@ class Router {
     let matchedLayout = null;
     let longestMatch = 0;
 
-    for (const [prefix, layout] of Object.entries(this.layouts)) {
+    Object.entries(this.layouts).map(([prefix, layout]) => {
       if (path.startsWith(prefix) && prefix.length > longestMatch) {
         matchedLayout = layout;
         longestMatch = prefix.length;
       }
-    }
+    });
 
     return matchedLayout;
   }
@@ -89,11 +89,7 @@ class Router {
 
   // Extraire les noms des paramètres : /produit/:slug -> ["slug"]
   extractParams(path) {
-    const params = [];
-    for (const match of path.matchAll(/:(\w+)/g)) {
-      params.push(match[1]);
-    }
-    return params;
+    return Array.from(path.matchAll(/:(\w+)/g)).map((match) => match[1]);
   }
 
   // Extraire les valeurs des paramètres : /produit/cookie-dough -> { slug: "cookie-dough" }
@@ -175,7 +171,7 @@ class Router {
   // l'adresse réelle (avec la base) pour ouvrir un lien dans un nouvel onglet,
   // et aria-current="page" sur les liens de la page affichée.
   updateLinks(path) {
-    for (const lien of this.root.querySelectorAll("a[data-link]")) {
+    Array.from(this.root.querySelectorAll("a[data-link]")).map((lien) => {
       const route = this.routePath(lien.pathname);
       lien.setAttribute("href", this.url(route));
 
@@ -184,7 +180,7 @@ class Router {
       } else {
         lien.removeAttribute("aria-current");
       }
-    }
+    });
   }
 
   // Démarrer le routeur

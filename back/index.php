@@ -21,6 +21,7 @@ use App\Controller\AdminCategorieController;
 use App\Controller\AdminCodePromoController;
 use App\Controller\AdminCommandeController;
 use App\Controller\AdminProduitController;
+use App\Controller\AdminToppingController;
 use App\Controller\AuthController;
 use App\Controller\CodePromoController;
 use App\Controller\CommandeController;
@@ -31,6 +32,7 @@ use App\Model\CategorieModel;
 use App\Model\CodePromoModel;
 use App\Model\CommandeModel;
 use App\Model\ParametreModel;
+use App\Model\ToppingAdminModel;
 use App\Model\ProduitAdminModel;
 use App\Model\ProduitModel;
 use App\Model\UtilisateurModel;
@@ -80,6 +82,7 @@ try {
     $codesPromo   = new CodePromoModel($pdo);
     $categories   = new CategorieModel($pdo);
     $produitsAdmin = new ProduitAdminModel($pdo);
+    $toppingsAdmin = new ToppingAdminModel($pdo);
 
     $controleurs = [
         ProduitController::class   => new ProduitController($produits, $parametres),
@@ -93,6 +96,7 @@ try {
         AdminCategorieController::class => new AdminCategorieController($categories),
         AdminCommandeController::class => new AdminCommandeController($commandes),
         AdminProduitController::class => new AdminProduitController($produitsAdmin, $categories, $parametres),
+        AdminToppingController::class => new AdminToppingController($toppingsAdmin, $parametres),
     ];
 
     $routes = require __DIR__ . '/src/routes.php';

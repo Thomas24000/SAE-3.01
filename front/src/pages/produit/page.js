@@ -272,7 +272,7 @@ M.ficheData = function () {
       ...M.produit,
       variantes: M.formatVariantes().map((item) => ({ ...item, statutStock: M.stockStatus(item) })),
       options: groupesAvecEtat(
-        groupesAvecDisponibilite(M.produit.options, M.porteurId(), M.produit.variantes, M.format),
+        groupesAvecDisponibilite(M.produit.options, M.porteurId(), M.produit.variantes, M.format, M.seuil),
         M.choix
       ),
     },

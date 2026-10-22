@@ -79,7 +79,8 @@ final class CommandeModel
                 array_values(array_unique(array_merge([], ...array_map(
                     static fn (array $ligne): array => $ligne['options'] ?? [],
                     $lignes
-                ))))
+                )))),
+                true
             );
 
             $detail = array_map(
@@ -110,6 +111,20 @@ final class CommandeModel
                 },
                 array_keys($demandes),
                 $demandes
+            );
+
+            // Une dose par topping et par commande, quel que soit le nombre de pots.
+            $doses = $this->toppingsDeLaCommande($detail);
+
+            array_map(
+                static function (array $topping): void {
+                    if ($topping['stock'] < 1) {
+                        throw new DomainException(
+                            'Le topping « ' . $topping['libelle'] . ' » est épuisé. Retourne au panier pour le retirer.'
+                        );
+                    }
+                },
+                $doses
             );
 
             $total = array_reduce(
@@ -192,6 +207,11 @@ final class CommandeModel
                 fn (int $id, int $demande) => $this->mouvementer($commandeId, $id, 'sortie', $demande),
                 array_keys($demandes),
                 $demandes
+            );
+
+            array_map(
+                fn (array $topping) => $this->mouvementerTopping($commandeId, $topping['id'], 'sortie'),
+                $doses
             );
 
             $this->pdo->commit();
@@ -891,7 +911,7 @@ final class CommandeModel
                 sort($ids);
 
                 try {
-                    $this->detaillerLigne(
+                    $detail = $this->detaillerLigne(
                         ['variantId' => $varianteId, 'quantite' => $demande, 'options' => $ids],
                         $variantes,
                         $this->lireChoix($ids)
@@ -899,6 +919,15 @@ final class CommandeModel
                 } catch (DomainException $e) {
                     $valide = false;
                 }
+            }
+
+            $epuises = $valide
+                ? array_filter($this->toppingsDeLaCommande([$detail]), static fn (array $topping): bool => $topping['stock'] < 1)
+                : [];
+
+            if ($epuises !== []) {
+                $resultat[] = ['motif' => 'a un topping épuisé'] + $base;
+                continue;
             }
 
             if (!$valide) {
@@ -973,6 +1002,94 @@ final class CommandeModel
             ),
             $requete->fetchAll()
         );
+
+        // Les doses de toppings sorties à la validation : on rend celles du journal.
+        $requete = $this->pdo->prepare(
+            'SELECT choix_id
+               FROM mouvement_topping
+              WHERE commande_id = :commande AND type = \'sortie\' AND choix_id IS NOT NULL
+           ORDER BY choix_id'
+        );
+        $requete->execute(['commande' => $commandeId]);
+
+        array_map(
+            fn (int $choixId) => $this->mouvementerTopping($commandeId, $choixId, 'retour'),
+            array_map('intval', $requete->fetchAll(PDO::FETCH_COLUMN))
+        );
+    }
+
+    /**
+     * Les toppings distincts d'une commande, par identifiant croissant : chacun
+     * ne consomme qu'une dose, même présent sur plusieurs lignes.
+     *
+     * @param array<int, array{choix:array<int, array<string, mixed>>}> $detail Les lignes détaillées (detaillerLigne).
+     * @return array<int, array{id:int, libelle:string, stock:int}>
+     */
+    private function toppingsDeLaCommande(array $detail): array
+    {
+        $toppings = array_reduce(
+            $detail,
+            static function (array $parId, array $ligne): array {
+                array_map(
+                    static function (array $option) use (&$parId): void {
+                        if ($option['stock'] !== null) {
+                            $parId[$option['id']] = ['id' => $option['id'], 'libelle' => $option['libelle'], 'stock' => $option['stock']];
+                        }
+                    },
+                    $ligne['choix']
+                );
+
+                return $parId;
+            },
+            []
+        );
+        ksort($toppings);
+
+        return array_values($toppings);
+    }
+
+    /**
+     * Déplace d'une dose le stock d'un topping et l'inscrit au journal, dans la
+     * transaction en cours. Même règles que mouvementer() : verrou, sortie
+     * refusée si le stock manque, mouvement unique par commande.
+     *
+     * @param int $commandeId Commande à l'origine du mouvement.
+     * @param int $choixId Topping (option_choix) dont le stock bouge.
+     * @param string $type « sortie » (validation) ou « retour » (annulation).
+     * @throws DomainException Si le topping est épuisé ou a disparu.
+     */
+    private function mouvementerTopping(int $commandeId, int $choixId, string $type): void
+    {
+        $lecture = $this->pdo->prepare('SELECT libelle, stock FROM option_choix WHERE id = :id AND type = \'topping\' FOR UPDATE');
+        $lecture->execute(['id' => $choixId]);
+        $topping = $lecture->fetch();
+
+        // Un topping supprimé depuis la commande n'a plus de stock à rendre.
+        if ($topping === false) {
+            if ($type === 'sortie') {
+                throw new DomainException('Un topping de la commande n\'existe plus.');
+            }
+
+            return;
+        }
+
+        $avant = (int) $topping['stock'];
+        $apres = $type === 'sortie' ? $avant - 1 : $avant + 1;
+
+        if ($apres < 0) {
+            throw new DomainException('Le topping « ' . $topping['libelle'] . ' » est épuisé.');
+        }
+
+        $this->pdo
+            ->prepare('UPDATE option_choix SET stock = :apres WHERE id = :id')
+            ->execute(['apres' => $apres, 'id' => $choixId]);
+
+        $this->pdo
+            ->prepare(
+                'INSERT INTO mouvement_topping (choix_id, commande_id, type, stock_avant, stock_apres)
+                 VALUES (:choix, :commande, :type, :avant, :apres)'
+            )
+            ->execute(['choix' => $choixId, 'commande' => $commandeId, 'type' => $type, 'avant' => $avant, 'apres' => $apres]);
     }
 
     /**
@@ -1090,12 +1207,14 @@ final class CommandeModel
      * du résultat.
      *
      * @param array<int, int> $ids Identifiants de choix.
-     * @return array<int, array{id:int, libelle:string, supplement_cents:int, groupe_id:int,
+     * @param bool $verrouiller Vrai dans la transaction d'une commande : les choix sont verrouillés
+     *        en écriture, par identifiant croissant (comme les variantes), pour que leur stock lu reste juste.
+     * @return array<int, array{id:int, libelle:string, supplement_cents:int, stock:int|null, groupe_id:int,
      *                          groupe_libelle:string, multiple:bool, categories:array<int, int>|null}>
-     *         Indexé par identifiant de choix. categories : les catégories qui proposent
+     *         Indexé par identifiant de choix. stock : les doses d'un topping, null pour un service. categories : les catégories qui proposent
      *         un topping ; null pour un service, proposé à tous les produits.
      */
-    private function lireChoix(array $ids): array
+    private function lireChoix(array $ids, bool $verrouiller = false): array
     {
         if ($ids === []) {
             return [];
@@ -1105,9 +1224,10 @@ final class CommandeModel
         $marqueurs = implode(',', array_fill(0, count($ids), '?'));
 
         $requete = $this->pdo->prepare(
-            'SELECT id, type, libelle, supplement_cents
+            'SELECT id, type, libelle, supplement_cents, stock
                FROM option_choix
-              WHERE id IN (' . $marqueurs . ')'
+              WHERE id IN (' . $marqueurs . ')
+           ORDER BY id' . ($verrouiller ? ' FOR UPDATE' : '')
         );
         $requete->execute(array_values($ids));
         $lignes = $requete->fetchAll();
@@ -1135,6 +1255,7 @@ final class CommandeModel
                     'id'               => (int) $ligne['id'],
                     'libelle'          => $ligne['libelle'],
                     'supplement_cents' => (int) $ligne['supplement_cents'],
+                    'stock'            => $ligne['stock'] === null ? null : (int) $ligne['stock'],
                     'groupe_id'        => ProduitModel::GROUPES[$ligne['type']]['id'],
                     'groupe_libelle'   => ProduitModel::GROUPES[$ligne['type']]['libelle'],
                     'multiple'         => ProduitModel::GROUPES[$ligne['type']]['multiple'],
@@ -1217,9 +1338,11 @@ final class CommandeModel
             'quantite'      => $ligne['quantite'],
             'choix'         => array_map(
                 static fn (array $c): array => [
+                    'id'               => $c['id'],
                     'groupe_libelle'   => $c['groupe_libelle'],
                     'libelle'          => $c['libelle'],
                     'supplement_cents' => $c['supplement_cents'],
+                    'stock'            => $c['stock'],
                 ],
                 $retenus
             ),

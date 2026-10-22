@@ -256,7 +256,7 @@ final class ProduitModel
      *
      * @param array<int, int> $produitIds Identifiants de produits (entiers positifs).
      * @return array<int, array<int, array{id:int, libelle:string, multiple:bool, obligatoire:bool,
-     *                                     choix:array<int, array{id:int, libelle:string, supplementCents:int}>}>>
+     *                                     choix:array<int, array{id:int, libelle:string, supplementCents:int, stock:int|null}>}>>
      *         Les groupes de chaque produit, indexés par identifiant de produit ;
      *         un produit sans option est absent.
      */
@@ -276,7 +276,8 @@ final class ProduitModel
                     option_choix.type,
                     option_choix.id AS choix_id,
                     option_choix.libelle AS choix_libelle,
-                    option_choix.supplement_cents
+                    option_choix.supplement_cents,
+                    option_choix.stock
                FROM produit
          INNER JOIN option_choix
                  ON option_choix.type = \'service\'
@@ -299,6 +300,8 @@ final class ProduitModel
                     'id'              => (int) $ligne['choix_id'],
                     'libelle'         => $ligne['choix_libelle'],
                     'supplementCents' => (int) $ligne['supplement_cents'],
+                    // Doses restantes d'un topping ; null pour un service (stock porté par les variantes).
+                    'stock'           => $ligne['stock'] === null ? null : (int) $ligne['stock'],
                 ];
 
                 return $produits;
@@ -375,7 +378,7 @@ final class ProduitModel
      *               variantes:array<int, array{id:int, libelle:string, choixId:int, prixCents:int,
      *                                          prixPromoCents:int|null, stock:int}>,
      *               options:array<int, array{id:int, libelle:string, multiple:bool, obligatoire:bool,
-     *                                        choix:array<int, array{id:int, libelle:string, supplementCents:int}>}>}|null
+     *                                        choix:array<int, array{id:int, libelle:string, supplementCents:int, stock:int|null}>}>}|null
      *         null si aucun produit ne porte ce slug.
      */
     public function findBySlug(string $slug): ?array

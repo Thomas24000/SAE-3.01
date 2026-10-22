@@ -185,7 +185,7 @@ renvoient un JSON `{ erreur }` avec un statut HTTP explicite.
 Les routes `/api/admin/*` exigent une session administrateur, distincte de
 celle des clients, et un jeton CSRF pour les écritures (403 sinon).
 
-Les prix sont des entiers en centimes. Le stock est porté par la variante, c'est-à-dire par la combinaison d'un produit, d'un format de la table `format` et d'un service (cuillère, coupelle, cône) : chaque combinaison a son propre stock. Les allergènes d'un produit sont une liste (`allergenes` sur la fiche) gérée dans le formulaire du back-office. La commande est une transaction : prix et stock sont relus en base, le stock est décrémenté et journalisé, puis recrédité si la commande est annulée.
+Les prix sont des entiers en centimes. Le stock est porté par la variante, c'est-à-dire par la combinaison d'un produit, d'un format de la table `format` et d'un service (cuillère, coupelle, cône) : chaque combinaison a son propre stock. Chaque topping a aussi son stock de doses, commun à tous les produits : une commande consomme une dose par topping choisi (quel que soit le nombre de pots), rendue à l'annulation. Les allergènes d'un produit sont une liste (`allergenes` sur la fiche) gérée dans le formulaire du back-office. La commande est une transaction : prix et stock sont relus en base, le stock est décrémenté et journalisé, puis recrédité si la commande est annulée.
 
 ## 7. Comptes de démonstration
 

@@ -22,6 +22,7 @@
 SET NAMES utf8mb4;
 
 DROP TABLE IF EXISTS journal_commande;
+DROP TABLE IF EXISTS mouvement_topping;
 DROP TABLE IF EXISTS mouvement_stock;
 DROP TABLE IF EXISTS ligne_commande_option;
 DROP TABLE IF EXISTS ligne_commande;
@@ -139,16 +140,22 @@ CREATE TABLE format (
 -- son type : le panier garde une simple liste d'identifiants. supplement_cents
 -- s'ajoute au prix de la variante. La clé (id, type) permet aux tables qui
 -- suivent d'imposer le type attendu par une clé étrangère composite.
+-- stock : nombre de doses d'un topping, commun à tous les produits (une commande
+-- en consomme une par topping). NULL pour un service, dont le stock est porté
+-- par les variantes.
+
 CREATE TABLE option_choix (
     id               INT UNSIGNED             NOT NULL AUTO_INCREMENT,
     type             ENUM('service', 'topping') NOT NULL,
     libelle          VARCHAR(60)              NOT NULL,
     supplement_cents INT UNSIGNED             NOT NULL DEFAULT 0,
+    stock            INT UNSIGNED             NULL,
     position         TINYINT UNSIGNED         NOT NULL,
 
     PRIMARY KEY (id),
     UNIQUE KEY uq_option_choix_libelle (type, libelle),
-    UNIQUE KEY uq_option_choix_type (id, type)
+    UNIQUE KEY uq_option_choix_type (id, type),
+    CONSTRAINT ck_option_choix_stock CHECK ((type = 'topping') = (stock IS NOT NULL))
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 -- Toppings proposés par catégorie (pas de chantilly, qui contient du lait, en
@@ -368,6 +375,29 @@ CREATE TABLE mouvement_stock (
         FOREIGN KEY (commande_id) REFERENCES commande (id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
+-- Journal des doses de toppings : une ligne par topping et par commande (une
+-- dose par commande), « sortie » à la validation, « retour » à l'annulation.
+-- Même principe que mouvement_stock : la clé unique rend le mouvement
+-- idempotent, le journal survit à la suppression du topping (choix_id NULL).
+CREATE TABLE mouvement_topping (
+    id          INT UNSIGNED             NOT NULL AUTO_INCREMENT,
+    choix_id    INT UNSIGNED             NULL,
+    commande_id INT UNSIGNED             NOT NULL,
+    type        ENUM('sortie', 'retour') NOT NULL,
+    stock_avant INT UNSIGNED             NOT NULL,
+    stock_apres INT UNSIGNED             NOT NULL,
+    cree_le     DATETIME                 NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_mouvement_topping (commande_id, choix_id, type),
+    KEY idx_mouvement_topping_choix (choix_id),
+
+    CONSTRAINT fk_mouvement_topping_choix
+        FOREIGN KEY (choix_id) REFERENCES option_choix (id) ON DELETE SET NULL,
+    CONSTRAINT fk_mouvement_topping_commande
+        FOREIGN KEY (commande_id) REFERENCES commande (id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
 -- Journal des changements de statut par les administrateurs, écrit dans la même
 -- transaction que le changement. Jamais modifié ; un admin référencé ne peut
 -- pas être supprimé.
@@ -409,18 +439,18 @@ INSERT INTO format (id, libelle, contenance_ml) VALUES
     (1, 'Pot 100 ml', 100),
     (2, 'Pot 465 ml', 465);
 
-INSERT INTO option_choix (id, type, libelle, supplement_cents, position) VALUES
-    (1,  'service', 'Cuillère en bois',        0,  1),
-    (2,  'service', 'Coupelle',                30, 2),
-    (3,  'service', 'Cône gaufrette',          60, 3),
-    (4,  'topping', 'Sauce chocolat',          50, 1),
-    (5,  'topping', 'Sauce caramel',           50, 2),
-    (6,  'topping', 'Chantilly',               40, 3),
-    (7,  'topping', 'Pépites de chocolat',     40, 4),
-    (8,  'topping', 'Amandes effilées',        40, 5),
-    (9,  'topping', 'Coulis de fruits rouges', 50, 6),
-    (10, 'topping', 'Feuilles de menthe',      30, 7),
-    (11, 'topping', 'Éclats de meringue',      40, 8);
+INSERT INTO option_choix (id, type, libelle, supplement_cents, stock, position) VALUES
+    (1,  'service', 'Cuillère en bois',        0,  NULL, 1),
+    (2,  'service', 'Coupelle',                30, NULL, 2),
+    (3,  'service', 'Cône gaufrette',          60, NULL, 3),
+    (4,  'topping', 'Sauce chocolat',          50, 120, 1),
+    (5,  'topping', 'Sauce caramel',           50, 90,  2),
+    (6,  'topping', 'Chantilly',               40, 4,   3),
+    (7,  'topping', 'Pépites de chocolat',     40, 60,  4),
+    (8,  'topping', 'Amandes effilées',        40, 0,   5),
+    (9,  'topping', 'Coulis de fruits rouges', 50, 45,  6),
+    (10, 'topping', 'Feuilles de menthe',      30, 80,  7),
+    (11, 'topping', 'Éclats de meringue',      40, 35,  8);
 
 INSERT INTO categorie_topping (categorie_id, choix_id) VALUES
     (1, 4), (1, 5), (1, 6), (1, 7),

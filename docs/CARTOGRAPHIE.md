@@ -65,12 +65,13 @@ commande, avec le prix unitaire.
 | --- | --- |
 | `categorie`, `produit`, `produit_image`, `variante` | catalogue |
 | `format` | formats de pot (« Pot 100 ml »), partagés |
-| `option_choix` (`type` = `service` ou `topping`), `categorie_topping` | services (un par variante) et toppings (par catégorie) ; une seule table pour que l'identifiant d'un choix soit unique |
+| `option_choix` (`type` = `service` ou `topping`), `categorie_topping` | services (un par variante) et toppings (par catégorie) ; une seule table pour que l'identifiant d'un choix soit unique. Un topping a un `stock` (doses, commun à tous les produits), un service non (son stock est celui des variantes) |
 | `allergene`, `produit_allergene` | allergènes d'un produit (liste, pas du texte libre) |
 | `statut_commande` | statuts d'une commande (`en_cours`, `prete`, `retiree`, `annulee`) |
 | `utilisateur` | clients et admins (`role`) |
 | `commande`, `ligne_commande`, `ligne_commande_option` | commandes figées (nom, prix, options copiés) |
-| `mouvement_stock` | journal des sorties/retours, idempotent |
+| `mouvement_stock` | journal des sorties/retours des variantes, idempotent |
+| `mouvement_topping` | journal des doses de toppings (une par topping et par commande), idempotent |
 | `parametre` | seuil « Bientôt épuisé » |
 
 Points clés :
@@ -78,6 +79,7 @@ Points clés :
 - **Promotion automatique (PRO-c).** Le produit au stock total le plus élevé (somme de ses variantes, à égalité le plus ancien, aucun si tout est épuisé) est à -20 %. Rien n'est enregistré : `PromotionModel` le déduit des stocks à chaque lecture, donc la promotion se déplace quand les stocks changent. La remise porte sur le prix du format ; les suppléments d'options restent au prix plein. L'API expose `promoPourcent`, `prixMinPromoCents` et `prixPromoCents` ; la commande recalcule le même prix et le fige dans la ligne de commande.
 - **Codes promo (PRO-a).** Table `code_promo` (code en majuscules, pourcentage 1-100, `actif`). Le client le saisit sur `/commande` ; `GET /api/code-promo?code=` le vérifie (404 si inconnu ou désactivé, 429 après 5 essais ratés par minute) et `POST /api/commande` accepte `codePromo`, revérifié dans la transaction (422 sinon). La réduction s'applique au total des lignes, **après** la promotion automatique (cumul). `commande.total_cents` est le total à payer ; `code_promo`, `reduction_pourcent` et `reduction_cents` sont copiés (pas de clé étrangère : modifier un code ne touche pas les commandes passées). Les statistiques de revenus (PIL-a) utilisent le total à payer ; le classement des meilleures ventes reste calculé sur les prix des lignes.
 - **Gestion des codes (PRO-b).** `/admin/codes-promo` (liste + statistiques : utilisations hors annulées, réductions accordées, chiffre d'affaires, dernière utilisation), `/admin/codes-promo/nouveau`, `/admin/codes-promo/:id/modifier`. Un code ne se renomme jamais ; on change son pourcentage ou on le désactive (les commandes passées gardent leur pourcentage). Un code n'est supprimable que s'aucune commande ne l'a cité. Écritures protégées par le jeton CSRF.
+- **Stock des toppings.** Une commande consomme **une dose par topping**, quel que soit le nombre de pots ou de lignes qui le contiennent (`CommandeModel::mouvementerTopping()`, journal `mouvement_topping`). Un topping à 0 dose est grisé « Épuisé » sur la fiche et dans le panier, « Bientôt épuisé » sous le seuil de la fiche ; une ligne qui en contient un est retirée du panier et la commande est refusée. L'annulation rend les doses du journal. `GET /api/admin/toppings` et `POST /api/admin/toppings/stock` réapprovisionnent.
 - La commande est une transaction : variantes verrouillées, prix relus en base, stock décrémenté et journalisé. `CommandeModel::mouvementer()` est le seul à écrire `variante.stock`, et `changerStatut()` le seul à changer un statut (recrédit à l'annulation).
 - Comptes de démo dans les seeds (`alice@example.com`, `admin@example.com`) : retirer les mots de passe avant tout dépôt public.
 

@@ -10,6 +10,7 @@ const LIENS = [
   { libelle: "Tableau de bord", href: "/admin", icone: "tableau", disponible: true },
   { libelle: "Produits", href: "/admin/produits", icone: "produits", disponible: true },
   { libelle: "Catégories", href: "/admin/categories", icone: "categories", disponible: true },
+  { libelle: "Toppings", href: "/admin/toppings", icone: "toppings", disponible: true },
   { libelle: "Commandes", href: "/admin/commandes", icone: "commandes", disponible: true },
   { libelle: "Statistiques", href: "/admin/statistiques", icone: "statistiques", disponible: true },
   { libelle: "Codes promo", href: "/admin/codes-promo", icone: "codes", disponible: true },

@@ -46,7 +46,7 @@ En dev (`npm run dev`), `/api` passe par le proxy Vite vers `mmi.unilim.fr` : le
 | Panier (`localStorage`, affichage seul) | `/panier` | `panier` (prix et stock actuels) |
 | Compte client | `/connexion`, `/inscription` | `login`, `inscription`, `me`, `logout` |
 | Commande | `/commande`, `/commande/:numero` | `commande` (POST/GET), `commandes`, `commande/reprise`, `code-promo` |
-| Back-office (session admin séparée, CSRF) | `/admin`, `/admin/categories…`, `/admin/produits…`, `/admin/commandes…`, `/admin/statistiques`, `/admin/codes-promo…` | `admin/login`, `admin/me`, `admin/logout`, `admin/categories…`, `admin/produits…`, `admin/parametres/seuil`, `admin/stats`, `admin/statistiques`, `admin/codes-promo…` |
+| Back-office (session admin séparée, CSRF) | `/admin`, `/admin/categories…`, `/admin/produits…`, `/admin/toppings`, `/admin/commandes…`, `/admin/statistiques`, `/admin/codes-promo…` | `admin/login`, `admin/me`, `admin/logout`, `admin/categories…`, `admin/produits…`, `admin/toppings…`, `admin/parametres/seuil`, `admin/stats`, `admin/statistiques`, `admin/codes-promo…` |
 | Page inconnue | `*` → `pages/404` | — |
 
 Pas encore faite : `/categorie/:slug` (DEC-a). Voir `docs/US.md` pour le reste.

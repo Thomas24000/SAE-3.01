@@ -9,7 +9,7 @@ paiement en ligne).
 | Fonctionnalité | État |
 |---|---|
 | Catalogue, filtre par catégorie (sans changement d'URL), « Voir plus » | fait (DEC-b) ; `/categorie/:slug` à faire (DEC-a) |
-| Fiche produit (`/produit/:slug`), galerie, variantes, options, quantité | fait (DEC-c) ; métadonnées SEO et retour à la catégorie d'origine à faire |
+| Fiche produit (`/produit/:nom`), galerie, variantes, options, quantité | fait (DEC-c) ; métadonnées SEO et retour à la catégorie d'origine à faire |
 | Panier en `localStorage`, compteur dans l'en-tête | fait (CMD-b) |
 | Inscription, connexion, déconnexion (mots de passe hachés, session régénérée) | fait (CMD-c) |
 | Validation de commande, numéro unique, confirmation | fait (CMD-a) |
@@ -57,7 +57,7 @@ front/               sources du front (Vite + Tailwind)
 
 | Étape | Action |
 |---|---|
-| 1 | Importer `sql/glaces.sql` dans votre base depuis phpMyAdmin (il crée toutes les tables : catalogue, variantes, options, utilisateurs, commandes, stock, codes promo ; une table existante de même nom serait remplacée) |
+| 1 | Importer `sql/glaces.sql` dans votre base depuis phpMyAdmin (il crée toutes les tables : catalogue, formats, services et toppings, allergènes, variantes, utilisateurs, commandes, stock, codes promo, puis charge les données ; une table existante de même nom, y compris d'une ancienne version du schéma, serait remplacée) |
 | 2 | Dans `back/config/config.php`, renseigner les identifiants de la base et le chemin du projet (`/~votre_login/SAE301-Starter/`) |
 | 3 | Dans `front/vite.config.js`, donner à `BASE` **exactement** le même chemin |
 | 4 | Dans `front/`, lancer `npm install` |
@@ -113,7 +113,7 @@ Déclaré dans `main.js`, sur le modèle de `react-router` :
 ```js
 router.addLayout("/", RootLayout);
 router.addRoute("/", ProduitsPage);
-router.addRoute("/produit/:slug", ProduitPage);   // params.slug dans la page
+router.addRoute("/produit/:nom", ProduitPage);   // params.nom dans la page
 router.addRoute("/panier", PanierPage);
 router.addRoute("/commande/:numero", ConfirmationPage);
 router.addRoute("/admin", AdminPage);          // /admin/... : layout du back-office
@@ -177,7 +177,7 @@ renvoient un JSON `{ erreur }` avec un statut HTTP explicite.
 
 | Groupe | Routes |
 |---|---|
-| Catalogue | `GET /api/produits`, `GET /api/produit?slug=…`, `GET /api/panier` (prix et stock actuels des variantes du panier) |
+| Catalogue | `GET /api/produits`, `GET /api/produit?nom=…`, `GET /api/panier` (prix et stock actuels des variantes du panier) |
 | Compte client | `POST /api/inscription`, `POST /api/login`, `GET /api/me`, `POST /api/logout`, `GET /api/compte`, `POST /api/compte/profil`, `POST /api/compte/mot-de-passe` |
 | Commande | `POST /api/commande`, `GET /api/commande?numero=…`, `GET /api/commandes` (filtres et pagination), `GET /api/commande/reprise`, `GET /api/code-promo?code=…` |
 | Back-office | `/api/admin/login`, `me`, `logout`, `categories…`, `produits…` (dont `images`), `parametres/seuil`, `commandes…`, `codes-promo…`, `stats`, `statistiques` |
@@ -185,7 +185,7 @@ renvoient un JSON `{ erreur }` avec un statut HTTP explicite.
 Les routes `/api/admin/*` exigent une session administrateur, distincte de
 celle des clients, et un jeton CSRF pour les écritures (403 sinon).
 
-Les prix sont des entiers en centimes. Le stock est porté par la variante, c'est-à-dire par la combinaison d'un format et d'un service (cuillère, coupelle, cône) : chaque combinaison a son propre stock. La commande est une transaction : prix et stock sont relus en base, le stock est décrémenté et journalisé, puis recrédité si la commande est annulée.
+Les prix sont des entiers en centimes. Le stock est porté par la variante, c'est-à-dire par la combinaison d'un produit, d'un format de la table `format` et d'un service (cuillère, coupelle, cône) : chaque combinaison a son propre stock. Chaque topping a aussi son stock de doses, commun à tous les produits : une commande consomme une dose par topping choisi (quel que soit le nombre de pots), rendue à l'annulation. Les allergènes d'un produit sont une liste (`allergenes` sur la fiche) gérée dans le formulaire du back-office. La commande est une transaction : prix et stock sont relus en base, le stock est décrémenté et journalisé, puis recrédité si la commande est annulée.
 
 ## 7. Comptes de démonstration
 

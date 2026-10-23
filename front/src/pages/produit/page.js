@@ -22,7 +22,7 @@ import { The404Page } from "../404/page.js";
 import template from "./template.html?raw";
 
 /**
- * Page « Détail produit » (US DEC-c), à l'adresse /produit/:slug.
+ * Page « Détail produit » (US DEC-c), à l'adresse /produit/:nom.
  *
  * M : le produit reçu de l'API, le format, l'image, la quantité et les
  * options choisies (US OPT-c). La variante est la combinaison du format et du
@@ -272,7 +272,7 @@ M.ficheData = function () {
       ...M.produit,
       variantes: M.formatVariantes().map((item) => ({ ...item, statutStock: M.stockStatus(item) })),
       options: groupesAvecEtat(
-        groupesAvecDisponibilite(M.produit.options, M.porteurId(), M.produit.variantes, M.format),
+        groupesAvecDisponibilite(M.produit.options, M.porteurId(), M.produit.variantes, M.format, M.seuil),
         M.choix
       ),
     },
@@ -295,9 +295,9 @@ let C = {};
 
 /**
  * Charge le produit désigné par l'adresse et range la réponse dans le modèle.
- * . slug : le slug lu dans l'adresse
+ * . nom : le nom du produit lu dans l'adresse (son slug, ex. cookie-dough)
  */
-C.charger = async function (slug) {
+C.charger = async function (nom) {
   M.produit = null;
   M.format = null;
   M.imageIndex = 0;
@@ -308,7 +308,7 @@ C.charger = async function (slug) {
   M.ajoutEnCours = false;
 
   try {
-    let reponse = await ProduitData.fetchOne(slug);
+    let reponse = await ProduitData.fetchOne(nom);
     // Un back plus ancien ne renvoie pas « options » : la fiche reste utilisable sans.
     M.produit = { ...reponse.produit, options: reponse.produit.options ?? [] };
     M.seuil = reponse.seuilBientotEpuise;
@@ -388,7 +388,7 @@ C.handler_addToCart = async function () {
 };
 
 C.init = async function (params) {
-  await C.charger(params.slug);
+  await C.charger(params.nom);
 
   if (M.introuvable) {
     return The404Page();

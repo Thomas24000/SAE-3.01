@@ -14,6 +14,28 @@ use PDO;
  */
 final class ProduitModel
 {
+    /** Visuel d'un produit qui n'a aucune image dans sa galerie. */
+    public const IMAGE_DEFAUT = 'images/produits/placeholder.svg';
+
+    /**
+     * Visuel principal d'un produit : la première image de sa galerie, sinon le
+     * visuel par défaut. Fragment SQL à placer dans un SELECT où « produit » est
+     * la table des produits.
+     */
+    public const SQL_IMAGE_PRINCIPALE = "COALESCE((SELECT produit_image.chemin FROM produit_image
+        WHERE produit_image.produit_id = produit.id ORDER BY produit_image.position LIMIT 1),
+        '" . self::IMAGE_DEFAUT . "')";
+
+    /**
+     * Les deux groupes d'options présentés au client, dans l'ordre d'affichage,
+     * indexés par le type des choix de option_choix. Le service porte le stock
+     * (une variante par service) ; les toppings sont facultatifs.
+     */
+    public const GROUPES = [
+        'service' => ['id' => 1, 'libelle' => 'Service', 'multiple' => false, 'obligatoire' => true],
+        'topping' => ['id' => 2, 'libelle' => 'Toppings', 'multiple' => true, 'obligatoire' => false],
+    ];
+
     /** Connexion à la base, fournie à la construction. */
     private PDO $pdo;
 
@@ -41,7 +63,7 @@ final class ProduitModel
                     produit.slug,
                     produit.description,
                     produit.teinte,
-                    produit.image,
+                    ' . self::SQL_IMAGE_PRINCIPALE . ' AS image,
                     categorie.libelle      AS categorie,
                     categorie.slug         AS categorie_slug,
                     MIN(variante.prix_cents) AS prix_min,
@@ -50,7 +72,7 @@ final class ProduitModel
          INNER JOIN categorie ON categorie.id = produit.categorie_id
          INNER JOIN variante  ON variante.produit_id = produit.id
            GROUP BY produit.id, produit.nom, produit.slug, produit.description,
-                    produit.teinte, produit.image, categorie.id, categorie.libelle,
+                    produit.teinte, categorie.id, categorie.libelle,
                     categorie.slug
            ORDER BY categorie.id, produit.nom'
         )->fetchAll();
@@ -173,7 +195,7 @@ final class ProduitModel
      * inconnu est simplement absent du résultat.
      *
      * @param array<int, int> $ids Identifiants de variantes (déjà validés comme entiers positifs).
-     * @return array<int, array{variantId:int, libelle:string, choixId:int|null, prixCents:int,
+     * @return array<int, array{variantId:int, libelle:string, choixId:int, prixCents:int,
      *                          prixPromoCents:int|null, stock:int,
      *                          produit:array{id:int, nom:string, slug:string, image:string, teinte:int}}>
      *         prixPromoCents : le prix remisé si le produit est en promotion (US PRO-c), sinon null.
@@ -190,17 +212,18 @@ final class ProduitModel
 
         $requete = $this->pdo->prepare(
             'SELECT variante.id,
-                    variante.libelle,
-                    variante.choix_id,
+                    format.libelle,
+                    variante.service_id AS choix_id,
                     variante.prix_cents,
                     variante.stock,
                     produit.id AS produit_id,
                     produit.nom,
                     produit.slug,
-                    produit.image,
+                    ' . self::SQL_IMAGE_PRINCIPALE . ' AS image,
                     produit.teinte
                FROM variante
          INNER JOIN produit ON produit.id = variante.produit_id
+         INNER JOIN format  ON format.id = variante.format_id
               WHERE variante.id IN (' . $marqueurs . ')
            ORDER BY variante.id'
         );
@@ -211,7 +234,7 @@ final class ProduitModel
             static fn (array $ligne): array => [
                 'variantId' => (int) $ligne['id'],
                 'libelle'   => $ligne['libelle'],
-                'choixId'   => $ligne['choix_id'] === null ? null : (int) $ligne['choix_id'],
+                'choixId'   => (int) $ligne['choix_id'],
                 'prixCents' => (int) $ligne['prix_cents'],
                 'prixPromoCents' => PromotionModel::prixPromo((int) $ligne['produit_id'], (int) $ligne['prix_cents'], $promoId),
                 'stock'     => (int) $ligne['stock'],
@@ -233,7 +256,7 @@ final class ProduitModel
      *
      * @param array<int, int> $produitIds Identifiants de produits (entiers positifs).
      * @return array<int, array<int, array{id:int, libelle:string, multiple:bool, obligatoire:bool,
-     *                                     choix:array<int, array{id:int, libelle:string, supplementCents:int}>}>>
+     *                                     choix:array<int, array{id:int, libelle:string, supplementCents:int, stock:int|null}>}>>
      *         Les groupes de chaque produit, indexés par identifiant de produit ;
      *         un produit sans option est absent.
      */
@@ -246,40 +269,39 @@ final class ProduitModel
         // Un « ? » par identifiant : les valeurs restent des paramètres liés.
         $marqueurs = implode(',', array_fill(0, count($produitIds), '?'));
 
+        // Tous les services conviennent à tous les produits ; un topping n'est
+        // proposé que si la catégorie du produit le propose.
         $requete = $this->pdo->prepare(
-            'SELECT option_groupe.id          AS groupe_id,
-                    option_groupe.produit_id,
-                    option_groupe.libelle     AS groupe_libelle,
-                    option_groupe.multiple,
-                    option_groupe.obligatoire,
-                    option_choix.id           AS choix_id,
-                    option_choix.libelle      AS choix_libelle,
-                    option_choix.supplement_cents
-               FROM option_groupe
-         INNER JOIN option_choix ON option_choix.groupe_id = option_groupe.id
-              WHERE option_groupe.produit_id IN (' . $marqueurs . ')
-           ORDER BY option_groupe.position, option_groupe.id, option_choix.position, option_choix.id'
+            'SELECT produit.id AS produit_id,
+                    option_choix.type,
+                    option_choix.id AS choix_id,
+                    option_choix.libelle AS choix_libelle,
+                    option_choix.supplement_cents,
+                    option_choix.stock
+               FROM produit
+         INNER JOIN option_choix
+                 ON option_choix.type = \'service\'
+                 OR EXISTS (SELECT 1 FROM categorie_topping
+                             WHERE categorie_topping.categorie_id = produit.categorie_id
+                               AND categorie_topping.choix_id = option_choix.id)
+              WHERE produit.id IN (' . $marqueurs . ')
+           ORDER BY produit.id, option_choix.type, option_choix.position, option_choix.id'
         );
         $requete->execute(array_values($produitIds));
 
         // Les lignes arrivent à plat (une par choix) : on les regroupe par
-        // produit puis par groupe, en conservant l'ordre de la requête.
+        // produit puis par type, en conservant l'ordre de la requête.
         $parProduit = array_reduce(
             $requete->fetchAll(),
             static function (array $produits, array $ligne): array {
                 $produitId = (int) $ligne['produit_id'];
-                $groupeId  = (int) $ligne['groupe_id'];
-                $produits[$produitId][$groupeId] ??= [
-                    'id'          => $groupeId,
-                    'libelle'     => $ligne['groupe_libelle'],
-                    'multiple'    => (bool) $ligne['multiple'],
-                    'obligatoire' => (bool) $ligne['obligatoire'],
-                    'choix'       => [],
-                ];
-                $produits[$produitId][$groupeId]['choix'][] = [
+                $produits[$produitId][$ligne['type']] ??= self::GROUPES[$ligne['type']] + ['choix' => []];
+                $produits[$produitId][$ligne['type']]['choix'][] = [
                     'id'              => (int) $ligne['choix_id'],
                     'libelle'         => $ligne['choix_libelle'],
                     'supplementCents' => (int) $ligne['supplement_cents'],
+                    // Doses restantes d'un topping ; null pour un service (stock porté par les variantes).
+                    'stock'           => $ligne['stock'] === null ? null : (int) $ligne['stock'],
                 ];
 
                 return $produits;
@@ -296,7 +318,7 @@ final class ProduitModel
      * combinaisons voisines d'une ligne et savoir lesquelles sont épuisées.
      *
      * @param array<int, int> $produitIds Identifiants de produits (entiers positifs).
-     * @return array<int, array<int, array{variantId:int, libelle:string, choixId:int|null, prixCents:int,
+     * @return array<int, array<int, array{variantId:int, libelle:string, choixId:int, prixCents:int,
      *                                     prixPromoCents:int|null, stock:int}>>
      *         Les variantes de chaque produit, indexées par identifiant de produit.
      */
@@ -310,10 +332,12 @@ final class ProduitModel
         $marqueurs = implode(',', array_fill(0, count($produitIds), '?'));
 
         $requete = $this->pdo->prepare(
-            'SELECT id, produit_id, libelle, choix_id, prix_cents, stock
+            'SELECT variante.id, variante.produit_id, format.libelle, variante.service_id AS choix_id,
+                    variante.prix_cents, variante.stock
                FROM variante
-              WHERE produit_id IN (' . $marqueurs . ')
-           ORDER BY produit_id, prix_cents, libelle, id'
+         INNER JOIN format ON format.id = variante.format_id
+              WHERE variante.produit_id IN (' . $marqueurs . ')
+           ORDER BY variante.produit_id, variante.prix_cents, format.contenance_ml, variante.id'
         );
         $requete->execute(array_values($produitIds));
         $promoId = PromotionModel::produitEnPromotion($this->pdo);
@@ -324,7 +348,7 @@ final class ProduitModel
                 $produits[(int) $ligne['produit_id']][] = [
                     'variantId' => (int) $ligne['id'],
                     'libelle'   => $ligne['libelle'],
-                    'choixId'   => $ligne['choix_id'] === null ? null : (int) $ligne['choix_id'],
+                    'choixId'   => (int) $ligne['choix_id'],
                     'prixCents' => (int) $ligne['prix_cents'],
                     'prixPromoCents' => PromotionModel::prixPromo((int) $ligne['produit_id'], (int) $ligne['prix_cents'], $promoId),
                     'stock'     => (int) $ligne['stock'],
@@ -339,21 +363,22 @@ final class ProduitModel
     /**
      * Un produit retrouvé par son slug, avec sa catégorie, ses images et toutes
      * ses variantes, de la moins chère à la plus chère. Une variante est une
-     * combinaison : un format (libelle) et, si le produit en a un, le choix du
-     * groupe d'options porteur de stock (choixId, ex. le Service), chacune avec
+     * combinaison : un format (libelle) et un service (choixId, un choix de
+     * type « service » de option_choix), chacune avec
      * son prix en centimes et son stock. Une combinaison absente de la liste
      * n'existe pas.
      *
      * @param string $slug Identifiant d'URL du produit (ex. « cookie-dough »).
      * @return array{id:int, nom:string, slug:string, description:string,
-     *               descriptionLongue:string, ingredients:string, teinte:int,
+     *               descriptionLongue:string, ingredients:string,
+     *               allergenes:array<int, array{id:int, code:string, libelle:string}>, teinte:int,
      *               image:string, images:array<int, string>,
      *               categorie:array{libelle:string, slug:string},
      *               promoPourcent:int|null,
-     *               variantes:array<int, array{id:int, libelle:string, choixId:int|null, prixCents:int,
+     *               variantes:array<int, array{id:int, libelle:string, choixId:int, prixCents:int,
      *                                          prixPromoCents:int|null, stock:int}>,
      *               options:array<int, array{id:int, libelle:string, multiple:bool, obligatoire:bool,
-     *                                        choix:array<int, array{id:int, libelle:string, supplementCents:int}>}>}|null
+     *                                        choix:array<int, array{id:int, libelle:string, supplementCents:int, stock:int|null}>}>}|null
      *         null si aucun produit ne porte ce slug.
      */
     public function findBySlug(string $slug): ?array
@@ -366,7 +391,7 @@ final class ProduitModel
                     produit.description_longue,
                     produit.ingredients,
                     produit.teinte,
-                    produit.image,
+                    ' . self::SQL_IMAGE_PRINCIPALE . ' AS image,
                     categorie.libelle AS categorie_libelle,
                     categorie.slug    AS categorie_slug
                FROM produit
@@ -381,11 +406,12 @@ final class ProduitModel
         }
 
         $requeteVariantes = $this->pdo->prepare(
-            'SELECT variante.id, variante.libelle, variante.choix_id, variante.prix_cents, variante.stock
+            'SELECT variante.id, format.libelle, variante.service_id AS choix_id, variante.prix_cents, variante.stock
                FROM variante
-          LEFT JOIN option_choix ON option_choix.id = variante.choix_id
+         INNER JOIN format        ON format.id = variante.format_id
+         INNER JOIN option_choix  ON option_choix.id = variante.service_id
               WHERE variante.produit_id = :produit_id
-           ORDER BY variante.prix_cents, variante.libelle, option_choix.position, variante.id'
+           ORDER BY variante.prix_cents, format.contenance_ml, option_choix.position, variante.id'
         );
         $requeteVariantes->execute(['produit_id' => (int) $produit['id']]);
         $variantes = $requeteVariantes->fetchAll();
@@ -399,6 +425,16 @@ final class ProduitModel
         $requeteImages->execute(['produit_id' => (int) $produit['id']]);
         $images = $requeteImages->fetchAll(PDO::FETCH_COLUMN);
 
+        $requeteAllergenes = $this->pdo->prepare(
+            'SELECT allergene.id, allergene.code, allergene.libelle
+               FROM produit_allergene
+         INNER JOIN allergene ON allergene.id = produit_allergene.allergene_id
+              WHERE produit_allergene.produit_id = :produit_id
+           ORDER BY allergene.libelle'
+        );
+        $requeteAllergenes->execute(['produit_id' => (int) $produit['id']]);
+        $allergenes = $requeteAllergenes->fetchAll();
+
         $promoId = PromotionModel::produitEnPromotion($this->pdo);
         $enPromo = (int) $produit['id'] === $promoId;
 
@@ -409,9 +445,17 @@ final class ProduitModel
             'description' => $produit['description'],
             'descriptionLongue' => $produit['description_longue'],
             'ingredients' => $produit['ingredients'],
+            'allergenes'  => array_map(
+                static fn (array $ligne): array => [
+                    'id'      => (int) $ligne['id'],
+                    'code'    => $ligne['code'],
+                    'libelle' => $ligne['libelle'],
+                ],
+                $allergenes
+            ),
             'teinte'      => (int) $produit['teinte'],
             'image'       => $produit['image'],
-            // Un produit sans galerie garde son visuel principal.
+            // Un produit sans galerie garde son visuel par défaut.
             'images'      => $images === [] ? [$produit['image']] : $images,
             'categorie'   => [
                 'libelle' => $produit['categorie_libelle'],
@@ -422,7 +466,7 @@ final class ProduitModel
                 static fn (array $ligne): array => [
                     'id'        => (int) $ligne['id'],
                     'libelle'   => $ligne['libelle'],
-                    'choixId'   => $ligne['choix_id'] === null ? null : (int) $ligne['choix_id'],
+                    'choixId'   => (int) $ligne['choix_id'],
                     'prixCents' => (int) $ligne['prix_cents'],
                     'prixPromoCents' => $enPromo ? PromotionModel::prixRemise((int) $ligne['prix_cents']) : null,
                     'stock'     => (int) $ligne['stock'],

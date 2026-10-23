@@ -46,22 +46,22 @@ final class ProduitController
     }
 
     /**
-     * GET /api/produit?slug=cookie-dough : la fiche d'un produit.
+     * GET /api/produit?nom=cookie-dough : la fiche d'un produit.
      *
      * Réponse : { produit: { ..., categorie, variantes: [...] }, seuilBientotEpuise: n }
-     * Erreurs : 400 si le slug est absent ou mal formé, 404 s'il est inconnu.
+     * Erreurs : 400 si le nom est absent ou mal formé, 404 s'il est inconnu.
      */
     public function show(Request $requete): void
     {
-        $slug = $requete->parametre('slug', '');
+        $nom = $requete->parametre('nom', '');
 
-        // Un slug ne contient que des minuscules, des chiffres et des tirets :
+        // Ce nom (le slug du produit) ne contient que des minuscules, des chiffres et des tirets :
         // tout le reste est rejeté avant d'atteindre la base.
-        if ($slug === '' || preg_match('/^[a-z0-9-]{1,120}$/', $slug) !== 1) {
-            Response::erreur('Le paramètre « slug » est absent ou invalide.', 400);
+        if ($nom === '' || preg_match('/^[a-z0-9-]{1,120}$/', $nom) !== 1) {
+            Response::erreur('Le paramètre « nom » est absent ou invalide.', 400);
         }
 
-        $produit = $this->produits->findBySlug($slug);
+        $produit = $this->produits->findBySlug($nom);
 
         if ($produit === null) {
             Response::erreur('Ce produit n\'existe pas.', 404);

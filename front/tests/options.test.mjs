@@ -183,5 +183,29 @@ test("disponibilité : les groupes non porteurs ne sont pas touchés", () => {
   assert.equal(vue[1], groupes[1]);
 });
 
+// Stock des toppings : un choix à 0 dose est épuisé, un choix sous le seuil est annoncé.
+let avecStock = [
+  { id: 1, choix: [{ id: 10, stock: null }] },
+  { id: 2, choix: [{ id: 20, stock: 0 }, { id: 21, stock: 4 }, { id: 22, stock: 50 }] },
+];
+
+test("disponibilité des toppings : épuisé, bientôt épuisé, disponible", () => {
+  let vue = groupesAvecDisponibilite(avecStock, 1, [], "Pot", 5)[1].choix;
+  assert.deepEqual(vue.map((choix) => choix.indisponible), [true, false, false]);
+  assert.deepEqual(vue.map((choix) => choix.raison), ["Épuisé", "", ""]);
+  assert.deepEqual(vue.map((choix) => choix.alerte), ["", "Bientôt épuisé", ""]);
+});
+
+test("disponibilité des toppings : sans seuil, pas d'alerte ; un service garde son stock null", () => {
+  let vue = groupesAvecDisponibilite(avecStock, 99, [], "Pot");
+  assert.deepEqual(vue[1].choix.map((choix) => choix.alerte), ["", "", ""]);
+  assert.equal(vue[0], avecStock[0]);
+});
+
+test("ligne invalide : un topping épuisé", () => {
+  assert.equal(ligneInvalide([10, 21], 1, avecStock), false);
+  assert.equal(ligneInvalide([10, 20], 1, avecStock), true);
+});
+
 console.log(echecs === 0 ? "\nTous les tests passent." : `\n${echecs} test(s) en échec.`);
 process.exit(echecs === 0 ? 0 : 1);

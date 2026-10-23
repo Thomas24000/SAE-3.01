@@ -22,6 +22,7 @@ import { AdminCodesPromoPage } from "./pages/admin-codes-promo/page.js";
 import { AdminCodePromoPage } from "./pages/admin-code-promo/page.js";
 import { AdminProduitsPage } from "./pages/admin-produits/page.js";
 import { AdminProduitPage } from "./pages/admin-produit/page.js";
+import { AdminToppingsPage } from "./pages/admin-toppings/page.js";
 import { The404Page } from "./pages/404/page.js";
 
 // base : chemin du projet sur le serveur (BASE dans vite.config.js).
@@ -32,7 +33,7 @@ router.addLayout("/", RootLayout);
 router.addLayout("/admin", AdminLayout);
 
 router.addRoute("/", ProduitsPage);
-router.addRoute("/produit/:slug", ProduitPage);
+router.addRoute("/produit/:nom", ProduitPage);
 router.addRoute("/panier", PanierPage);
 router.addRoute("/commande", CommandePage);
 router.addRoute("/commande/:numero", ConfirmationPage);
@@ -46,6 +47,7 @@ router.addRoute("/admin", AdminPage);
 router.addRoute("/admin/produits", AdminProduitsPage);
 router.addRoute("/admin/produits/nouveau", AdminProduitPage);
 router.addRoute("/admin/produits/:id/modifier", AdminProduitPage);
+router.addRoute("/admin/toppings", AdminToppingsPage);
 router.addRoute("/admin/categories", AdminCategoriesPage);
 router.addRoute("/admin/categories/nouvelle", AdminCategoriePage);
 router.addRoute("/admin/categories/:id/modifier", AdminCategoriePage);

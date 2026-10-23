@@ -18,9 +18,6 @@ use Throwable;
  */
 final class ProduitAdminModel
 {
-    /** Visuel d'un produit qui n'a encore aucune image téléversée. */
-    private const IMAGE_DEFAUT = 'images/produits/placeholder.svg';
-
     /** Nombre maximal d'images par produit. */
     public const IMAGES_MAX = 10;
 
@@ -43,16 +40,16 @@ final class ProduitAdminModel
     {
         $lignes = $this->pdo->query(
             'SELECT produit.id, produit.nom, produit.slug, produit.categorie_id,
-                    categorie.libelle AS categorie, produit.image,
+                    categorie.libelle AS categorie, ' . ProduitModel::SQL_IMAGE_PRINCIPALE . ' AS image,
                     COALESCE(MIN(variante.prix_cents), 0) AS prix_min,
                     COALESCE(SUM(variante.stock), 0)      AS stock,
-                    COUNT(DISTINCT variante.libelle)        AS nombre_formats,
+                    COUNT(DISTINCT variante.format_id)       AS nombre_formats,
                     (SELECT COUNT(*) FROM produit_image WHERE produit_image.produit_id = produit.id) AS nombre_images
                FROM produit
          INNER JOIN categorie ON categorie.id = produit.categorie_id
           LEFT JOIN variante  ON variante.produit_id = produit.id
            GROUP BY produit.id, produit.nom, produit.slug, produit.categorie_id,
-                    categorie.libelle, produit.image
+                    categorie.libelle
            ORDER BY produit.id'
         )->fetchAll();
 
@@ -78,8 +75,8 @@ final class ProduitAdminModel
      * Un produit avec tous ses champs, ses formats et ses images.
      *
      * @return array{id:int, nom:string, slug:string, categorieId:int, description:string,
-     *         descriptionLongue:string, ingredients:string,
-     *         variantes:array<int, array{id:int, libelle:string, choixId:int|null, prixCents:int, stock:int}>,
+     *         descriptionLongue:string, ingredients:string, allergeneIds:array<int, int>,
+     *         variantes:array<int, array{id:int, libelle:string, choixId:int, prixCents:int, stock:int}>,
      *         services:array<int, array{id:int, libelle:string}>,
      *         images:array<int, array{id:int, chemin:string, miniature:string, principale:bool}>}|null
      *         null si le produit n'existe pas.
@@ -105,8 +102,9 @@ final class ProduitAdminModel
             'description'       => $produit['description'],
             'descriptionLongue' => $produit['description_longue'],
             'ingredients'       => $produit['ingredients'],
+            'allergeneIds'      => $this->lireAllergeneIds($id),
             'variantes'         => $this->lireVariantes($id),
-            'services'          => $this->lireServices($id),
+            'services'          => $this->services(),
             'images'            => $this->lireImages($id),
         ];
     }
@@ -117,7 +115,7 @@ final class ProduitAdminModel
      * Lève une PDOException (SQLSTATE 23000) si le slug existe déjà.
      *
      * @param array{nom:string, slug:string, categorieId:int, description:string,
-     *        descriptionLongue:string, ingredients:string, teinte:int,
+     *        descriptionLongue:string, ingredients:string, teinte:int, allergeneIds?:array<int, int>,
      *        variantes:array<int, array{libelle:string, prixCents:int, stock:int}>} $donnees
      * @return int Identifiant du produit créé.
      * @throws DomainException Si la catégorie n'existe pas (code 400).
@@ -130,9 +128,9 @@ final class ProduitAdminModel
             $this->verifierCategorie($donnees['categorieId']);
 
             $requete = $this->pdo->prepare(
-                'INSERT INTO produit (categorie_id, nom, slug, description, teinte, image,
+                'INSERT INTO produit (categorie_id, nom, slug, description, teinte,
                                       description_longue, ingredients)
-                 VALUES (:categorie_id, :nom, :slug, :description, :teinte, :image,
+                 VALUES (:categorie_id, :nom, :slug, :description, :teinte,
                          :description_longue, :ingredients)'
             );
             $requete->execute([
@@ -141,13 +139,13 @@ final class ProduitAdminModel
                 'slug'               => $donnees['slug'],
                 'description'        => $donnees['description'],
                 'teinte'             => $donnees['teinte'],
-                'image'              => self::IMAGE_DEFAUT,
                 'description_longue' => $donnees['descriptionLongue'],
                 'ingredients'        => $donnees['ingredients'],
             ]);
             $id = (int) $this->pdo->lastInsertId();
 
             $this->synchroniserVariantes($id, $donnees['variantes']);
+            $this->synchroniserAllergenes($id, $donnees['allergeneIds'] ?? []);
             $this->pdo->commit();
 
             return $id;
@@ -164,7 +162,7 @@ final class ProduitAdminModel
      * garder des adresses stables.
      *
      * @param array{nom:string, categorieId:int, description:string, descriptionLongue:string,
-     *        ingredients:string, variantes:array<int, array{id?:int, libelle:string,
+     *        ingredients:string, allergeneIds?:array<int, int>, variantes:array<int, array{id?:int, libelle:string,
      *        prixCents:int, stock:int}>} $donnees
      * @throws DomainException Produit introuvable (404), catégorie ou format invalide (400).
      */
@@ -192,6 +190,7 @@ final class ProduitAdminModel
             ]);
 
             $this->synchroniserVariantes($id, $donnees['variantes']);
+            $this->synchroniserAllergenes($id, $donnees['allergeneIds'] ?? []);
             $this->pdo->commit();
         } catch (Throwable $e) {
             $this->pdo->rollBack();
@@ -234,6 +233,38 @@ final class ProduitAdminModel
     }
 
     /**
+     * Les formats existants, du plus petit au plus grand : de quoi remplir la
+     * liste déroulante du formulaire produit.
+     *
+     * @return array<int, array{id:int, libelle:string}>
+     */
+    public function formats(): array
+    {
+        $lignes = $this->pdo->query('SELECT id, libelle FROM format ORDER BY contenance_ml, id')->fetchAll();
+
+        return array_map(
+            static fn (array $ligne): array => ['id' => (int) $ligne['id'], 'libelle' => $ligne['libelle']],
+            $lignes
+        );
+    }
+
+    /**
+     * Tous les allergènes déclarables, par ordre alphabétique : les cases à
+     * cocher du formulaire produit.
+     *
+     * @return array<int, array{id:int, libelle:string}>
+     */
+    public function allergenes(): array
+    {
+        $lignes = $this->pdo->query('SELECT id, libelle FROM allergene ORDER BY libelle, id')->fetchAll();
+
+        return array_map(
+            static fn (array $ligne): array => ['id' => (int) $ligne['id'], 'libelle' => $ligne['libelle']],
+            $lignes
+        );
+    }
+
+    /**
      * Le produit existe-t-il ?
      */
     public function existe(int $id): bool
@@ -257,7 +288,7 @@ final class ProduitAdminModel
 
     /**
      * Ajoute une image en dernière position. La première image d'un produit
-     * devient son image principale.
+     * est son image principale.
      *
      * @param string $chemin Chemin relatif de l'image (voir Televersement).
      */
@@ -280,7 +311,6 @@ final class ProduitAdminModel
             );
             $requete->execute(['produit_id' => $produitId, 'chemin' => $chemin, 'position' => $position]);
 
-            $this->synchroniserImagePrincipale($produitId);
             $this->pdo->commit();
         } catch (Throwable $e) {
             $this->pdo->rollBack();
@@ -315,7 +345,6 @@ final class ProduitAdminModel
             $requete->execute(['id' => $imageId]);
 
             $this->renumeroterImages($produitId);
-            $this->synchroniserImagePrincipale($produitId);
             $this->pdo->commit();
 
             return (string) $chemin;
@@ -363,7 +392,6 @@ final class ProduitAdminModel
             $requete = $this->pdo->prepare('UPDATE produit_image SET position = 1 WHERE id = :id');
             $requete->execute(['id' => $imageId]);
 
-            $this->synchroniserImagePrincipale($produitId);
             $this->pdo->commit();
 
             return true;
@@ -375,18 +403,19 @@ final class ProduitAdminModel
 
     /**
      * Les variantes d'un produit, du format le moins cher au plus cher : une par
-     * combinaison format + service (choixId null pour un produit sans service).
+     * combinaison format + service.
      *
      * @return array<int, array{id:int, libelle:string, choixId:int|null, prixCents:int, stock:int}>
      */
     private function lireVariantes(int $produitId): array
     {
         $requete = $this->pdo->prepare(
-            'SELECT variante.id, variante.libelle, variante.choix_id, variante.prix_cents, variante.stock
+            'SELECT variante.id, format.libelle, variante.service_id AS choix_id, variante.prix_cents, variante.stock
                FROM variante
-          LEFT JOIN option_choix ON option_choix.id = variante.choix_id
+         INNER JOIN format       ON format.id = variante.format_id
+         INNER JOIN option_choix ON option_choix.id = variante.service_id
               WHERE variante.produit_id = :id
-           ORDER BY variante.prix_cents, variante.libelle, option_choix.position, variante.id'
+           ORDER BY variante.prix_cents, format.contenance_ml, option_choix.position, variante.id'
         );
         $requete->execute(['id' => $produitId]);
 
@@ -394,7 +423,7 @@ final class ProduitAdminModel
             static fn (array $ligne): array => [
                 'id'        => (int) $ligne['id'],
                 'libelle'   => $ligne['libelle'],
-                'choixId'   => $ligne['choix_id'] === null ? null : (int) $ligne['choix_id'],
+                'choixId'   => (int) $ligne['choix_id'],
                 'prixCents' => (int) $ligne['prix_cents'],
                 'stock'     => (int) $ligne['stock'],
             ],
@@ -403,25 +432,61 @@ final class ProduitAdminModel
     }
 
     /**
-     * Les services du produit : les choix du groupe d'options qui porte le stock
-     * (US OPT-b), dans l'ordre d'affichage. Vide si le produit n'en a pas.
+     * Les identifiants des allergènes d'un produit.
      *
-     * @return array<int, array{id:int, libelle:string}>
+     * @return array<int, int>
      */
-    private function lireServices(int $produitId): array
+    private function lireAllergeneIds(int $produitId): array
     {
         $requete = $this->pdo->prepare(
-            'SELECT option_choix.id, option_choix.libelle
-               FROM option_choix
-         INNER JOIN option_groupe ON option_groupe.id = option_choix.groupe_id
-              WHERE option_groupe.produit_id = :id AND option_groupe.porte_stock = 1
-           ORDER BY option_choix.position, option_choix.id'
+            'SELECT allergene_id FROM produit_allergene WHERE produit_id = :id ORDER BY allergene_id'
         );
         $requete->execute(['id' => $produitId]);
 
+        return array_map('intval', $requete->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    /**
+     * Remplace les allergènes du produit par ceux reçus (une liste vide les
+     * retire tous).
+     *
+     * @param array<int, int> $allergeneIds Identifiants d'allergènes, sans doublon.
+     * @throws DomainException Si un allergène n'existe pas (code 400).
+     */
+    private function synchroniserAllergenes(int $produitId, array $allergeneIds): void
+    {
+        $existants = array_map(static fn (array $allergene): int => $allergene['id'], $this->allergenes());
+
+        if (array_diff($allergeneIds, $existants) !== []) {
+            throw new DomainException('Un des allergènes choisis n\'existe pas.', 400);
+        }
+
+        $requete = $this->pdo->prepare('DELETE FROM produit_allergene WHERE produit_id = :id');
+        $requete->execute(['id' => $produitId]);
+
+        for ($i = 0; $i < count($allergeneIds); $i++) {
+            $requete = $this->pdo->prepare(
+                'INSERT INTO produit_allergene (produit_id, allergene_id) VALUES (:produit, :allergene)'
+            );
+            $requete->execute(['produit' => $produitId, 'allergene' => $allergeneIds[$i]]);
+        }
+    }
+
+    /**
+     * Les services proposables : tous les choix de type « service », dans l'ordre
+     * d'affichage. Ils sont communs à tous les produits.
+     *
+     * @return array<int, array{id:int, libelle:string}>
+     */
+    public function services(): array
+    {
+        $lignes = $this->pdo->query(
+            'SELECT id, libelle FROM option_choix WHERE type = \'service\' ORDER BY position, id'
+        )->fetchAll();
+
         return array_map(
             static fn (array $ligne): array => ['id' => (int) $ligne['id'], 'libelle' => $ligne['libelle']],
-            $requete->fetchAll()
+            $lignes
         );
     }
 
@@ -480,33 +545,35 @@ final class ProduitAdminModel
 
     /**
      * Aligne les variantes du produit sur la liste reçue (voir modifier()). Une
-     * variante est une combinaison format + service : choixId doit être un des
-     * services du produit, ou null si le produit n'en a pas. Une variante
-     * existante garde son service, seuls son format, son prix et son stock changent.
+     * variante est une combinaison format + service : le format est retrouvé par
+     * son libellé dans la table format, et choixId doit être un des services. Une
+     * variante existante garde son service, seuls son format, son prix et son stock changent.
      *
      * @param array<int, array{id?:int, libelle:string, choixId:int|null, prixCents:int, stock:int}> $variantes
-     * @throws DomainException Si un identifiant de variante n'appartient pas au produit ou si un
-     *         service est invalide (code 400).
+     * @throws DomainException Si un identifiant de variante n'appartient pas au produit, si un
+     *         service est invalide ou si un format n'existe pas (code 400).
      */
     private function synchroniserVariantes(int $produitId, array $variantes): void
     {
-        $services = array_map(static fn (array $service): int => $service['id'], $this->lireServices($produitId));
+        $services = array_map(static fn (array $service): int => $service['id'], $this->services());
+        $formats  = $this->lireFormats();
 
         for ($i = 0; $i < count($variantes); $i++) {
-            $choixId = $variantes[$i]['choixId'] ?? null;
-
-            if ($services === [] ? $choixId !== null : !in_array($choixId, $services, true)) {
-                throw new DomainException('Un des services choisis n\'existe pas pour ce produit.', 400);
+            if (!in_array($variantes[$i]['choixId'] ?? null, $services, true)) {
+                throw new DomainException('Chaque variante doit avoir un service existant.', 400);
+            }
+            if (!isset($formats[mb_strtolower($variantes[$i]['libelle'])])) {
+                throw new DomainException('Le format « ' . $variantes[$i]['libelle'] . ' » n\'existe pas.', 400);
             }
         }
 
-        $requete = $this->pdo->prepare('SELECT id, choix_id FROM variante WHERE produit_id = :id FOR UPDATE');
+        $requete = $this->pdo->prepare('SELECT id, service_id FROM variante WHERE produit_id = :id FOR UPDATE');
         $requete->execute(['id' => $produitId]);
         $lignes = $requete->fetchAll();
         $existants = array_map(static fn (array $ligne): int => (int) $ligne['id'], $lignes);
-        $choixExistants = array_combine(
+        $servicesExistants = array_combine(
             $existants,
-            array_map(static fn (array $ligne): ?int => $ligne['choix_id'] === null ? null : (int) $ligne['choix_id'], $lignes)
+            array_map(static fn (array $ligne): int => (int) $ligne['service_id'], $lignes)
         );
 
         $conserves = [];
@@ -515,14 +582,14 @@ final class ProduitAdminModel
                 if (!in_array($variantes[$i]['id'], $existants, true)) {
                     throw new DomainException('Un des formats n\'appartient pas à ce produit.', 400);
                 }
-                if ($choixExistants[$variantes[$i]['id']] !== ($variantes[$i]['choixId'] ?? null)) {
+                if ($servicesExistants[$variantes[$i]['id']] !== $variantes[$i]['choixId']) {
                     throw new DomainException('Le service d\'une variante ne peut pas être changé.', 400);
                 }
                 $conserves[] = $variantes[$i]['id'];
             }
         }
 
-        // Les formats retirés d'abord : leur libellé redevient disponible.
+        // Les variantes retirées d'abord : leur combinaison redevient disponible.
         $retires = array_values(array_diff($existants, $conserves));
         for ($i = 0; $i < count($retires); $i++) {
             $requete = $this->pdo->prepare('DELETE FROM variante WHERE id = :id');
@@ -531,31 +598,47 @@ final class ProduitAdminModel
 
         for ($i = 0; $i < count($variantes); $i++) {
             $variante = $variantes[$i];
+            $formatId = $formats[mb_strtolower($variante['libelle'])];
 
             if (isset($variante['id'])) {
                 $requete = $this->pdo->prepare(
-                    'UPDATE variante SET libelle = :libelle, prix_cents = :prix, stock = :stock WHERE id = :id'
+                    'UPDATE variante SET format_id = :format, prix_cents = :prix, stock = :stock WHERE id = :id'
                 );
                 $requete->execute([
-                    'libelle' => $variante['libelle'],
-                    'prix'    => $variante['prixCents'],
-                    'stock'   => $variante['stock'],
-                    'id'      => $variante['id'],
+                    'format' => $formatId,
+                    'prix'   => $variante['prixCents'],
+                    'stock'  => $variante['stock'],
+                    'id'     => $variante['id'],
                 ]);
             } else {
                 $requete = $this->pdo->prepare(
-                    'INSERT INTO variante (produit_id, libelle, choix_id, prix_cents, stock)
-                     VALUES (:produit_id, :libelle, :choix, :prix, :stock)'
+                    'INSERT INTO variante (produit_id, format_id, service_id, prix_cents, stock)
+                     VALUES (:produit_id, :format, :service, :prix, :stock)'
                 );
                 $requete->execute([
                     'produit_id' => $produitId,
-                    'libelle'    => $variante['libelle'],
-                    'choix'      => $variante['choixId'] ?? null,
+                    'format'     => $formatId,
+                    'service'    => $variante['choixId'],
                     'prix'       => $variante['prixCents'],
                     'stock'      => $variante['stock'],
                 ]);
             }
         }
+    }
+
+    /**
+     * Les formats existants, retrouvables par leur libellé en minuscules.
+     *
+     * @return array<string, int> Identifiant du format, indexé par libellé en minuscules.
+     */
+    private function lireFormats(): array
+    {
+        $lignes = $this->pdo->query('SELECT id, libelle FROM format')->fetchAll();
+
+        return array_combine(
+            array_map(static fn (array $ligne): string => mb_strtolower($ligne['libelle']), $lignes),
+            array_map(static fn (array $ligne): int => (int) $ligne['id'], $lignes)
+        );
     }
 
     /**
@@ -571,21 +654,5 @@ final class ProduitAdminModel
               WHERE produit_id = :id ORDER BY position'
         );
         $requete->execute(['id' => $produitId]);
-    }
-
-    /**
-     * Fait de la première image de la galerie l'image principale du produit
-     * (colonne produit.image), ou remet le visuel par défaut s'il n'en reste aucune.
-     */
-    private function synchroniserImagePrincipale(int $produitId): void
-    {
-        $requete = $this->pdo->prepare(
-            'SELECT chemin FROM produit_image WHERE produit_id = :id ORDER BY position LIMIT 1'
-        );
-        $requete->execute(['id' => $produitId]);
-        $chemin = $requete->fetchColumn();
-
-        $requete = $this->pdo->prepare('UPDATE produit SET image = :image WHERE id = :id');
-        $requete->execute(['image' => $chemin === false ? self::IMAGE_DEFAUT : $chemin, 'id' => $produitId]);
     }
 }

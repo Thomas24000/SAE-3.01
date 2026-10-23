@@ -30,7 +30,6 @@ const DESCRIPTION_MAX = 400;
 const DESCRIPTION_LONGUE_MAX = 800;
 const INGREDIENTS_MAX = 600;
 const FORMATS_MAX = 10;
-const LIBELLE_FORMAT_MAX = 60;
 const TAILLE_IMAGE_MAX = 5 * 1024 * 1024;
 const TYPES_IMAGE = ["image/jpeg", "image/png", "image/webp"];
 
@@ -48,8 +47,11 @@ let M = {
   description: "",
   descriptionLongue: "",
   ingredients: "",
+  allergeneIds: [], // identifiants des allergènes cochés
   variantes: [], // formats saisis : [{ libelle, prix, stocks: [{ id, choixId, service, stock }] }] (textes)
-  services: [], // [{ id, libelle }] : les services du produit (US OPT-b), vide s'il n'en a pas
+  services: [], // [{ id, libelle }] : les services proposés (US OPT-b), communs à tous les produits
+  formats: [], // [{ id, libelle }] : les formats existants, ceux de la liste déroulante
+  allergenes: [], // [{ id, libelle }] : tous les allergènes déclarables
   categories: [], // [{ id, libelle }]
   images: [], // [{ id, src, miniature, principale }]
   seuil: 5, // seuil « Bientôt épuisé » enregistré
@@ -63,18 +65,13 @@ let M = {
 };
 
 /**
- * Les stocks d'un format : un par service du produit, ou un seul sans service.
+ * Les stocks d'un format : un par service.
  * . stocksExistants : les variantes déjà enregistrées pour ce format ([] pour un nouveau format)
  * > [{ id, choixId, service, stock }] ; un service sans variante a un stock vide (non proposé)
  *   pour un format existant, "0" pour un nouveau format
  */
 M.formatStocks = function (stocksExistants) {
   let nouveau = stocksExistants.length === 0;
-
-  if (M.services.length === 0) {
-    let existant = stocksExistants[0];
-    return [{ id: existant?.id ?? null, choixId: null, service: "", stock: existant ? String(existant.stock) : "0" }];
-  }
 
   return M.services.map((service) => {
     let existant = stocksExistants.find((variante) => variante.choixId === service.id);
@@ -89,11 +86,14 @@ M.formatStocks = function (stocksExistants) {
 };
 
 /**
- * Une ligne de format vide, prête à remplir.
- * > { libelle: "", prix: "", stocks } (voir formatStocks)
+ * Une ligne de format vide, prête à remplir : elle propose le premier format
+ * qu'aucune ligne n'utilise encore.
+ * > { libelle, prix: "", stocks } (voir formatStocks)
  */
 M.emptyFormat = function () {
-  return { libelle: "", prix: "", stocks: M.formatStocks([]) };
+  let libre = M.formats.find((format) => !M.variantes.some((variante) => variante.libelle === format.libelle));
+
+  return { libelle: libre?.libelle ?? M.formats[0]?.libelle ?? "", prix: "", stocks: M.formatStocks([]) };
 };
 
 /**
@@ -145,7 +145,7 @@ M.textToStock = function (texte) {
 
 /**
  * Reprend l'état saisi dans le formulaire (voir FormulaireProduitView.lireEtat).
- * . etat : { nom, categorieId, description, descriptionLongue, ingredients, variantes }
+ * . etat : { nom, categorieId, description, descriptionLongue, ingredients, allergeneIds, variantes }
  */
 M.setState = function (etat) {
   M.nom = etat.nom;
@@ -153,6 +153,7 @@ M.setState = function (etat) {
   M.description = etat.description;
   M.descriptionLongue = etat.descriptionLongue;
   M.ingredients = etat.ingredients;
+  M.allergeneIds = etat.allergeneIds;
   M.variantes = etat.variantes;
 };
 
@@ -191,11 +192,9 @@ M.validate = function () {
   let libelles = [];
   for (let i = 0; i < M.variantes.length; i++) {
     let variante = M.variantes[i];
-    let libelle = variante.libelle.trim();
-    if (libelle === "" || libelle.length > LIBELLE_FORMAT_MAX) {
-      return `Le nom d'un format est obligatoire (${LIBELLE_FORMAT_MAX} caractères au maximum).`;
-    }
-    if (libelles.includes(libelle.toLowerCase())) return `Deux formats portent le même nom : « ${libelle} ».`;
+    let libelle = variante.libelle;
+    if (!M.formats.some((format) => format.libelle === libelle)) return "Choisissez un format dans la liste.";
+    if (libelles.includes(libelle.toLowerCase())) return `Le format « ${libelle} » est choisi deux fois.`;
     libelles.push(libelle.toLowerCase());
     if (M.textToPrice(variante.prix) === null) {
       return `Le prix du format « ${libelle} » doit être un montant en euros supérieur à 0 (par exemple 3,50).`;
@@ -203,16 +202,15 @@ M.validate = function () {
 
     for (let j = 0; j < variante.stocks.length; j++) {
       let stock = variante.stocks[j];
-      // Un stock vide retire la combinaison, sauf sans service où le stock est obligatoire.
-      if (stock.stock.trim() === "" && stock.choixId !== null) continue;
+      // Un stock vide retire la combinaison.
+      if (stock.stock.trim() === "") continue;
 
       if (M.textToStock(stock.stock) === null) {
-        let cible = stock.service === "" ? `du format « ${libelle} »` : `« ${stock.service} » du format « ${libelle} »`;
-        return `Le stock ${cible} doit être un nombre entier positif ou nul.`;
+        return `Le stock « ${stock.service} » du format « ${libelle} » doit être un nombre entier positif ou nul.`;
       }
     }
 
-    if (variante.stocks.every((stock) => stock.choixId !== null && stock.stock.trim() === "")) {
+    if (variante.stocks.every((stock) => stock.stock.trim() === "")) {
       return `Le format « ${libelle} » doit être proposé avec au moins un service.`;
     }
   }
@@ -221,7 +219,7 @@ M.validate = function () {
 
 /**
  * Le corps de la requête d'enregistrement : prix en centimes, nombres convertis.
- * > { id?, nom, categorieId, description, descriptionLongue, ingredients, variantes }
+ * > { id?, nom, categorieId, description, descriptionLongue, ingredients, allergeneIds, variantes }
  */
 M.payload = function () {
   let corps = {
@@ -230,6 +228,7 @@ M.payload = function () {
     description: M.description,
     descriptionLongue: M.descriptionLongue,
     ingredients: M.ingredients,
+    allergeneIds: M.allergeneIds,
     // Une variante par combinaison proposée ; un stock vide en est absent (et supprime la variante existante).
     variantes: M.variantes.flatMap((variante) =>
       variante.stocks
@@ -288,14 +287,14 @@ C.charger = async function (idTexte) {
   M.id = null;
   M.nomEnregistre = "";
   M.slug = "";
-  M.services = [];
   M.setState({
     nom: "",
     categorieId: "",
     description: "",
     descriptionLongue: "",
     ingredients: "",
-    variantes: [{ ...M.emptyFormat(), libelle: "Pot 100 ml" }],
+    allergeneIds: [],
+    variantes: [],
   });
   M.images = [];
   M.enCours = M.imagesEnCours = M.seuilEnCours = false;
@@ -311,15 +310,15 @@ C.charger = async function (idTexte) {
 
     if (idTexte === undefined) {
       let reponse = await ProduitAdminData.fetchAll();
-      M.categories = reponse.categories;
-      M.seuil = reponse.seuilBientotEpuise;
+      C.applyLists(reponse);
+      M.services = reponse.services;
+      M.variantes = [M.emptyFormat()];
       return true;
     }
 
     let reponse = await ProduitAdminData.fetchOne(idTexte);
+    C.applyLists(reponse);
     C.applyProduct(reponse.produit);
-    M.categories = reponse.categories;
-    M.seuil = reponse.seuilBientotEpuise;
   } catch (erreur) {
     if (erreur.statut === 401) {
       goTo("/admin");
@@ -336,9 +335,20 @@ C.charger = async function (idTexte) {
 };
 
 /**
+ * Place dans le modèle les listes qui alimentent le formulaire.
+ * . reponse : { categories, formats, allergenes, seuilBientotEpuise }
+ */
+C.applyLists = function (reponse) {
+  M.categories = reponse.categories;
+  M.formats = reponse.formats;
+  M.allergenes = reponse.allergenes;
+  M.seuil = reponse.seuilBientotEpuise;
+};
+
+/**
  * Place un produit reçu du serveur dans le modèle.
- * . produit : { id, nom, slug, categorieId, description, descriptionLongue, ingredients, variantes (une par combinaison
- *   format + service), services, images }
+ * . produit : { id, nom, slug, categorieId, description, descriptionLongue, ingredients, allergeneIds,
+ *   variantes (une par combinaison format + service), services, images }
  */
 C.applyProduct = function (produit) {
   M.id = produit.id;
@@ -351,6 +361,7 @@ C.applyProduct = function (produit) {
     description: produit.description,
     descriptionLongue: produit.descriptionLongue,
     ingredients: produit.ingredients,
+    allergeneIds: produit.allergeneIds,
     variantes: M.groupFormats(produit.variantes),
   });
   M.images = produit.images;
@@ -408,7 +419,7 @@ C.handler_addFormat = function (etat) {
   }
 
   M.variantes.push(M.emptyFormat());
-  V.refresh(C.viewData(), "[data-ligne]:last-of-type input[name='libelle']");
+  V.refresh(C.viewData(), "[data-ligne]:last-of-type select[name='libelle']");
 };
 
 /**
@@ -622,6 +633,9 @@ C.viewData = function () {
       descriptionLongue: M.descriptionLongue,
       ingredients: M.ingredients,
       categories: M.categories,
+      formats: M.formats,
+      allergenes: M.allergenes,
+      allergeneIds: M.allergeneIds,
       variantes: M.variantes,
       edition,
       bouton: edition ? "Enregistrer les modifications" : "Créer le produit",

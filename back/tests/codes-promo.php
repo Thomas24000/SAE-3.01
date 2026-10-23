@@ -32,6 +32,7 @@ if (PHP_SAPI !== 'cli') {
 require_once __DIR__ . '/../src/Model/PromotionModel.php';
 require_once __DIR__ . '/../src/Model/CodePromoInvalideException.php';
 require_once __DIR__ . '/../src/Model/CodePromoModel.php';
+require_once __DIR__ . '/../src/Model/ProduitModel.php';
 require_once __DIR__ . '/../src/Model/CommandeModel.php';
 
 $dsn = getenv('STK_DSN');
@@ -78,11 +79,11 @@ function reinitialiser(PDO $pdo, int $stock): void
  */
 function variante(PDO $pdo, int $produitId): array
 {
-    $requete = $pdo->prepare('SELECT id, prix_cents, choix_id FROM variante WHERE produit_id = :produit ORDER BY prix_cents, id LIMIT 1');
+    $requete = $pdo->prepare('SELECT id, prix_cents, service_id AS choix_id FROM variante WHERE produit_id = :produit ORDER BY prix_cents, id LIMIT 1');
     $requete->execute(['produit' => $produitId]);
     $ligne = $requete->fetch();
 
-    return [(int) $ligne['id'], (int) $ligne['prix_cents'], $ligne['choix_id'] === null ? [] : [(int) $ligne['choix_id']]];
+    return [(int) $ligne['id'], (int) $ligne['prix_cents'], [(int) $ligne['choix_id']]];
 }
 
 /**

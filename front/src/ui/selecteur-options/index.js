@@ -20,9 +20,10 @@ let SelecteurOptionsView = {
    * Un choix d'option, avec son supplément de prix.
    *
    * @param {{id: number, libelle: string, supplementCents: number, selectionne: boolean,
-   *          indisponible?: boolean, raison?: string}} choix
+   *          indisponible?: boolean, raison?: string, alerte?: string}} choix
    *        indisponible : le choix n'est pas sélectionnable ; raison (« Épuisé »,
-   *        « Indisponible ») le dit en toutes lettres à la place du supplément.
+   *        « Indisponible ») le dit en toutes lettres à la place du supplément ;
+   *        alerte (« Bientôt épuisé ») s'ajoute au supplément d'un choix encore disponible.
    * @param {{id: number, multiple: boolean}} groupe - le groupe auquel appartient le choix.
    * @returns {DocumentFragment}
    */
@@ -40,9 +41,8 @@ let SelecteurOptionsView = {
         desactive: indisponible ? "disabled" : "",
         supplement: indisponible
           ? choix.raison
-          : choix.supplementCents > 0
-            ? `+ ${formaterPrix(choix.supplementCents)}`
-            : "Inclus",
+          : (choix.supplementCents > 0 ? `+ ${formaterPrix(choix.supplementCents)}` : "Inclus") +
+            (choix.alerte ? ` · ${choix.alerte}` : ""),
         classes: ETATS[etat],
       })
     );

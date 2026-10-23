@@ -79,17 +79,12 @@ final class CommandeModel
                 array_values(array_unique(array_merge([], ...array_map(
                     static fn (array $ligne): array => $ligne['options'] ?? [],
                     $lignes
-                ))))
-            );
-            $obligatoires = $this->lireGroupesObligatoires(
-                array_values(array_unique(array_map(
-                    static fn (array $variante): int => $variante['produit_id'],
-                    $variantes
-                )))
+                )))),
+                true
             );
 
             $detail = array_map(
-                fn (array $ligne): array => $this->detaillerLigne($ligne, $variantes, $choix, $obligatoires),
+                fn (array $ligne): array => $this->detaillerLigne($ligne, $variantes, $choix),
                 $lignes
             );
 
@@ -116,6 +111,20 @@ final class CommandeModel
                 },
                 array_keys($demandes),
                 $demandes
+            );
+
+            // Une dose par topping et par commande, quel que soit le nombre de pots.
+            $doses = $this->toppingsDeLaCommande($detail);
+
+            array_map(
+                static function (array $topping): void {
+                    if ($topping['stock'] < 1) {
+                        throw new DomainException(
+                            'Le topping « ' . $topping['libelle'] . ' » est épuisé. Retourne au panier pour le retirer.'
+                        );
+                    }
+                },
+                $doses
             );
 
             $total = array_reduce(
@@ -198,6 +207,11 @@ final class CommandeModel
                 fn (int $id, int $demande) => $this->mouvementer($commandeId, $id, 'sortie', $demande),
                 array_keys($demandes),
                 $demandes
+            );
+
+            array_map(
+                fn (array $topping) => $this->mouvementerTopping($commandeId, $topping['id'], 'sortie'),
+                $doses
             );
 
             $this->pdo->commit();
@@ -801,7 +815,7 @@ final class CommandeModel
      * stock d'aujourd'hui.
      *
      * Les options d'une commande sont des libellés figés : on les retrouve par leur
-     * groupe et leur libellé parmi les choix actuels du produit, puis on applique les
+     * groupe et leur libellé parmi les choix actuels, puis on applique les
      * mêmes règles que la validation d'une commande (detaillerLigne). Une ligne dont
      * la variante a disparu, dont une option a disparu ou changé de règles, ou dont la
      * variante est épuisée est écartée avec son motif ; si le stock couvre une partie
@@ -854,12 +868,7 @@ final class CommandeModel
         )));
         $variantes = $varianteIds === [] ? [] : $this->lireVariantes($varianteIds);
 
-        $produitIds = array_values(array_unique(array_map(
-            static fn (array $variante): int => $variante['produit_id'],
-            $variantes
-        )));
-        $actuels      = $this->lireChoixDesProduits($produitIds);
-        $obligatoires = $this->lireGroupesObligatoires($produitIds);
+        $actuels = $this->lireChoixParLibelle();
 
         // Stock restant par variante, consommé ligne après ligne.
         $restant = array_map(static fn (array $variante): int => $variante['stock'], $variantes);
@@ -887,9 +896,9 @@ final class CommandeModel
                 continue;
             }
 
-            // Retrouve chaque option d'alors parmi les choix actuels du produit.
+            // Retrouve chaque option d'alors parmi les choix actuels.
             $ids = array_map(
-                static fn (array $option): ?int => $actuels[$variante['produit_id'] . '|' . $option['groupe_libelle'] . '|' . $option['choix_libelle']] ?? null,
+                static fn (array $option): ?int => $actuels[$option['groupe_libelle'] . '|' . $option['choix_libelle']] ?? null,
                 array_values(array_filter(
                     $anciennes,
                     static fn (array $option): bool => (int) $option['ligne_id'] === (int) $ligne['id']
@@ -902,15 +911,23 @@ final class CommandeModel
                 sort($ids);
 
                 try {
-                    $this->detaillerLigne(
+                    $detail = $this->detaillerLigne(
                         ['variantId' => $varianteId, 'quantite' => $demande, 'options' => $ids],
                         $variantes,
-                        $this->lireChoix($ids),
-                        $obligatoires
+                        $this->lireChoix($ids)
                     );
                 } catch (DomainException $e) {
                     $valide = false;
                 }
+            }
+
+            $epuises = $valide
+                ? array_filter($this->toppingsDeLaCommande([$detail]), static fn (array $topping): bool => $topping['stock'] < 1)
+                : [];
+
+            if ($epuises !== []) {
+                $resultat[] = ['motif' => 'a un topping épuisé'] + $base;
+                continue;
             }
 
             if (!$valide) {
@@ -939,33 +956,18 @@ final class CommandeModel
     }
 
     /**
-     * Les choix d'options actuels des produits demandés, retrouvables par leur
-     * produit, leur groupe et leur libellé (ce que garde une commande passée).
+     * Les choix d'options actuels, retrouvables par leur groupe et leur libellé
+     * (ce que garde une commande passée).
      *
-     * @param array<int, int> $produitIds Identifiants de produits.
-     * @return array<string, int> Identifiant de choix, indexé par « produit|groupe|libellé ».
+     * @return array<string, int> Identifiant de choix, indexé par « groupe|libellé ».
      */
-    private function lireChoixDesProduits(array $produitIds): array
+    private function lireChoixParLibelle(): array
     {
-        if ($produitIds === []) {
-            return [];
-        }
-
-        $marqueurs = implode(',', array_fill(0, count($produitIds), '?'));
-
-        $requete = $this->pdo->prepare(
-            'SELECT option_choix.id, option_choix.libelle, option_groupe.libelle AS groupe_libelle,
-                    option_groupe.produit_id
-               FROM option_choix
-         INNER JOIN option_groupe ON option_groupe.id = option_choix.groupe_id
-              WHERE option_groupe.produit_id IN (' . $marqueurs . ')'
-        );
-        $requete->execute(array_values($produitIds));
-        $lignes = $requete->fetchAll();
+        $lignes = $this->pdo->query('SELECT id, type, libelle FROM option_choix')->fetchAll();
 
         return array_combine(
             array_map(
-                static fn (array $ligne): string => $ligne['produit_id'] . '|' . $ligne['groupe_libelle'] . '|' . $ligne['libelle'],
+                static fn (array $ligne): string => ProduitModel::GROUPES[$ligne['type']]['libelle'] . '|' . $ligne['libelle'],
                 $lignes
             ),
             array_map(static fn (array $ligne): int => (int) $ligne['id'], $lignes)
@@ -1000,6 +1002,94 @@ final class CommandeModel
             ),
             $requete->fetchAll()
         );
+
+        // Les doses de toppings sorties à la validation : on rend celles du journal.
+        $requete = $this->pdo->prepare(
+            'SELECT choix_id
+               FROM mouvement_topping
+              WHERE commande_id = :commande AND type = \'sortie\' AND choix_id IS NOT NULL
+           ORDER BY choix_id'
+        );
+        $requete->execute(['commande' => $commandeId]);
+
+        array_map(
+            fn (int $choixId) => $this->mouvementerTopping($commandeId, $choixId, 'retour'),
+            array_map('intval', $requete->fetchAll(PDO::FETCH_COLUMN))
+        );
+    }
+
+    /**
+     * Les toppings distincts d'une commande, par identifiant croissant : chacun
+     * ne consomme qu'une dose, même présent sur plusieurs lignes.
+     *
+     * @param array<int, array{choix:array<int, array<string, mixed>>}> $detail Les lignes détaillées (detaillerLigne).
+     * @return array<int, array{id:int, libelle:string, stock:int}>
+     */
+    private function toppingsDeLaCommande(array $detail): array
+    {
+        $toppings = array_reduce(
+            $detail,
+            static function (array $parId, array $ligne): array {
+                array_map(
+                    static function (array $option) use (&$parId): void {
+                        if ($option['stock'] !== null) {
+                            $parId[$option['id']] = ['id' => $option['id'], 'libelle' => $option['libelle'], 'stock' => $option['stock']];
+                        }
+                    },
+                    $ligne['choix']
+                );
+
+                return $parId;
+            },
+            []
+        );
+        ksort($toppings);
+
+        return array_values($toppings);
+    }
+
+    /**
+     * Déplace d'une dose le stock d'un topping et l'inscrit au journal, dans la
+     * transaction en cours. Même règles que mouvementer() : verrou, sortie
+     * refusée si le stock manque, mouvement unique par commande.
+     *
+     * @param int $commandeId Commande à l'origine du mouvement.
+     * @param int $choixId Topping (option_choix) dont le stock bouge.
+     * @param string $type « sortie » (validation) ou « retour » (annulation).
+     * @throws DomainException Si le topping est épuisé ou a disparu.
+     */
+    private function mouvementerTopping(int $commandeId, int $choixId, string $type): void
+    {
+        $lecture = $this->pdo->prepare('SELECT libelle, stock FROM option_choix WHERE id = :id AND type = \'topping\' FOR UPDATE');
+        $lecture->execute(['id' => $choixId]);
+        $topping = $lecture->fetch();
+
+        // Un topping supprimé depuis la commande n'a plus de stock à rendre.
+        if ($topping === false) {
+            if ($type === 'sortie') {
+                throw new DomainException('Un topping de la commande n\'existe plus.');
+            }
+
+            return;
+        }
+
+        $avant = (int) $topping['stock'];
+        $apres = $type === 'sortie' ? $avant - 1 : $avant + 1;
+
+        if ($apres < 0) {
+            throw new DomainException('Le topping « ' . $topping['libelle'] . ' » est épuisé.');
+        }
+
+        $this->pdo
+            ->prepare('UPDATE option_choix SET stock = :apres WHERE id = :id')
+            ->execute(['apres' => $apres, 'id' => $choixId]);
+
+        $this->pdo
+            ->prepare(
+                'INSERT INTO mouvement_topping (choix_id, commande_id, type, stock_avant, stock_apres)
+                 VALUES (:choix, :commande, :type, :avant, :apres)'
+            )
+            ->execute(['choix' => $choixId, 'commande' => $commandeId, 'type' => $type, 'avant' => $avant, 'apres' => $apres]);
     }
 
     /**
@@ -1062,10 +1152,10 @@ final class CommandeModel
      * que deux commandes ne s'attendent jamais l'une l'autre).
      *
      * @param array<int, int> $ids Identifiants de variantes.
-     * @return array<int, array{id:int, libelle:string, choix_id:int|null, combinaison:string, prix_cents:int, prix_facture_cents:int,
-     *                          stock:int, produit_id:int, nom:string}>
-     *         Indexé par identifiant de variante. combinaison : le format suivi du choix qui porte le
-     *         stock (« Pot 465 ml, Cône gaufrette »), pour les messages.
+     * @return array<int, array{id:int, libelle:string, choix_id:int, combinaison:string, prix_cents:int, prix_facture_cents:int,
+     *                          stock:int, produit_id:int, categorie_id:int, nom:string}>
+     *         Indexé par identifiant de variante. combinaison : le format suivi du service
+     *         (« Pot 465 ml, Cône gaufrette »), pour les messages.
      */
     private function lireVariantes(array $ids): array
     {
@@ -1073,11 +1163,13 @@ final class CommandeModel
         $marqueurs = implode(',', array_fill(0, count($ids), '?'));
 
         $requete = $this->pdo->prepare(
-            'SELECT variante.id, variante.libelle, variante.choix_id, variante.prix_cents, variante.stock,
-                    produit.id AS produit_id, produit.nom,
-                    (SELECT option_choix.libelle FROM option_choix WHERE option_choix.id = variante.choix_id) AS choix_libelle
+            'SELECT variante.id, format.libelle, variante.service_id AS choix_id, variante.prix_cents, variante.stock,
+                    produit.id AS produit_id, produit.categorie_id, produit.nom,
+                    option_choix.libelle AS choix_libelle
                FROM variante
-         INNER JOIN produit ON produit.id = variante.produit_id
+         INNER JOIN produit      ON produit.id = variante.produit_id
+         INNER JOIN format       ON format.id = variante.format_id
+         INNER JOIN option_choix ON option_choix.id = variante.service_id
               WHERE variante.id IN (' . $marqueurs . ')
            ORDER BY variante.id
                 FOR UPDATE'
@@ -1093,16 +1185,15 @@ final class CommandeModel
                 static fn (array $ligne): array => [
                     'id'         => (int) $ligne['id'],
                     'libelle'    => $ligne['libelle'],
-                    'choix_id'   => $ligne['choix_id'] === null ? null : (int) $ligne['choix_id'],
-                    'combinaison' => $ligne['choix_libelle'] === null
-                        ? $ligne['libelle']
-                        : $ligne['libelle'] . ', ' . $ligne['choix_libelle'],
+                    'choix_id'   => (int) $ligne['choix_id'],
+                    'combinaison' => $ligne['libelle'] . ', ' . $ligne['choix_libelle'],
                     'prix_cents' => (int) $ligne['prix_cents'],
                     // Le prix facturé : remisé si le produit est en promotion (US PRO-c).
                     'prix_facture_cents' => PromotionModel::prixPromo((int) $ligne['produit_id'], (int) $ligne['prix_cents'], $promoId)
                         ?? (int) $ligne['prix_cents'],
                     'stock'      => (int) $ligne['stock'],
                     'produit_id' => (int) $ligne['produit_id'],
+                    'categorie_id' => (int) $ligne['categorie_id'],
                     'nom'        => $ligne['nom'],
                 ],
                 $lignes
@@ -1111,15 +1202,19 @@ final class CommandeModel
     }
 
     /**
-     * Les choix d'options demandés, avec leur groupe et le produit auquel ils
-     * appartiennent. Un identifiant inconnu est simplement absent du résultat.
+     * Les choix d'options demandés, avec leur groupe (service ou toppings) et les
+     * catégories qui les proposent. Un identifiant inconnu est simplement absent
+     * du résultat.
      *
      * @param array<int, int> $ids Identifiants de choix.
-     * @return array<int, array{id:int, libelle:string, supplement_cents:int, groupe_id:int,
-     *                          groupe_libelle:string, multiple:bool, produit_id:int}>
-     *         Indexé par identifiant de choix.
+     * @param bool $verrouiller Vrai dans la transaction d'une commande : les choix sont verrouillés
+     *        en écriture, par identifiant croissant (comme les variantes), pour que leur stock lu reste juste.
+     * @return array<int, array{id:int, libelle:string, supplement_cents:int, stock:int|null, groupe_id:int,
+     *                          groupe_libelle:string, multiple:bool, categories:array<int, int>|null}>
+     *         Indexé par identifiant de choix. stock : les doses d'un topping, null pour un service. categories : les catégories qui proposent
+     *         un topping ; null pour un service, proposé à tous les produits.
      */
-    private function lireChoix(array $ids): array
+    private function lireChoix(array $ids, bool $verrouiller = false): array
     {
         if ($ids === []) {
             return [];
@@ -1129,19 +1224,29 @@ final class CommandeModel
         $marqueurs = implode(',', array_fill(0, count($ids), '?'));
 
         $requete = $this->pdo->prepare(
-            'SELECT option_choix.id,
-                    option_choix.libelle,
-                    option_choix.supplement_cents,
-                    option_groupe.id        AS groupe_id,
-                    option_groupe.libelle   AS groupe_libelle,
-                    option_groupe.multiple,
-                    option_groupe.produit_id
+            'SELECT id, type, libelle, supplement_cents, stock
                FROM option_choix
-         INNER JOIN option_groupe ON option_groupe.id = option_choix.groupe_id
-              WHERE option_choix.id IN (' . $marqueurs . ')'
+              WHERE id IN (' . $marqueurs . ')
+           ORDER BY id' . ($verrouiller ? ' FOR UPDATE' : '')
         );
         $requete->execute(array_values($ids));
         $lignes = $requete->fetchAll();
+
+        $requete = $this->pdo->prepare(
+            'SELECT choix_id, categorie_id
+               FROM categorie_topping
+              WHERE choix_id IN (' . $marqueurs . ')'
+        );
+        $requete->execute(array_values($ids));
+        $categories = array_reduce(
+            $requete->fetchAll(),
+            static function (array $parChoix, array $ligne): array {
+                $parChoix[(int) $ligne['choix_id']][] = (int) $ligne['categorie_id'];
+
+                return $parChoix;
+            },
+            []
+        );
 
         return array_combine(
             array_map(static fn (array $ligne): int => (int) $ligne['id'], $lignes),
@@ -1150,10 +1255,11 @@ final class CommandeModel
                     'id'               => (int) $ligne['id'],
                     'libelle'          => $ligne['libelle'],
                     'supplement_cents' => (int) $ligne['supplement_cents'],
-                    'groupe_id'        => (int) $ligne['groupe_id'],
-                    'groupe_libelle'   => $ligne['groupe_libelle'],
-                    'multiple'         => (bool) $ligne['multiple'],
-                    'produit_id'       => (int) $ligne['produit_id'],
+                    'stock'            => $ligne['stock'] === null ? null : (int) $ligne['stock'],
+                    'groupe_id'        => ProduitModel::GROUPES[$ligne['type']]['id'],
+                    'groupe_libelle'   => ProduitModel::GROUPES[$ligne['type']]['libelle'],
+                    'multiple'         => ProduitModel::GROUPES[$ligne['type']]['multiple'],
+                    'categories'       => $ligne['type'] === 'service' ? null : ($categories[(int) $ligne['id']] ?? []),
                 ],
                 $lignes
             )
@@ -1161,53 +1267,20 @@ final class CommandeModel
     }
 
     /**
-     * Les groupes d'options obligatoires des produits demandés.
-     *
-     * @param array<int, int> $produitIds Identifiants de produits.
-     * @return array<int, array{id:int, produit_id:int, libelle:string}>
-     */
-    private function lireGroupesObligatoires(array $produitIds): array
-    {
-        if ($produitIds === []) {
-            return [];
-        }
-
-        $marqueurs = implode(',', array_fill(0, count($produitIds), '?'));
-
-        $requete = $this->pdo->prepare(
-            'SELECT id, produit_id, libelle
-               FROM option_groupe
-              WHERE obligatoire = 1 AND produit_id IN (' . $marqueurs . ')'
-        );
-        $requete->execute(array_values($produitIds));
-
-        return array_map(
-            static fn (array $ligne): array => [
-                'id'         => (int) $ligne['id'],
-                'produit_id' => (int) $ligne['produit_id'],
-                'libelle'    => $ligne['libelle'],
-            ],
-            $requete->fetchAll()
-        );
-    }
-
-    /**
      * Contrôle une ligne de commande d'après la base et calcule son prix.
      *
      * @param array{variantId:int, quantite:int, options?:array<int, int>} $ligne La ligne reçue.
-     * @param array<int, array{id:int, libelle:string, choix_id:int|null, combinaison:string, prix_cents:int,
-     *                         prix_facture_cents:int, stock:int, produit_id:int, nom:string}> $variantes
+     * @param array<int, array{id:int, libelle:string, choix_id:int, combinaison:string, prix_cents:int,
+     *                         prix_facture_cents:int, stock:int, produit_id:int, categorie_id:int, nom:string}> $variantes
      *        Les variantes lues, indexées par identifiant.
      * @param array<int, array{id:int, libelle:string, supplement_cents:int, groupe_id:int,
-     *                         groupe_libelle:string, multiple:bool, produit_id:int}> $choix
+     *                         groupe_libelle:string, multiple:bool, categories:array<int, int>|null}> $choix
      *        Les choix lus, indexés par identifiant.
-     * @param array<int, array{id:int, produit_id:int, libelle:string}> $obligatoires
-     *        Les groupes obligatoires des produits commandés.
      * @return array{variante:array<string, mixed>, quantite:int, choix:array<int, array<string, mixed>>, prix_unitaire:int}
      *         prix_unitaire : prix du format plus suppléments, en centimes.
      * @throws DomainException Si la variante n'existe plus ou si les options sont invalides.
      */
-    private function detaillerLigne(array $ligne, array $variantes, array $choix, array $obligatoires): array
+    private function detaillerLigne(array $ligne, array $variantes, array $choix): array
     {
         $variante = $variantes[$ligne['variantId']] ?? null;
 
@@ -1227,9 +1300,12 @@ final class CommandeModel
             $ligne['options'] ?? []
         );
 
-        // Un choix inconnu ou rattaché à un autre produit : refus.
+        // Un choix inconnu, ou un topping que la catégorie du produit ne propose pas : refus.
         if (in_array(null, $retenus, true)
-            || array_filter($retenus, static fn (array $c): bool => $c['produit_id'] !== $variante['produit_id']) !== []) {
+            || array_filter(
+                $retenus,
+                static fn (array $c): bool => $c['categories'] !== null && !in_array($variante['categorie_id'], $c['categories'], true)
+            ) !== []) {
             throw $invalide;
         }
 
@@ -1240,22 +1316,14 @@ final class CommandeModel
             static fn (array $c): bool => !$c['multiple'] && $parGroupe[$c['groupe_id']] > 1
         );
 
-        // Un groupe obligatoire du produit doit avoir au moins un choix.
-        $manquants = array_filter(
-            $obligatoires,
-            static fn (array $groupe): bool => $groupe['produit_id'] === $variante['produit_id']
-                && !isset($parGroupe[$groupe['id']])
-        );
-
-        if ($trop !== [] || $manquants !== []) {
+        if ($trop !== []) {
             throw $invalide;
         }
 
-        // OPT-b : la variante est une combinaison format + choix porteur de stock.
-        // Le choix passé dans les options doit être celui de la variante, sinon le
-        // stock décrémenté ne serait pas celui de ce que le client a choisi.
-        if ($variante['choix_id'] !== null
-            && !in_array($variante['choix_id'], array_map(static fn (array $c): int => $c['id'], $retenus), true)) {
+        // Le service est obligatoire : la variante est une combinaison format + service,
+        // et le service des options doit être le sien, sinon le stock décrémenté ne
+        // serait pas celui de ce que le client a choisi.
+        if (!in_array($variante['choix_id'], array_map(static fn (array $c): int => $c['id'], $retenus), true)) {
             throw $invalide;
         }
 
@@ -1270,9 +1338,11 @@ final class CommandeModel
             'quantite'      => $ligne['quantite'],
             'choix'         => array_map(
                 static fn (array $c): array => [
+                    'id'               => $c['id'],
                     'groupe_libelle'   => $c['groupe_libelle'],
                     'libelle'          => $c['libelle'],
                     'supplement_cents' => $c['supplement_cents'],
+                    'stock'            => $c['stock'],
                 ],
                 $retenus
             ),

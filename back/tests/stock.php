@@ -25,6 +25,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 require_once __DIR__ . '/../src/Model/PromotionModel.php';
+require_once __DIR__ . '/../src/Model/ProduitModel.php';
 require_once __DIR__ . '/../src/Model/CommandeModel.php';
 
 /**
@@ -54,13 +55,7 @@ function connecter(): PDO
  */
 function service(PDO $pdo, int $variantId): array
 {
-    $requete = $pdo->prepare(
-        "SELECT MIN(option_choix.id)
-           FROM variante
-     INNER JOIN option_groupe ON option_groupe.produit_id = variante.produit_id AND option_groupe.libelle = 'Service'
-     INNER JOIN option_choix  ON option_choix.groupe_id = option_groupe.id
-          WHERE variante.id = :id"
-    );
+    $requete = $pdo->prepare('SELECT service_id FROM variante WHERE id = :id');
     $requete->execute(['id' => $variantId]);
 
     return [(int) $requete->fetchColumn()];

@@ -165,11 +165,12 @@ export function choixDeLigne(ids, produitId, groupes) {
  * l'une de ses options n'est pas reconnue pour son produit, si un groupe
  * obligatoire du produit n'a aucun choix (cas des paniers créés avant les
  * options) ou si le choix du groupe porteur de stock n'est pas celui de sa
- * variante (cas des paniers créés avant les variantes par service, US OPT-b).
+ * variante (cas des paniers créés avant les variantes par service, US OPT-b), ou
+ * si l'un de ses toppings est épuisé (stock à 0 : le serveur le refuserait).
  *
  * @param {number[]} ids - les identifiants de choix de la ligne.
  * @param {number} produitId - le produit de la variante de la ligne.
- * @param {Array<{id: number, obligatoire: boolean, choix: Array<{id: number}>}>} groupes
+ * @param {Array<{id: number, obligatoire: boolean, choix: Array<{id: number, stock?: (number|null)}>}>} groupes
  *        les groupes d'options de ce produit (vide si le produit n'en a pas).
  * @param {number|null} [choixId] - le choix du groupe porteur de stock de la variante de la ligne.
  * @returns {boolean} true si la ligne doit être retirée du panier.
@@ -178,7 +179,8 @@ export function ligneInvalide(ids, produitId, groupes, choixId = null) {
   return (
     choixDeLigne(ids, produitId, groupes).length !== ids.length ||
     hasMissing(groupes, choixDepuisIds(groupes, ids)) ||
-    (choixId !== null && !ids.includes(choixId))
+    (choixId !== null && !ids.includes(choixId)) ||
+    choixDeLigne(ids, produitId, groupes).some((choix) => choix.stock === 0)
   );
 }
 
@@ -245,18 +247,35 @@ export function varianteAChoisir(variantes, format, choixId) {
 /**
  * Les groupes, avec pour chaque choix du groupe porteur de stock son
  * indisponibilité pour le format donné : « Épuisé » si la combinaison n'a plus
- * de stock, « Indisponible » si elle n'existe pas. Les autres groupes sont
- * renvoyés tels quels.
+ * de stock, « Indisponible » si elle n'existe pas. Dans les autres groupes, un
+ * choix qui a un stock (un topping) est « Épuisé » à 0 dose et porte `alerte`
+ * (« Bientôt épuisé ») quand il est au plus égal au seuil ; un groupe sans
+ * stock est renvoyé tel quel.
  *
- * @param {Array<{id: number, choix: Array<{id: number}>}>} groupes
+ * @param {Array<{id: number, choix: Array<{id: number, stock?: (number|null)}>}>} groupes
  * @param {number|null} porteurId - l'identifiant du groupe porteur de stock.
  * @param {Array<{libelle: string, choixId: number|null, stock: number}>} variantes
  * @param {string} format - le format choisi.
- * @returns {Array<Object>} les groupes, leurs choix portant `indisponible` (booléen) et `raison`.
+ * @param {number|null} [seuil] - le stock à partir duquel (inclus) un topping est « Bientôt épuisé » ; null pour ne pas l'annoncer.
+ * @returns {Array<Object>} les groupes, leurs choix portant `indisponible` (booléen), `raison` et, le cas échéant, `alerte`.
  */
-export function groupesAvecDisponibilite(groupes, porteurId, variantes, format) {
+export function groupesAvecDisponibilite(groupes, porteurId, variantes, format, seuil = null) {
   return groupes.map((groupe) => {
-    if (groupe.id !== porteurId) return groupe;
+    if (groupe.id !== porteurId) {
+      if (groupe.choix.every((choix) => typeof choix.stock !== "number")) return groupe;
+
+      return {
+        ...groupe,
+        choix: groupe.choix.map((choix) => {
+          if (typeof choix.stock !== "number") return choix;
+
+          let epuise = choix.stock === 0;
+          let alerte = !epuise && seuil !== null && choix.stock <= seuil ? "Bientôt épuisé" : "";
+
+          return { ...choix, indisponible: epuise, raison: epuise ? "Épuisé" : "", alerte: alerte };
+        }),
+      };
+    }
 
     return {
       ...groupe,

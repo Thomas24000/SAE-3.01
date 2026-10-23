@@ -14,10 +14,12 @@
       module : le navigateur l'exécute avant de dessiner la page, qui
       n'apparaît donc jamais, même brièvement, dans le mauvais thème.
       Le thème est conservé en localStorage : le serveur n'en a pas besoin.
+      La clé est préfixée par le chemin du projet (le localStorage est partagé
+      par tous les sites du serveur) ; Vite remplace %BASE_URL% au build.
     -->
     <script>
       try {
-        if (localStorage.getItem("theme") === "sombre") {
+        if (localStorage.getItem("%BASE_URL%theme") === "sombre") {
           document.documentElement.classList.add("theme-dark");
         }
       } catch (e) {

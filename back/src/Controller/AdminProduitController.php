@@ -31,6 +31,7 @@ final class AdminProduitController
     private const DESCRIPTION_MAX = 400;
     private const DESCRIPTION_LONGUE_MAX = 800;
     private const INGREDIENTS_MAX = 600;
+    private const ALLERGENES_MAX = 50;
     private const FORMATS_MAX = 10;
     private const SERVICES_MAX = 10; // services par format (combinaisons format + service)
     private const LIBELLE_FORMAT_MAX = 60;
@@ -60,6 +61,7 @@ final class AdminProduitController
      *
      * Réponse : { produits: [{ id, nom, slug, categorieId, categorie, image, miniature,
      * prixMin, stock, nombreFormats, nombreImages }], categories: [{ id, libelle }],
+     * formats: [{ id, libelle }], services: [{ id, libelle }], allergenes: [{ id, libelle }],
      * seuilBientotEpuise }
      * Erreur : 401 sans session administrateur.
      */
@@ -70,6 +72,9 @@ final class AdminProduitController
         Response::json([
             'produits'           => $this->produits->lister(),
             'categories'         => $this->listeCategories(),
+            'formats'            => $this->produits->formats(),
+            'services'           => $this->produits->services(),
+            'allergenes'         => $this->produits->allergenes(),
             'seuilBientotEpuise' => $this->parametres->seuilBientotEpuise(),
         ]);
     }
@@ -78,8 +83,9 @@ final class AdminProduitController
      * GET /api/admin/produit?id= : un produit complet.
      *
      * Réponse : { produit: { id, nom, slug, categorieId, description, descriptionLongue,
-     * ingredients, variantes: [{ id, libelle, choixId, prixCents, stock }],
-     * services: [{ id, libelle }], images: [{ id, chemin, miniature, principale }] }, categories, seuilBientotEpuise }
+     * ingredients, allergeneIds: [id], variantes: [{ id, libelle, choixId, prixCents, stock }],
+     * services: [{ id, libelle }], images: [{ id, chemin, miniature, principale }] },
+     * categories, formats: [{ id, libelle }], allergenes: [{ id, libelle }], seuilBientotEpuise }
      * Erreurs : 401, 400 (identifiant invalide), 404.
      */
     public function show(Request $requete): void
@@ -94,6 +100,8 @@ final class AdminProduitController
         Response::json([
             'produit'            => $produit,
             'categories'         => $this->listeCategories(),
+            'formats'            => $this->produits->formats(),
+            'allergenes'         => $this->produits->allergenes(),
             'seuilBientotEpuise' => $this->parametres->seuilBientotEpuise(),
         ]);
     }
@@ -103,7 +111,8 @@ final class AdminProduitController
      * ensuite depuis sa page de modification).
      *
      * Corps : { nom, categorieId, description, descriptionLongue, ingredients,
-     * variantes: [{ libelle, choixId?, prixCents, stock }] }
+     * allergeneIds: [id] (facultatif, vide par défaut),
+     * variantes: [{ libelle, choixId, prixCents, stock }] } — libelle est celui d'un format existant.
      * Réponse (201) : { produit: { id, nom, slug } }
      * Erreurs : 401, 403 (CSRF), 400 (champ invalide), 409 (nom ou format en double).
      */
@@ -136,7 +145,8 @@ final class AdminProduitController
      * POST /api/admin/produits/modifier : modifie un produit et ses formats.
      *
      * Corps : { id, nom, categorieId, description, descriptionLongue, ingredients,
-     * variantes: [{ id?, libelle, prixCents, stock }] } — un format absent est supprimé.
+     * allergeneIds: [id] (remplace la liste), variantes: [{ id?, libelle, choixId, prixCents, stock }] }
+     * — une variante absente est supprimée.
      * Réponse : { produit } (voir show)
      * Erreurs : 401, 403, 400, 404, 409.
      */
@@ -282,7 +292,8 @@ final class AdminProduitController
      * Vérifie et normalise les champs d'un produit et de ses formats.
      *
      * @return array{nom:string, categorieId:int, description:string, descriptionLongue:string,
-     *         ingredients:string, variantes:array<int, array{id?:int, libelle:string, choixId:int|null, prixCents:int, stock:int}>}
+     *         ingredients:string, allergeneIds:array<int, int>,
+     *         variantes:array<int, array{id?:int, libelle:string, choixId:int|null, prixCents:int, stock:int}>}
      */
     private function donneesValides(array $corps): array
     {
@@ -310,8 +321,30 @@ final class AdminProduitController
             'description'       => $description,
             'descriptionLongue' => $longue,
             'ingredients'       => $ingredients,
+            'allergeneIds'      => $this->allergenesValides($corps['allergeneIds'] ?? []),
             'variantes'         => $this->variantesValides($corps['variantes'] ?? null),
         ];
+    }
+
+    /**
+     * Vérifie la liste des allergènes : des identifiants positifs sans doublon
+     * (la liste peut être vide ; l'existence est vérifiée par le modèle).
+     *
+     * @return array<int, int>
+     */
+    private function allergenesValides(mixed $brutes): array
+    {
+        if (!is_array($brutes) || !array_is_list($brutes) || count($brutes) > self::ALLERGENES_MAX) {
+            Response::erreur('La liste des allergènes est invalide.', 400);
+        }
+
+        $ids = array_map(fn (mixed $brut): int => $this->identifiant($brut), $brutes);
+
+        if (count(array_unique($ids)) !== count($ids)) {
+            Response::erreur('Un allergène est choisi deux fois.', 400);
+        }
+
+        return $ids;
     }
 
     /**

@@ -10,6 +10,7 @@ const ICONES = {
   tableau: "nav-tableau-de-bord.svg",
   produits: "nav-produits.svg",
   categories: "nav-categories.svg",
+  toppings: "nav-produits.svg",
   commandes: "commandes.svg",
   statistiques: "nav-statistiques.svg",
   codes: "nav-codes-promo.svg",
@@ -20,7 +21,7 @@ const ICONES = {
 // Une section pas encore construite reste visible mais n'est pas un lien.
 let NavigationAdminView = {
   /**
-   * @param {{liens: Array<{libelle: string, href: string, icone: "tableau"|"produits"|"categories"|"commandes"|"statistiques"|"codes",
+   * @param {{liens: Array<{libelle: string, href: string, icone: "tableau"|"produits"|"categories"|"toppings"|"commandes"|"statistiques"|"codes",
    *          disponible: boolean}>}} data - les sections à afficher.
    * @param {{surDeconnexion: function(): void}} actions - appelée au clic sur « Déconnexion ».
    * @returns {DocumentFragment}

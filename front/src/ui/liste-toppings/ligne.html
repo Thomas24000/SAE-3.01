@@ -1,0 +1,12 @@
+<li class="flex flex-col gap-2 p-4" data-id="{{id}}">
+  <div class="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+    <p class="text-sm font-semibold md:w-50">{{libelle}} <span class="font-normal text-fg-muted">{{supplement}}</span></p>
+    <p class="text-sm md:w-40">{{categories}}</p>
+    <p class="flex items-center gap-2 text-sm md:w-36"><strong>{{stock}} {{unite}}</strong><slot name="badge"></slot></p>
+    <div class="flex min-w-0 flex-1 items-center gap-2">
+      <input name="stock" type="number" min="0" max="1000000" step="1" inputmode="numeric" value="{{saisie}}" aria-label="Nouveau stock de {{libelle}}" class="h-10 w-28 rounded-md border border-border-default bg-bg-default px-3 text-base transition-colors hover:border-border-strong" />
+      <button type="button" data-action="enregistrer" data-id="{{id}}" aria-label="Enregistrer le stock de {{libelle}}" aria-disabled="{{enCours}}" class="flex min-h-10 items-center justify-center rounded-md border border-border-strong px-4 py-2 text-sm leading-tight font-semibold transition-colors hover:bg-bg-subtle aria-disabled:cursor-not-allowed aria-disabled:opacity-60">Enregistrer</button>
+    </div>
+  </div>
+  <slot name="message"></slot>
+</li>

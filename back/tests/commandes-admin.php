@@ -25,6 +25,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 require_once __DIR__ . '/../src/Model/PromotionModel.php';
+require_once __DIR__ . '/../src/Model/ProduitModel.php';
 require_once __DIR__ . '/../src/Model/CommandeModel.php';
 
 $dsn = getenv('STK_DSN');
@@ -69,13 +70,7 @@ function stock(PDO $pdo, int $variantId): int
  */
 function commander(PDO $pdo, CommandeModel $model, int $quantite): int
 {
-    $choix = $pdo->query(
-        "SELECT MIN(option_choix.id)
-           FROM option_groupe
-     INNER JOIN option_choix ON option_choix.groupe_id = option_groupe.id
-          WHERE option_groupe.produit_id = (SELECT produit_id FROM variante WHERE id = 1)
-            AND option_groupe.libelle = 'Service'"
-    )->fetchColumn();
+    $choix = $pdo->query('SELECT service_id FROM variante WHERE id = 1')->fetchColumn();
     $commande = $model->creer(1, [['variantId' => 1, 'quantite' => $quantite, 'options' => [(int) $choix]]]);
     $requete  = $pdo->prepare('SELECT id FROM commande WHERE numero = :numero');
     $requete->execute(['numero' => $commande['numero']]);

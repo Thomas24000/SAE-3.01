@@ -12,7 +12,9 @@
  * Ce module est le seul à lire et écrire le panier (avec lib/theme.js pour le
  * thème, qui est le seul autre à toucher au localStorage).
  */
-const CLE_PANIER = "panier";
+// Le localStorage est partagé par tous les sites de mmi.unilim.fr : le chemin du
+// projet préfixe la clé pour ne pas croiser le panier d'un autre site.
+const CLE_PANIER = import.meta.env.BASE_URL + "panier";
 
 // Plafond de sécurité : le vrai plafond est le stock de la variante, que
 // connaît la page, pas ce module.

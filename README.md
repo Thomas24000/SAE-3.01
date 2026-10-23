@@ -9,7 +9,7 @@ paiement en ligne).
 | Fonctionnalité | État |
 |---|---|
 | Catalogue, filtre par catégorie (sans changement d'URL), « Voir plus » | fait (DEC-b) ; `/categorie/:slug` à faire (DEC-a) |
-| Fiche produit (`/produit/:slug`), galerie, variantes, options, quantité | fait (DEC-c) ; métadonnées SEO et retour à la catégorie d'origine à faire |
+| Fiche produit (`/produit/:nom`), galerie, variantes, options, quantité | fait (DEC-c) ; métadonnées SEO et retour à la catégorie d'origine à faire |
 | Panier en `localStorage`, compteur dans l'en-tête | fait (CMD-b) |
 | Inscription, connexion, déconnexion (mots de passe hachés, session régénérée) | fait (CMD-c) |
 | Validation de commande, numéro unique, confirmation | fait (CMD-a) |
@@ -113,7 +113,7 @@ Déclaré dans `main.js`, sur le modèle de `react-router` :
 ```js
 router.addLayout("/", RootLayout);
 router.addRoute("/", ProduitsPage);
-router.addRoute("/produit/:slug", ProduitPage);   // params.slug dans la page
+router.addRoute("/produit/:nom", ProduitPage);   // params.nom dans la page
 router.addRoute("/panier", PanierPage);
 router.addRoute("/commande/:numero", ConfirmationPage);
 router.addRoute("/admin", AdminPage);          // /admin/... : layout du back-office
@@ -177,7 +177,7 @@ renvoient un JSON `{ erreur }` avec un statut HTTP explicite.
 
 | Groupe | Routes |
 |---|---|
-| Catalogue | `GET /api/produits`, `GET /api/produit?slug=…`, `GET /api/panier` (prix et stock actuels des variantes du panier) |
+| Catalogue | `GET /api/produits`, `GET /api/produit?nom=…`, `GET /api/panier` (prix et stock actuels des variantes du panier) |
 | Compte client | `POST /api/inscription`, `POST /api/login`, `GET /api/me`, `POST /api/logout`, `GET /api/compte`, `POST /api/compte/profil`, `POST /api/compte/mot-de-passe` |
 | Commande | `POST /api/commande`, `GET /api/commande?numero=…`, `GET /api/commandes` (filtres et pagination), `GET /api/commande/reprise`, `GET /api/code-promo?code=…` |
 | Back-office | `/api/admin/login`, `me`, `logout`, `categories…`, `produits…` (dont `images`), `parametres/seuil`, `commandes…`, `codes-promo…`, `stats`, `statistiques` |

@@ -42,7 +42,7 @@ En dev (`npm run dev`), `/api` passe par le proxy Vite vers `mmi.unilim.fr` : le
 
 | Domaine | Front (routes) | API (`/api/...`) |
 | --- | --- | --- |
-| Catalogue, fiche produit | `/`, `/produit/:slug` | `produits`, `produit` |
+| Catalogue, fiche produit | `/`, `/produit/:nom` | `produits`, `produit` |
 | Panier (`localStorage`, affichage seul) | `/panier` | `panier` (prix et stock actuels) |
 | Compte client | `/connexion`, `/inscription` | `login`, `inscription`, `me`, `logout` |
 | Commande | `/commande`, `/commande/:numero` | `commande` (POST/GET), `commandes`, `commande/reprise`, `code-promo` |

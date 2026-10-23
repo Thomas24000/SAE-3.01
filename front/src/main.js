@@ -33,7 +33,7 @@ router.addLayout("/", RootLayout);
 router.addLayout("/admin", AdminLayout);
 
 router.addRoute("/", ProduitsPage);
-router.addRoute("/produit/:slug", ProduitPage);
+router.addRoute("/produit/:nom", ProduitPage);
 router.addRoute("/panier", PanierPage);
 router.addRoute("/commande", CommandePage);
 router.addRoute("/commande/:numero", ConfirmationPage);

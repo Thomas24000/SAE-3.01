@@ -24,7 +24,7 @@ ProduitData.fetchAll = async function () {
 };
 
 /**
- * La fiche d'un produit : GET /api/produit?slug=…
+ * La fiche d'un produit : GET /api/produit?nom=…
  *
  * La réponse contient { produit, seuilBientotEpuise } avec produit de la forme
  * { id, nom, slug, description, descriptionLongue, ingredients,
@@ -35,8 +35,8 @@ ProduitData.fetchAll = async function () {
  *
  * Lève une ErreurApi (statut 404 si le produit n'existe pas).
  */
-ProduitData.fetchOne = async function (slug) {
-  let reponse = await getRequest(`produit?slug=${encodeURIComponent(slug)}`);
+ProduitData.fetchOne = async function (nom) {
+  let reponse = await getRequest(`produit?nom=${encodeURIComponent(nom)}`);
 
   reponse.produit.image = import.meta.env.BASE_URL + reponse.produit.image;
   reponse.produit.images = reponse.produit.images.map((chemin) => import.meta.env.BASE_URL + chemin);

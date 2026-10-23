@@ -100,7 +100,7 @@ C.charger = async function () {
   M.stats = null;
 
   try {
-    M.session = await AdminData.me();
+    M.session = await AdminData.me(true);
     if (M.session.connecte) M.stats = await StatsData.fetch();
   } catch (erreur) {
     M.session = null;

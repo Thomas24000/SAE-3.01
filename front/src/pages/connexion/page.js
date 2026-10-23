@@ -52,7 +52,7 @@ C.charger = async function () {
   M.retour = safeReturnPath(readQuery("retour"));
 
   try {
-    M.session = await AuthData.me();
+    M.session = await AuthData.me(true);
   } catch (erreur) {
     // Pas de session lisible : on propose le formulaire, la connexion dira le reste.
     M.session = null;

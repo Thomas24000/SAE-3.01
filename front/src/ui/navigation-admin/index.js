@@ -3,6 +3,7 @@ import template from "./template.html?raw";
 import templateLien from "./lien.html?raw";
 import templateLienIndisponible from "./lien-indisponible.html?raw";
 
+const LOGO = import.meta.env.BASE_URL + "images/ben-jerry-s-4.svg";
 const IMAGES = import.meta.env.BASE_URL + "images/admin/";
 
 // Fichiers de public/images/admin/, par nom d'icône.
@@ -27,7 +28,7 @@ let NavigationAdminView = {
    * @returns {DocumentFragment}
    */
   dom: function (data, actions) {
-    let fragment = htmlToFragment(genericRenderer(template, { images: IMAGES }));
+    let fragment = htmlToFragment(genericRenderer(template, { images: IMAGES, logo: LOGO }));
 
     let liens = data.liens.map((lien) =>
       htmlToFragment(

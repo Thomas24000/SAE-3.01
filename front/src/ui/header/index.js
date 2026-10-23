@@ -2,6 +2,8 @@ import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { basculerTheme } from "../../lib/theme.js";
 import template from "./template.html?raw";
 
+const LOGO = import.meta.env.BASE_URL + "images/ben-jerry-s-4.svg";
+
 /**
  * Texte lu par les lecteurs d'écran pour le lien du compte.
  *
@@ -45,6 +47,7 @@ let HeaderView = {
    */
   html: function (data) {
     return genericRenderer(template, {
+      logo: LOGO,
       compteHref: destinationCompte(data.email),
       compteLibelle: libelleCompte(data.email),
       email: data.email ?? "",

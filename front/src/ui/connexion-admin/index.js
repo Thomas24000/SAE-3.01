@@ -2,6 +2,8 @@ import { genericRenderer, htmlToFragment } from "../../lib/utils.js";
 import { MessageView } from "../message/index.js";
 import template from "./template.html?raw";
 
+const LOGO = import.meta.env.BASE_URL + "images/ben-jerry-s-4.svg";
+
 // Carte de connexion du back-office. Elle transmet les identifiants saisis ;
 // c'est le serveur qui accepte ou refuse.
 let ConnexionAdminView = {
@@ -13,7 +15,7 @@ let ConnexionAdminView = {
    * @returns {DocumentFragment}
    */
   dom: function (data, actions) {
-    let fragment = htmlToFragment(genericRenderer(template, { email: data.email }));
+    let fragment = htmlToFragment(genericRenderer(template, { email: data.email, logo: LOGO }));
     fragment.querySelector('slot[name="message"]').replaceWith(MessageView.dom(data.message));
 
     let formulaire = fragment.querySelector("form");
